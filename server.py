@@ -15,6 +15,7 @@ Uso:
 
 from __future__ import annotations
 
+import gzip
 import json
 import mimetypes
 import os
@@ -25,6 +26,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import unicodedata
 import uuid
 import webbrowser
@@ -51,6 +53,9 @@ USER_AGENT = (
 )
 
 STORE_LOCK = threading.Lock()
+CATALOGO_LOCK = threading.Lock()
+STORE_CACHE: dict = {"chave": None, "dados": {"playlists": []}}
+CATALOGO_CACHE: dict = {"chave": None, "json": b"", "gzip": b""}
 
 mimetypes.add_type("application/vnd.apple.mpegurl", ".m3u8")
 mimetypes.add_type("audio/x-mpegurl", ".m3u")
@@ -250,16 +255,38 @@ def encerrar_servidor(porta: int) -> int:
 # --------------------------------------------------------------------------- #
 # Armazenamento
 # --------------------------------------------------------------------------- #
-def load_store() -> dict:
-    if not os.path.exists(STORE_PATH):
-        return {"playlists": []}
+def chave_store() -> tuple:
+    """Identifica o arquivo de playlists sem precisar lê-lo."""
     try:
-        with open(STORE_PATH, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-    except (OSError, ValueError):
-        return {"playlists": []}
-    if not isinstance(data, dict) or not isinstance(data.get("playlists"), list):
-        return {"playlists": []}
+        info = os.stat(STORE_PATH)
+        return (info.st_mtime_ns, info.st_size)
+    except OSError:
+        return (0, 0)
+
+
+def load_store() -> dict:
+    """Lê as playlists salvas, reaproveitando o cache.
+
+    Com uma lista grande o arquivo passa de 30 MB: ler e interpretar o JSON
+    a cada requisição custava meio segundo.
+    """
+    chave = chave_store()
+    if STORE_CACHE["chave"] == chave:
+        return STORE_CACHE["dados"]
+
+    if not os.path.exists(STORE_PATH):
+        data = {"playlists": []}
+    else:
+        try:
+            with open(STORE_PATH, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            data = {"playlists": []}
+        if not isinstance(data, dict) or not isinstance(data.get("playlists"), list):
+            data = {"playlists": []}
+
+    STORE_CACHE["chave"] = chave
+    STORE_CACHE["dados"] = data
     return data
 
 
@@ -442,8 +469,8 @@ def parse_playlist_text(text: str, source_url: str, fallback_name: str = "") -> 
     return fallback_name or playlist_name, channels, truncated
 
 
-def infer_tipo(url: str) -> str:
-    path = urlsplit(url).path.lower()
+def infer_tipo(url: str, partes=None) -> str:
+    path = (partes.path if partes is not None else urlsplit(url).path).lower()
     if path.endswith(".mpd"):
         return "dash"
     if path.endswith(".ts"):
@@ -453,7 +480,7 @@ def infer_tipo(url: str) -> str:
     return "hls"
 
 
-def variante_hls(url: str) -> str:
+def variante_hls(url: str, partes=None) -> str:
     """Deriva a variante HLS de um link Xtream Codes terminado em .ts.
 
     O mesmo servidor costuma expor /usuario/senha/12345.m3u8, que é um HLS
@@ -461,7 +488,8 @@ def variante_hls(url: str) -> str:
     o "nome" do canal é numérico, para não alterar links genéricos de outros
     provedores.
     """
-    partes = urlsplit(url)
+    if partes is None:
+        partes = urlsplit(url)
     caminho = partes.path
     if not caminho.lower().endswith(".ts"):
         return ""
@@ -473,8 +501,26 @@ def variante_hls(url: str) -> str:
     )
 
 
+# Tabela de escapes para query string: bem mais rápida que urllib.quote,
+# que importa bastante ao montar o catálogo de uma lista com 50 mil canais.
+_CARACTERES_SEGUROS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~"
+)
+_TABELA_ESCAPE = {
+    i: (chr(i) if chr(i) in _CARACTERES_SEGUROS else "%%%02X" % i) for i in range(256)
+}
+
+
+def escapar_url(valor: str) -> str:
+    """Escapa um endereço para uso como valor de query string.
+
+    Equivale a urllib.parse.quote(valor, safe=""), mas bem mais rápido.
+    """
+    return valor.encode("utf-8").decode("latin-1").translate(_TABELA_ESCAPE)
+
+
 def proxy_url(url: str) -> str:
-    return "/api/proxy?url=" + quote(url, safe="")
+    return "/api/proxy?url=" + escapar_url(url)
 
 
 def make_playlist(name: str, url: str, channels: list[dict]) -> dict:
@@ -540,8 +586,23 @@ def normalizar_grupo(valor: str) -> str:
     return re.sub(r"\s+", " ", texto).strip().lower()
 
 
+CACHE_CATEGORIA: dict = {}
+
+
 def categorizar_grupo(grupo: str) -> str:
-    """Mapeia o group-title da playlist para uma categoria visível no site."""
+    """Mapeia o group-title da playlist para uma categoria visível no site.
+
+    O resultado fica em cache: numa lista grande existem poucos grupos
+    distintos, mas a mesma regra rodaria dezenas de milhares de vezes.
+    """
+    if grupo in CACHE_CATEGORIA:
+        return CACHE_CATEGORIA[grupo]
+    resultado = _categorizar_grupo(grupo)
+    CACHE_CATEGORIA[grupo] = resultado
+    return resultado
+
+
+def _categorizar_grupo(grupo: str) -> str:
     g = normalizar_grupo(grupo)
     if not g:
         return "outros"
@@ -609,6 +670,35 @@ def categorizar_grupo(grupo: str) -> str:
     return "outros"
 
 
+def chave_catalogo() -> tuple:
+    """Identifica o estado do catálogo sem montar o catálogo inteiro."""
+    return chave_store()
+
+
+def catalogo_bytes() -> tuple[bytes, bytes]:
+    """Devolve (json, gzip) do catálogo, reaproveitando o cache.
+
+    Com uma lista grande (50 mil canais) reconstruir o catálogo a cada
+    requisição levava vários segundos; o cache deixa isso acontecer uma vez.
+    """
+    chave = chave_catalogo()
+    with CATALOGO_LOCK:
+        if CATALOGO_CACHE["chave"] == chave:
+            return CATALOGO_CACHE["json"], CATALOGO_CACHE["gzip"]
+
+        # A construção fica dentro do lock para que duas requisições
+        # simultâneas não montem o catálogo duas vezes.
+        dados = build_catalog()
+        bruto = json.dumps(
+            {"ok": True, **dados}, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        comprimido = gzip.compress(bruto, compresslevel=5)
+        CATALOGO_CACHE["chave"] = chave
+        CATALOGO_CACHE["json"] = bruto
+        CATALOGO_CACHE["gzip"] = comprimido
+        return bruto, comprimido
+
+
 def build_catalog() -> dict:
     store = load_store()
     canais = []
@@ -618,6 +708,9 @@ def build_catalog() -> dict:
         playlists.append(summarize(playlist))
         pid = playlist.get("id", "")
         pname = playlist.get("name", "Playlist")
+        # Os logos se repetem muito; guardar o resultado evita repetir o
+        # trabalho de escape e de validação para cada canal.
+        cache_logo: dict = {}
 
         for index, canal in enumerate(playlist.get("channels", [])):
             stream = canal.get("url", "")
@@ -626,10 +719,11 @@ def build_catalog() -> dict:
             name = (canal.get("name") or f"Canal {index + 1}").strip()
             group = (canal.get("group") or "").strip()
             logo = (canal.get("logo") or "").strip()
-            tipo_stream = infer_tipo(stream)
+            partes = urlsplit(stream)
+            tipo_stream = infer_tipo(stream, partes)
             eh_ao_vivo = tipo_stream in ("hls", "ts", "dash")
 
-            hls = variante_hls(stream)
+            hls = variante_hls(stream, partes)
             if hls:
                 # HLS contínuo como fonte principal; o .ts fica como
                 # alternativa caso o provedor não tenha a variante .m3u8.
@@ -655,13 +749,18 @@ def build_catalog() -> dict:
                     }
                 ]
 
+            logo_proxy = cache_logo.get(logo)
+            if logo_proxy is None:
+                logo_proxy = proxy_url(logo) if is_http_url(logo) else logo
+                cache_logo[logo] = logo_proxy
+
             canais.append(
                 {
                     "slug": f"ext-{pid}-{index}",
                     "nome": name,
                     "categoria": categorizar_grupo(group),
                     "grupo": group,
-                    "logo": proxy_url(logo) if is_http_url(logo) else logo,
+                    "logo": logo_proxy,
                     "aoVivo": eh_ao_vivo,
                     "agora": {
                         "titulo": group or ("Transmissão ao vivo" if eh_ao_vivo else "Conteúdo sob demanda"),
@@ -822,7 +921,17 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         if route == "/api/catalogo.json":
-            self._send_json({"ok": True, **build_catalog()})
+            bruto, comprimido = catalogo_bytes()
+            aceita_gzip = "gzip" in (self.headers.get("Accept-Encoding") or "").lower()
+            corpo = comprimido if aceita_gzip else bruto
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            if aceita_gzip:
+                self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(corpo)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(corpo)
             return
 
         if route == "/api/proxy":
@@ -1255,6 +1364,18 @@ def main() -> None:
     httpd = Servidor((host, porta), Handler)
     httpd.daemon_threads = True
     banner_inicial(host, porta)
+
+    # Monta o catálogo em segundo plano: com uma lista grande isso leva
+    # alguns segundos e a primeira página não deve esperar por isso.
+    def aquecer() -> None:
+        try:
+            inicio = time.time()
+            catalogo_bytes()
+            print(f"  Catálogo pronto em {time.time() - inicio:.1f}s", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  Aviso: não foi possível preparar o catálogo: {exc}", flush=True)
+
+    threading.Thread(target=aquecer, daemon=True).start()
 
     if abrir or protocolo["acao"] == "iniciar":
         threading.Timer(0.6, abrir_navegador, args=(endereco,)).start()
