@@ -114,6 +114,17 @@ Se o celular não conseguir conectar, em geral é o firewall do Windows bloquean
 netsh advfirewall firewall add rule name="EFTV (servidor local na rede)" dir=in action=allow protocol=TCP localport=8124 profile=private
 ```
 
+### Deixar pronto para outra pessoa usar
+
+Para que o servidor suba sozinho com o notebook (sem terminal e sem precisar de ninguém), rode `instalar/iniciar-eftv-automatico.bat` uma única vez. Ele cria um atalho na inicialização do Windows que sobe o servidor em segundo plano, já com `--lan`.
+
+Aí o uso na smart TV fica:
+
+1. você abre o endereço `http://IP-DO-NOTEBOOK:8124/` no navegador da TV **uma vez** e salva como favorito;
+2. seu pai liga a TV, abre o favorito e assiste — sem tocar em mais nada.
+
+O endereço aparece no cartão **Servidor local** da própria página, com um botão **Copiar**. Ele pode mudar se o notebook reconectar no Wi-Fi; para fixar, reserve um IP para o notebook no roteador.
+
 Detalhes que importam nesse cenário:
 
 - **Celular e TV precisam estar na mesma rede Wi-Fi**, e o roteador não pode ter "isolamento de clientes" (AP isolation) ligado.

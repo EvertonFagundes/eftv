@@ -60,11 +60,46 @@
       return;
     }
     redeEl.hidden = false;
+    const lista = externos
+      .map((u) => `<code>${window.canaisEscape ? window.canaisEscape(u) : u}</code>`)
+      .join(" · ");
     redeEl.innerHTML =
       "No celular ou na smart TV, abra: " +
-      externos
-        .map((u) => `<code>${window.canaisEscape ? window.canaisEscape(u) : u}</code>`)
-        .join(" · ");
+      lista +
+      ' <button class="link-btn" type="button" data-copiar-rede>Copiar</button>' +
+      '<small>Abra esse endereço no navegador da smart TV e salve como favorito: ' +
+      "da próxima vez é só um clique. O endereço pode mudar se o notebook " +
+      "reconectar no Wi-Fi.</small>";
+    const botao = redeEl.querySelector("[data-copiar-rede]");
+    if (botao) {
+      botao.addEventListener("click", () => {
+        const texto = externos[0];
+        const feito = () => {
+          const antigo = botao.textContent;
+          botao.textContent = "Copiado!";
+          setTimeout(() => {
+            botao.textContent = antigo;
+          }, 1800);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(texto).then(feito, () => {});
+          return;
+        }
+        const area = document.createElement("textarea");
+        area.value = texto;
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        try {
+          document.execCommand("copy");
+          feito();
+        } catch (_) {
+          // Sem área de transferência: o endereço fica visível para copiar.
+        }
+        area.remove();
+      });
+    }
   }
 
   /* ------------------------------------------------------------- sondagem */

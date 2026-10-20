@@ -414,6 +414,26 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   font-size: 0.9em;
 }
 
+.local-server-rede small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.link-btn {
+  border: 0;
+  background: none;
+  color: var(--brand-2);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
 .local-server-lan {
   display: flex;
   align-items: flex-start;
