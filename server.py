@@ -699,6 +699,40 @@ def catalogo_bytes() -> tuple[bytes, bytes]:
         return bruto, comprimido
 
 
+def fontes_do_canal(stream: str, name: str) -> list[dict]:
+    """Monta as opções de transmissão de um canal.
+
+    Fica fora do catálogo porque essa parte só é usada na página do canal:
+    num catálogo grande ela multiplicaria o tamanho do JSON.
+    """
+    partes = urlsplit(stream)
+    tipo_stream = infer_tipo(stream, partes)
+    hls = variante_hls(stream, partes)
+    if hls:
+        # HLS contínuo como fonte principal; o .ts fica como alternativa
+        # caso o provedor não tenha a variante .m3u8.
+        return [
+            {
+                "label": "HLS",
+                "nome": name,
+                "tipo": "hls",
+                "demo": False,
+                "url": proxy_url(hls),
+                "fallbackTipo": "ts",
+                "fallbackUrl": proxy_url(stream),
+            }
+        ]
+    return [
+        {
+            "label": "Opção 1",
+            "nome": name,
+            "tipo": tipo_stream,
+            "demo": False,
+            "url": proxy_url(stream),
+        }
+    ]
+
+
 def build_catalog() -> dict:
     store = load_store()
     canais = []
@@ -723,32 +757,6 @@ def build_catalog() -> dict:
             tipo_stream = infer_tipo(stream, partes)
             eh_ao_vivo = tipo_stream in ("hls", "ts", "dash")
 
-            hls = variante_hls(stream, partes)
-            if hls:
-                # HLS contínuo como fonte principal; o .ts fica como
-                # alternativa caso o provedor não tenha a variante .m3u8.
-                fontes = [
-                    {
-                        "label": "HLS",
-                        "nome": name,
-                        "tipo": "hls",
-                        "demo": False,
-                        "url": proxy_url(hls),
-                        "fallbackTipo": "ts",
-                        "fallbackUrl": proxy_url(stream),
-                    }
-                ]
-            else:
-                fontes = [
-                    {
-                        "label": "Opção 1",
-                        "nome": name,
-                        "tipo": tipo_stream,
-                        "demo": False,
-                        "url": proxy_url(stream),
-                    }
-                ]
-
             logo_proxy = cache_logo.get(logo)
             if logo_proxy is None:
                 logo_proxy = proxy_url(logo) if is_http_url(logo) else logo
@@ -762,19 +770,7 @@ def build_catalog() -> dict:
                     "grupo": group,
                     "logo": logo_proxy,
                     "aoVivo": eh_ao_vivo,
-                    "agora": {
-                        "titulo": group or ("Transmissão ao vivo" if eh_ao_vivo else "Conteúdo sob demanda"),
-                        "inicio": "--:--",
-                        "fim": "--:--",
-                        "descricao": (
-                            f"Canal importado da playlist {pname}."
-                            if eh_ao_vivo
-                            else f"Vídeo sob demanda da playlist {pname}."
-                        ),
-                    },
-                    "aSeguir": "Programação não disponível",
                     "origem": {"playlist": pname, "playlistId": pid},
-                    "fontes": fontes,
                 }
             )
 
@@ -918,6 +914,19 @@ class Handler(SimpleHTTPRequestHandler):
                 },
                 cors="publico",
             )
+            return
+
+        if route == "/api/canal":
+            # Detalhes de um canal: as fontes de transmissão não vão no
+            # catálogo (que pode ter dezenas de milhares de canais) e chegam
+            # aqui só quando a página do canal é aberta.
+            query = parse_qs(parts.query)
+            slug = (query.get("slug") or [""])[0].strip()
+            canal = self._canal_por_slug(slug)
+            if not canal:
+                self._error("Canal não encontrado.", 404)
+                return
+            self._send_json({"ok": True, "canal": canal}, cors="publico")
             return
 
         if route == "/api/catalogo.json":
@@ -1167,6 +1176,61 @@ class Handler(SimpleHTTPRequestHandler):
                     sock.settimeout(FETCH_TIMEOUT)
                 except OSError:
                     pass
+
+    def _canal_por_slug(self, slug: str) -> dict:
+        """Monta o canal completo (com as fontes) a partir do slug."""
+        if not slug.startswith("ext-"):
+            return {}
+        resto = slug[4:]
+        separador = resto.rfind("-")
+        if separador <= 0:
+            return {}
+        pid = resto[:separador]
+        try:
+            indice = int(resto[separador + 1 :])
+        except ValueError:
+            return {}
+
+        store = load_store()
+        for playlist in store.get("playlists", []):
+            if playlist.get("id") != pid:
+                continue
+            canais = playlist.get("channels", [])
+            if indice < 0 or indice >= len(canais):
+                return {}
+            original = canais[indice]
+            stream = original.get("url", "")
+            if not stream:
+                return {}
+            name = (original.get("name") or f"Canal {indice + 1}").strip()
+            group = (original.get("group") or "").strip()
+            logo = (original.get("logo") or "").strip()
+            tipo_stream = infer_tipo(stream)
+            eh_ao_vivo = tipo_stream in ("hls", "ts", "dash")
+            pname = playlist.get("name", "Playlist")
+            return {
+                "slug": slug,
+                "nome": name,
+                "categoria": categorizar_grupo(group),
+                "grupo": group,
+                "logo": proxy_url(logo) if is_http_url(logo) else logo,
+                "aoVivo": eh_ao_vivo,
+                "agora": {
+                    "titulo": group
+                    or ("Transmissão ao vivo" if eh_ao_vivo else "Conteúdo sob demanda"),
+                    "inicio": "--:--",
+                    "fim": "--:--",
+                    "descricao": (
+                        f"Canal importado da playlist {pname}."
+                        if eh_ao_vivo
+                        else f"Vídeo sob demanda da playlist {pname}."
+                    ),
+                },
+                "aSeguir": "Programação não disponível",
+                "origem": {"playlist": pname, "playlistId": pid},
+                "fontes": fontes_do_canal(stream, name),
+            }
+        return {}
 
     def _handle_proxy(self, query: str) -> None:
         params = parse_qs(query)

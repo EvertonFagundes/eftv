@@ -19,11 +19,28 @@
       </section>`;
   }
 
-  function iniciar() {
+  async function iniciar() {
     const canal = window.CanaisAPI ? window.CanaisAPI.porSlug(slug) : null;
     if (!canal) {
       mostrarNaoEncontrado();
       return;
+    }
+
+    // No servidor local as fontes de transmissão não vêm no catálogo: ele
+    // pode ter dezenas de milhares de canais e carregaria URLs demais.
+    // Elas chegam aqui sob demanda, só quando a página do canal é aberta.
+    if (!canal.fontes || !canal.fontes.length) {
+      try {
+        const resp = await fetch("/api/canal?slug=" + encodeURIComponent(slug), {
+          cache: "no-store",
+        });
+        if (resp.ok) {
+          const dados = await resp.json();
+          if (dados && dados.ok && dados.canal) Object.assign(canal, dados.canal);
+        }
+      } catch (_) {
+        // Sem detalhe: a página continua mostrando o que já tem.
+      }
     }
 
     const fontes = Array.isArray(canal.fontes) ? canal.fontes : [];
