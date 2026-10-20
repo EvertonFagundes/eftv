@@ -62,6 +62,25 @@ mimetypes.add_type("application/manifest+json", ".webmanifest")
 VERSAO = "1.1"
 PROTOCOLO = "eftv"
 
+# Extensões de mídia em streaming: o proxy não precisa espiar o começo
+# dessas respostas (faria o navegador esperar antes de receber os headers).
+EXTENSOES_MIDIA = (
+    ".ts",
+    ".mp4",
+    ".m4v",
+    ".webm",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".mpd",
+    ".aac",
+    ".mp3",
+    ".m4a",
+    ".mpg",
+    ".mpeg",
+    ".flv",
+)
+
 
 # --------------------------------------------------------------------------- #
 # Protocolo eftv://
@@ -1017,6 +1036,29 @@ class Handler(SimpleHTTPRequestHandler):
         )
 
     # ---------------------------------------------------------------- proxy
+    def _espiar(self, resp, tamanho: int, timeout: float = 5.0) -> tuple[bytes, bool]:
+        """Lei o começo da resposta sem esperar demais.
+
+        Devolve (dados, conseguiu). Se a origem demora, devolve (b"", False)
+        e o caller repassa a resposta como stream normal.
+        """
+        sock = None
+        try:
+            sock = resp.fp.raw._sock
+            sock.settimeout(timeout)
+        except (AttributeError, OSError):
+            sock = None
+        try:
+            return resp.read(tamanho), True
+        except (socket.timeout, TimeoutError, OSError):
+            return b"", False
+        finally:
+            if sock is not None:
+                try:
+                    sock.settimeout(FETCH_TIMEOUT)
+                except OSError:
+                    pass
+
     def _handle_proxy(self, query: str) -> None:
         params = parse_qs(query)
         target = (params.get("url") or [""])[0].strip()
@@ -1055,10 +1097,18 @@ class Handler(SimpleHTTPRequestHandler):
 
             is_playlist = path.endswith((".m3u8", ".m3u")) or "mpegurl" in ctype
             first = b""
-            if not is_playlist:
-                first = resp.read(1024)
-                if first.lstrip().startswith(b"#EXTM3U"):
+
+            if not is_playlist and not path.endswith(EXTENSOES_MIDIA):
+                # Só espia o começo quando o tipo é desconhecido: pode ser uma
+                # playlist sem extensão. Para streams (.ts, .mp4, ...) espiar
+                # atrasaria o navegador, porque a resposta só sairia depois
+                # de 1 KB chegarem da origem.
+                first, espiou = self._espiar(resp, 1024)
+                if espiou and first.lstrip().startswith(b"#EXTM3U"):
                     is_playlist = True
+                elif not espiou:
+                    # A origem demorou: seguimos repassando como stream.
+                    first = b""
 
             if is_playlist:
                 data = first + resp.read(MAX_PLAYLIST_BYTES + 1)
@@ -1091,7 +1141,14 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             if first:
                 self.wfile.write(first)
-            shutil.copyfileobj(resp, self.wfile, length=64 * 1024)
+            # Repassa em blocos pequenos e assim que chegam: um stream ao vivo
+            # não pode esperar juntar 64 KB antes de seguir para o navegador.
+            while True:
+                bloco = resp.read1(16 * 1024)
+                if not bloco:
+                    break
+                self.wfile.write(bloco)
+                self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception as exc:  # noqa: BLE001

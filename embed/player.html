@@ -142,7 +142,9 @@
 
       // Marca que o HLS realmente começou a tocar; antes disso, um erro fatal
       // pode ser resolvido tentando a fonte alternativa (MPEG-TS).
-      video.addEventListener("playing", () => { hlsTocou = true; }, { once: true });
+      video.addEventListener("playing", () => { hlsTocou = true; ocultarStatus(); });
+      // Assim que há dados decodificáveis, a espera termina.
+      video.addEventListener("canplay", () => { ocultarStatus(); });
 
       function destruirPlayers() {
         if (hlsPlayer) { try { hlsPlayer.destroy(); } catch (_) {} hlsPlayer = null; }
@@ -306,9 +308,8 @@
             { type: "mse", isLive: true, url: srcAtual },
             { enableWorker: true, liveBufferLatencyChasing: true }
           );
-          mpegtsPlayer.attachMediaElement(video);
-          mpegtsPlayer.load();
-          mpegtsPlayer.play().catch(() => {});
+          // Os ouvintes são registrados antes do load: assim um erro rápido
+          // (link fora do ar, timeout) não passa despercebido.
           mpegtsPlayer.on(window.mpegts.Events.ERROR, (_tipo, detalhe) => {
             falhar(
               "Erro no MPEG-TS (" + detalhe + "). " +
@@ -319,6 +320,9 @@
             ocultarStatus();
             mostrarBotaoAoVivo(true);
           });
+          mpegtsPlayer.attachMediaElement(video);
+          mpegtsPlayer.load();
+          mpegtsPlayer.play().catch(() => {});
           setTimeout(() => { if (video.readyState >= 2) ocultarStatus(); }, 4000);
         } catch (erro) {
           falhar("Falha ao iniciar o MPEG-TS: " + erro);
