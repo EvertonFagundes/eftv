@@ -203,6 +203,11 @@
   /* -------------------------------------------------------------- parar */
   async function parar() {
     if (!btnParar) return;
+    const aviso =
+      "Encerrar o servidor local?\n\n" +
+      "Os canais param de tocar e a página precisa ser recarregada. " +
+      "Para voltar, use o botão \"Iniciar servidor local\".";
+    if (!window.confirm(aviso)) return;
     btnParar.disabled = true;
     status("Encerrando o servidor...", "neutro");
     // No modo local o comando vai para o servidor que serve a página.
@@ -322,7 +327,11 @@
     verificar().then((dados) => {
       if (!dados) {
         mostrar(btnIniciar, !ehAndroid);
-        status("Servidor local parado. Inicie para usar a EFTV completa.", "neutro");
+        status(
+          "Servidor local parado. Sem ele os canais não tocam: o navegador " +
+            "bloqueia os streams (CORS). Use o servidor local.",
+          "erro"
+        );
       }
     });
 

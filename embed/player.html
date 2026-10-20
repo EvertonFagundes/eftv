@@ -127,6 +127,13 @@
       const botaoAoVivo = document.getElementById("btn-ao-vivo");
       const rotuloAoVivo = document.getElementById("live-jump-label");
 
+      // Na versão local (127.0.0.1) o player depende do server.py: se ele
+      // estiver parado, nenhum stream toca. A dica evita confusão.
+      const servidorLocal = /^(127\.0\.0\.1|localhost|::1)$/i.test(location.hostname);
+      const dicaServidor = servidorLocal
+        ? ' Se o servidor local parou, inicie-o de novo no botão "Iniciar servidor local".'
+        : "";
+
       badgeFonte.textContent = [canal, label].filter(Boolean).join(" · ");
       badgeDemo.textContent = demo ? "fonte de teste" : "";
 
@@ -277,7 +284,8 @@
             if (!hlsTocou && tentarFallback()) return;
             falhar(
               "Erro no HLS (" + data.type + " / " + data.details + "). " +
-              "Pode ser bloqueio de CORS, mistura HTTP/HTTPS ou stream fora do ar."
+              "Pode ser bloqueio de CORS, mistura HTTP/HTTPS ou stream fora do ar." +
+              dicaServidor
             );
           });
           return;
@@ -313,7 +321,8 @@
           mpegtsPlayer.on(window.mpegts.Events.ERROR, (_tipo, detalhe) => {
             falhar(
               "Erro no MPEG-TS (" + detalhe + "). " +
-              "Verifique se o link está no ar e se o proxy consegue acessá-lo."
+              "Verifique se o link está no ar e se o proxy consegue acessá-lo." +
+              dicaServidor
             );
           });
           mpegtsPlayer.on(window.mpegts.Events.MEDIA_INFO, () => {
