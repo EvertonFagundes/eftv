@@ -1407,6 +1407,9 @@ def main() -> None:
         baixo = argumento.lower()
         if baixo in ("--abrir", "--open", "-a"):
             abrir = True
+        elif baixo in ("--sem-navegador", "--sem-abrir"):
+            # Util para TV Box e servidores headless: nao abre o navegador.
+            abrir = False
         elif baixo in ("--parar", "--stop"):
             protocolo["acao"] = "parar"
         elif baixo.startswith("--porta=") or baixo.startswith("--port="):

@@ -89,13 +89,20 @@ cat > "$BIN/eftv-parar" <<EOF
 exec "$PYTHON" "$DEST/server.py" --parar "\$@"
 EOF
 
+cat > "$BIN/eftv-servidor" <<EOF
+#!/data/data/com.termux/files/usr/bin/bash
+# Sobe a EFTV na rede Wi-Fi sem abrir o navegador (para TV Box e
+# servidores que nao tem tela). O comando "eftv" abre o navegador.
+exec "$PYTHON" "$DEST/server.py" --lan --sem-navegador "\$@"
+EOF
+
 cat > "$BIN/eftv-atualizar" <<EOF
 #!/data/data/com.termux/files/usr/bin/bash
 # Atualiza a copia do codigo da EFTV.
 git -C "$DEST" pull --ff-only
 EOF
 
-chmod +x "$BIN/eftv" "$BIN/eftv-parar" "$BIN/eftv-atualizar"
+chmod +x "$BIN/eftv" "$BIN/eftv-parar" "$BIN/eftv-servidor" "$BIN/eftv-atualizar"
 
 # ------------------------------------------------- iniciar com o aparelho
 # O Termux:Boot roda este script quando o Android lanca o aparelho.
@@ -106,7 +113,7 @@ if mkdir -p "$BOOT" 2>/dev/null; then
 # Iniciado automaticamente pelo Termux:Boot quando o aparelho liga.
 export PATH="\$HOME/bin:\$PATH"
 termux-wake-lock >/dev/null 2>&1
-"$PYTHON" "$DEST/server.py" --lan
+"$PYTHON" "$DEST/server.py" --lan --sem-navegador
 EOF
   chmod +x "$BOOT/eftv"
   tem_boot=1
@@ -124,7 +131,7 @@ for arquivo in "$HOME/.bashrc" "$HOME/.profile"; do
   }
 done
 
-echo "  Comandos prontos: eftv, eftv-parar, eftv-atualizar"
+echo "  Comandos prontos: eftv, eftv-servidor, eftv-parar, eftv-atualizar"
 echo
 
 if [ "$apenas_instalar" -eq 1 ]; then

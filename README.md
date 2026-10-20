@@ -178,6 +178,26 @@ Se o servidor rodar no **celular** (e não no notebook), a smart TV acessa o end
 
 Depois é só abrir o endereço **Na rede Wi-Fi** no navegador da TV e salvar como favorito. Nada mais precisa ser feito no celular: ele fica na tomada, com o Termux rodando, e a TV acessa os canais que o celular busca e repassa.
 
+### TV Box como servidor
+
+Uma TV Box (Android TV) serve muito bem como servidor: fica na tomada, ligada o tempo todo e o IP dela quase nunca muda. O roteiro é o mesmo do Termux, com duas diferenças:
+
+- **Android 7.0 ou superior** (Configurações → Sobre → Versão do Android). Boxes antigas com Android 5 ou 6 não rodam o Termux atual — nesses casos, use o celular ou o notebook.
+- O comando `eftv` **abre o navegador** do aparelho. Na box isso toma a tela da TV; use `eftv-servidor`, que sobe o servidor sem abrir nada. É o que o Termux:Boot usa na inicialização.
+
+Checklist rápido na box:
+
+```bash
+pkg install -y python git
+git clone https://github.com/EvertonFagundes/eftv.git ~/eftv
+bash ~/eftv/instalar/instalar-eftv-termux.sh
+eftv-servidor
+```
+
+Depois, na smart TV: abra `http://IP-DA-BOX:8124/` e salve como favorito. Vale fixar o IP da box no roteador (ou em *Configurações de rede → Configurações de IP → Estático*) para o favorito nunca quebrar.
+
+Atenção ao Wi-Fi: a box precisa buscar o stream e repassá-lo à TV, então o canal de 4K (15–25 Mbps) passa a depender do Wi-Fi da box. Boxes com Wi-Fi fraco ou só 2,4 GHz podem engasgar; nesse caso, o celular (que costuma ter antena melhor) ou um notebook são melhores.
+
 ## Como adicionar canais
 
 1. Abra a página inicial.
