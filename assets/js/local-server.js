@@ -67,14 +67,23 @@
 
   /* ------------------------------------------------------------- sondagem */
   async function sondar() {
+    // No modo local a consulta é feita no mesmo servidor que serve a página
+    // (assim funciona também de uma smart TV, que não tem o 127.0.0.1 do
+    // celular). No modo estático, sondamos o loopback da própria máquina.
+    const url =
+      window.CANAIS_MODO === "local" ? "/api/status" : `${base}/api/status`;
     try {
-      const resp = await fetch(`${base}/api/status`, { cache: "no-store", mode: "cors" });
+      const resp = await fetch(url, { cache: "no-store", mode: "cors" });
       if (!resp.ok) return null;
       const dados = await resp.json();
       return dados && dados.ok ? dados : null;
     } catch (_) {
       return null;
     }
+  }
+
+  function enderecoLocal() {
+    return window.CANAIS_MODO === "local" ? location.origin : base;
   }
 
   function aplicarEstado(dados) {
@@ -87,17 +96,16 @@
     }
     mostrar(btnIniciar, false);
     mostrar(btnAbrir, true);
-    if (btnAbrir) btnAbrir.href = `${base}/`;
+    if (btnAbrir) btnAbrir.href = `${enderecoLocal()}/`;
     const playlists = dados.playlists || 0;
     const canais = dados.canais || 0;
     mostrarRede(dados.urls);
 
     // Quando a página é servida pelo próprio servidor, o endereço correto é o
     // que o navegador está usando (pode ser o IP da rede, em uma smart TV).
-    const endereco = window.CANAIS_MODO === "local" ? location.origin : base;
     const onde = ehHostLocal ? "" : " · você está em outro aparelho";
     status(
-      `Servidor local ativo em ${endereco} · ${playlists} ${
+      `Servidor local ativo em ${enderecoLocal()} · ${playlists} ${
         playlists === 1 ? "playlist" : "playlists"
       } · ${canais} ${canais === 1 ? "canal" : "canais"}${onde}`,
       "ok"
@@ -197,8 +205,13 @@
     if (!btnParar) return;
     btnParar.disabled = true;
     status("Encerrando o servidor...", "neutro");
+    // No modo local o comando vai para o servidor que serve a página.
+    const url =
+      window.CANAIS_MODO === "local"
+        ? "/api/servidor?acao=parar"
+        : `${base}/api/servidor?acao=parar`;
     try {
-      await fetch(`${base}/api/servidor?acao=parar`, {
+      await fetch(url, {
         method: "POST",
         headers: { "X-EFTV-Local": "1" },
         cache: "no-store",
@@ -271,7 +284,7 @@
 
   /* ------------------------------------------------------------- início */
   function init() {
-    if (btnAbrir) btnAbrir.href = `${base}/`;
+    if (btnAbrir) btnAbrir.href = `${enderecoLocal()}/`;
 
     btnIniciar && btnIniciar.addEventListener("click", iniciar);
     btnParar && btnParar.addEventListener("click", parar);
