@@ -92,6 +92,13 @@ O GitHub Pages não executa Python, então essa versão funciona de forma difere
 - **Dados:** cada navegador/dispositivo tem sua própria biblioteca; não há sincronização nem armazenamento no GitHub.
 - **Proxy completo, importação por link sem CORS e mais recursos:** rode o `server.py` localmente.
 
+### Se a importação falhar no Pages
+
+- Use o botão **Copiar link** na lista de playlists. O endereço mostrado na tela é mascarado com `***` e não funciona se for copiado manualmente.
+- O link precisa ser o da **lista M3U** do provedor (normalmente `get.php...type=m3u_plus` ou um arquivo `.m3u` / `.m3u8` com vários `#EXTINF`). Páginas de login, respostas JSON da API e manifests de um único canal não são playlists.
+- Um `.m3u8` baixado de um canal contém apenas os segmentos daquele canal. Para importar vários canais, use a lista completa do provedor.
+- A EFTV agora reconhece arquivos UTF-16, quebras de linha antigas e URLs entre aspas, e mostra uma mensagem específica para HTML, JSON, links RTMP/RTSP/UDP, arquivos compactados e manifests HLS.
+
 Para publicar a sua própria cópia, envie os arquivos para um repositório e ative **Settings → Pages → Deploy from a branch → main / (root)**. O arquivo `.nojekyll` já está incluído.
 
 ## Estrutura
