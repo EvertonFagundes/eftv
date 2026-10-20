@@ -24,6 +24,7 @@ Player local de playlists IPTV para o navegador. Importe sua lista `.m3u` / `.m3
 ## Como rodar
 
 ```bash
+git clone https://github.com/EvertonFagundes/eftv.git
 cd eftv
 ./start.sh
 # ou: python3 server.py
