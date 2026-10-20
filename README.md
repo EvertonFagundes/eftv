@@ -108,6 +108,12 @@ Na interface, o cartão **Servidor local** tem o interruptor **Acesso pela rede 
 
 Depois é só abrir no Chrome do Android (ou em qualquer navegador da rede) o endereço mostrado, por exemplo `http://192.168.0.14:8124/`. O celular precisa estar **na mesma rede Wi-Fi** do notebook.
 
+Se o celular não conseguir conectar, em geral é o firewall do Windows bloqueando a entrada. Rode `instalar/liberar-firewall.bat` (ele pede permissão de administrador e libera a porta 8124 na rede privada):
+
+```bash
+netsh advfirewall firewall add rule name="EFTV (servidor local na rede)" dir=in action=allow protocol=TCP localport=8124 profile=private
+```
+
 Detalhes que importam nesse cenário:
 
 - **Celular e TV precisam estar na mesma rede Wi-Fi**, e o roteador não pode ter "isolamento de clientes" (AP isolation) ligado.
