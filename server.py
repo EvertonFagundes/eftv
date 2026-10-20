@@ -172,9 +172,15 @@ def _prioridade_interface(interface: str) -> int:
     return 2
 
 
-def urls_de_acesso(porta: int) -> list[str]:
-    """Endereços para abrir a EFTV: loopback e os IPs da rede local."""
+def urls_de_acesso(porta: int, escuta: str = "") -> list[str]:
+    """Endereços para abrir a EFTV: loopback e os IPs da rede local.
+
+    Os IPs da rede só aparecem quando o servidor está escutando além do
+    loopback (--lan); caso contrário, o endereço announced não funcionaria.
+    """
     urls = [f"http://127.0.0.1:{porta}/"]
+    if escuta in ("127.0.0.1", "localhost", "::1"):
+        return urls
     for ip in enderecos_locais():
         urls.append(f"http://{ip}:{porta}/")
     return urls
@@ -212,13 +218,14 @@ def abrir_navegador(url: str) -> None:
 
 
 def analisar_protocolo(argumento: str) -> dict:
-    """Interpreta eftv://acao?porta=8124.
+    """Interpreta eftv://acao?porta=8124&lan=1.
 
-    Devolve {"acao": ..., "porta": ...}. Ações conhecidas: "iniciar" e "parar".
+    Devolve {"acao": ..., "porta": ..., "lan": ...}. Ações conhecidas:
+    "iniciar" e "parar". Com lan=1 o servidor escuta também na rede local.
     """
     texto = str(argumento or "").strip()
     if not texto.lower().startswith(PROTOCOLO + "://"):
-        return {"acao": "", "porta": ""}
+        return {"acao": "", "porta": "", "lan": False}
 
     partes = urlsplit(texto)
     acao = (partes.netloc or partes.path.lstrip("/") or "iniciar").lower()
@@ -226,7 +233,8 @@ def analisar_protocolo(argumento: str) -> dict:
         acao = "iniciar"
     consulta = parse_qs(partes.query)
     porta = (consulta.get("porta") or consulta.get("port") or [""])[0].strip()
-    return {"acao": acao, "porta": porta}
+    lan = (consulta.get("lan") or ["0"])[0].strip().lower() in ("1", "true", "sim", "yes")
+    return {"acao": acao, "porta": porta, "lan": lan}
 
 
 def servidor_rodando(porta: int) -> bool:
@@ -898,14 +906,17 @@ class Handler(SimpleHTTPRequestHandler):
             store = load_store()
             playlists = store.get("playlists", [])
             total_canais = sum(len(p.get("channels", [])) for p in playlists)
+            escuta = self.server.server_address[0]
+            urls = urls_de_acesso(self.server.server_address[1], escuta)
             self._send_json(
                 {
                     "ok": True,
                     "modo": "local",
                     "versao": VERSAO,
-                    "host": self.server.server_address[0],
+                    "host": escuta,
                     "porta": self.server.server_address[1],
-                    "urls": urls_de_acesso(self.server.server_address[1]),
+                    "urls": urls,
+                    "rede": len(urls) > 1,
                     "playlists": len(playlists),
                     "canais": total_canais,
                     "python": platform.python_version(),
@@ -1359,7 +1370,7 @@ class Servidor(ThreadingHTTPServer):
 
 def banner_inicial(host: str, porta: int) -> None:
     """Mostra os endereços para usar a EFTV, inclusive em outros aparelhos."""
-    urls = urls_de_acesso(porta)
+    urls = urls_de_acesso(porta, host)
     print("", flush=True)
     print("  EFTV no ar!", flush=True)
     print(f"  Neste aparelho:  {urls[0]}", flush=True)
@@ -1367,12 +1378,15 @@ def banner_inicial(host: str, porta: int) -> None:
         print(f"  Na rede Wi-Fi:   {url}", flush=True)
     if len(urls) > 1:
         print(
-            "  Na smart TV (ou tablet, notebook), abra o navegador e digite",
+            "  No celular ou na smart TV, abra o navegador e digite o",
             flush=True,
         )
-        print("  o endereço \"Na rede Wi-Fi\".", flush=True)
+        print("  endereço \"Na rede Wi-Fi\" (mesma rede Wi-Fi).", flush=True)
     else:
-        print("  Para usar em outros aparelhos da rede, start com --lan.", flush=True)
+        print(
+            "  Para usar no celular ou na smart TV, inicie com --lan.",
+            flush=True,
+        )
     print(f"  Playlists: {STORE_PATH}", flush=True)
     print("  Deixe esta janela aberta. Para encerrar, pressione Ctrl+C.", flush=True)
     print("", flush=True)
@@ -1380,7 +1394,7 @@ def banner_inicial(host: str, porta: int) -> None:
 
 def main() -> None:
     argumentos = sys.argv[1:]
-    protocolo = {"acao": "", "porta": ""}
+    protocolo = {"acao": "", "porta": "", "lan": False}
     for argumento in argumentos:
         if argumento.lower().startswith(PROTOCOLO + "://"):
             protocolo = analisar_protocolo(argumento)
@@ -1401,6 +1415,9 @@ def main() -> None:
             host = baixo.split("=", 1)[1]
         elif baixo in ("--lan", "--rede"):
             host = "0.0.0.0"
+
+    if protocolo["lan"]:
+        host = "0.0.0.0"
 
     if protocolo["porta"]:
         try:

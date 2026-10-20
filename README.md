@@ -102,6 +102,12 @@ Com `--lan` (ou `HOST=0.0.0.0`) o servidor escuta também na interface de rede, 
 
 A partir daí, qualquer aparelho da mesma rede abre `http://192.168.0.14:8124/` no navegador e usa a EFTV completa — o proxy de streams continua funcionando, porque quem busca o conteúdo é o servidor (o celular ou o notebook), não a TV.
 
+### Ligar pelo celular
+
+Na interface, o cartão **Servidor local** tem o interruptor **Acesso pela rede Wi-Fi**. Marque e clique em **Iniciar servidor local**: o servidor sobe escutando em `0.0.0.0` e o cartão passa a mostrar o endereço para digitar no celular. Pelo terminal, o equivalente é `python3 server.py --lan`.
+
+Depois é só abrir no Chrome do Android (ou em qualquer navegador da rede) o endereço mostrado, por exemplo `http://192.168.0.14:8124/`. O celular precisa estar **na mesma rede Wi-Fi** do notebook.
+
 Detalhes que importam nesse cenário:
 
 - **Celular e TV precisam estar na mesma rede Wi-Fi**, e o roteador não pode ter "isolamento de clientes" (AP isolation) ligado.

@@ -16,6 +16,7 @@
 
   const statusEl = document.querySelector("[data-local-status]");
   const redeEl = document.querySelector("[data-local-rede]");
+  const lanEl = document.querySelector("[data-local-lan]");
   const btnIniciar = document.querySelector("[data-local-start]");
   const btnAbrir = document.querySelector("[data-local-open]");
   const btnParar = document.querySelector("[data-local-stop]");
@@ -37,6 +38,7 @@
   let aba = null;
   let iniciando = false;
   let abaAberta = false;
+  let ultimoStatus = null;
 
   function status(texto, tom) {
     if (!statusEl) return;
@@ -59,7 +61,7 @@
     }
     redeEl.hidden = false;
     redeEl.innerHTML =
-      "Outros aparelhos na mesma rede: " +
+      "No celular ou na smart TV, abra: " +
       externos
         .map((u) => `<code>${window.canaisEscape ? window.canaisEscape(u) : u}</code>`)
         .join(" · ");
@@ -99,6 +101,7 @@
     if (btnAbrir) btnAbrir.href = `${enderecoLocal()}/`;
     const playlists = dados.playlists || 0;
     const canais = dados.canais || 0;
+    ultimoStatus = dados;
     mostrarRede(dados.urls);
 
     // Quando a página é servida pelo próprio servidor, o endereço correto é o
@@ -191,7 +194,8 @@
 
     // Dispara o protocolo registrado pelo lançador.
     const link = document.createElement("a");
-    link.href = `eftv://iniciar?porta=${porta}`;
+    const quer = `porta=${porta}` + (lanEl && lanEl.checked ? "&lan=1" : "");
+    link.href = `eftv://iniciar?${quer}`;
     link.style.display = "none";
     document.body.appendChild(link);
     link.click();
@@ -298,6 +302,20 @@
     fecharDialog && fecharDialog.addEventListener("click", fechar);
     btnCopiar && btnCopiar.addEventListener("click", copiarComando);
     btnTermux && btnTermux.addEventListener("click", abrirTermux);
+
+    // O acesso pela rede só passa a valer quando o servidor sobe com --lan.
+    lanEl &&
+      lanEl.addEventListener("change", () => {
+        if (!ultimoStatus) return;
+        if (lanEl.checked && !ultimoStatus.rede) {
+          status(
+            "O servidor já está rodando só neste aparelho. Encerre-o " +
+              "(botão \"Encerrar servidor\" ou fechando a janela do terminal) " +
+              "e clique em \"Iniciar servidor local\" de novo.",
+            "neutro"
+          );
+        }
+      });
 
     // No Android não existe o protocolo eftv://: o servidor sobe pelo Termux.
     if (ehAndroid) {
