@@ -1,0 +1,15 @@
+# Dados locais: contêm URLs, usuários, senhas e tokens das playlists.
+data/*.json
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Logs e arquivos temporários
+*.log
+*.tmp
+.DS_Store
+.env

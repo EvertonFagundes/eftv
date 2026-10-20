@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EFTV — Seus canais, em um só lugar</title>
+  <meta name="description" content="EFTV: importe sua playlist M3U/M3U8 e assista aos seus canais ao vivo ou sob demanda no navegador.">
+  <meta name="theme-color" content="#071426">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" aria-label="EFTV — início">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+        </span>
+        <span class="brand-name">EF<b>TV</b></span>
+      </a>
+
+      <nav class="main-nav" aria-label="Navegação principal">
+        <a href="index.html" class="is-active">Início</a>
+        <a href="index.html#canais">Canais</a>
+        <a href="index.html#playlists">Adicionar</a>
+      </nav>
+
+      <button class="search-trigger" type="button" data-search-open aria-label="Buscar canal">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.8" cy="10.8" r="6.8"></circle>
+          <path d="m16 16 4.2 4.2"></path>
+        </svg>
+        <span>Buscar</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="home-hero" aria-label="EFTV">
+      <div class="home-hero-copy">
+        <span class="eyebrow"><i class="spark"></i> Streaming local, sem complicação</span>
+        <h1>Seus canais,<br><span class="gradient-text">em um só lugar.</span></h1>
+        <p>
+          Importe sua playlist <code>.m3u</code> ou <code>.m3u8</code> e acompanhe
+          ao vivo ou sob demanda. Sua biblioteca fica salva neste computador.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#playlists">Adicionar playlist</a>
+          <a class="btn btn-ghost" href="#canais">Explorar canais</a>
+        </div>
+        <div class="hero-metrics" aria-label="Resumo da biblioteca">
+          <div class="metric"><strong id="contador-canais">0</strong><span>canais</span></div>
+          <div class="metric"><strong data-hero-live>0</strong><span>ao vivo</span></div>
+          <div class="metric"><strong data-hero-playlists>0</strong><span>playlists</span></div>
+        </div>
+      </div>
+
+      <div class="home-hero-art" aria-hidden="true">
+        <div class="signal-glow"></div>
+        <div class="signal-card">
+          <div class="signal-top">
+            <span class="live-pill"><i class="live-dot"></i> AO VIVO</span>
+            <span class="signal-brand">EFTV</span>
+          </div>
+          <div class="signal-screen">
+            <span class="signal-play">
+              <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+            </span>
+            <span class="signal-scan"></span>
+          </div>
+          <div class="signal-bottom">
+            <span></span><span></span><span></span><span class="wide"></span>
+          </div>
+        </div>
+        <div class="signal-note"><i class="dot-blue"></i> Sua playlist, sua programação</div>
+      </div>
+    </section>
+
+    <section class="playlist-panel" id="playlists" aria-labelledby="playlists-titulo">
+      <div class="playlist-head">
+        <div>
+          <span class="playlist-kicker">Sua biblioteca</span>
+          <h2 id="playlists-titulo">Adicionar playlist</h2>
+          <p class="playlist-sub">
+            Cole o link de uma lista <code>.m3u</code> / <code>.m3u8</code> ou envie um arquivo.
+            Os canais entram na grade abaixo e ficam salvos neste computador.
+          </p>
+        </div>
+        <button class="playlist-btn ghost" type="button" data-playlist-clear hidden>Remover todas</button>
+      </div>
+
+      <form class="playlist-form" data-playlist-form>
+        <div class="playlist-url-row">
+          <input
+            class="channel-filter playlist-url"
+            type="url"
+            inputmode="url"
+            placeholder="https://exemplo.com/lista.m3u8"
+            aria-label="Link da playlist M3U ou M3U8"
+            autocomplete="off"
+            spellcheck="false"
+            data-playlist-url
+          >
+          <button class="playlist-btn primary" type="submit" data-playlist-add>Adicionar link</button>
+        </div>
+
+        <div class="playlist-or"><span>ou envie um arquivo</span></div>
+
+        <div class="playlist-file-row">
+          <label class="playlist-btn" for="playlist-file">Escolher arquivo .m3u/.m3u8</label>
+          <input
+            id="playlist-file"
+            type="file"
+            accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain"
+            data-playlist-file
+            hidden
+          >
+          <span class="playlist-file-name" data-playlist-file-name>Nenhum arquivo selecionado</span>
+        </div>
+
+        <p class="playlist-status" data-playlist-status hidden role="status"></p>
+      </form>
+
+      <div class="playlist-list" data-playlist-list></div>
+      <div class="playlist-empty" data-playlist-empty>
+        Nenhuma playlist adicionada ainda. Cole um link acima ou envie um arquivo para começar.
+      </div>
+    </section>
+
+    <section id="canais" class="library-section" aria-labelledby="canais-titulo">
+      <div class="section-head">
+        <div>
+          <span class="section-kicker">Sua programação</span>
+          <h2 id="canais-titulo">Canais</h2>
+        </div>
+        <div class="filter-row">
+          <input class="channel-filter" type="search" placeholder="Filtrar por nome ou grupo..." data-channel-filter>
+        </div>
+      </div>
+
+      <div class="filter-chips" id="filtros" aria-label="Filtrar canais">
+        <button class="category-filter active" type="button" data-category-filter="">Todas</button>
+        <button class="category-filter" type="button" data-category-filter="__ao_vivo">Ao vivo</button>
+        <button class="category-filter" type="button" data-category-filter="__sob_demanda">Sob demanda</button>
+        <button class="category-filter" type="button" data-category-filter="importados">Importados</button>
+      </div>
+
+      <div class="channel-grid" data-channel-grid></div>
+      <div class="load-more-row">
+        <button class="category-filter load-more" type="button" data-load-more hidden>Mostrar mais canais</button>
+      </div>
+      <div class="no-results" data-no-results hidden>Nenhum canal por aqui ainda. Adicione sua primeira playlist acima.</div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <span class="footer-brand">
+        <span class="brand-mark small" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+        </span>
+        EFTV
+      </span>
+      <span>Sua biblioteca de canais, direto no navegador.</span>
+      <span class="footer-note">Conteúdo reproduzido a partir das playlists que você importa.</span>
+    </div>
+  </footer>
+
+  <!-- Overlay de busca -->
+  <div class="search-overlay" data-search-overlay aria-hidden="true" role="dialog" aria-label="Buscar canal">
+    <div class="search-box">
+      <div class="row">
+        <input type="search" placeholder="Buscar canal..." data-global-search autocomplete="off">
+        <button class="search-close" type="button" data-search-close aria-label="Fechar busca">✕</button>
+      </div>
+      <div class="search-results" data-search-results></div>
+    </div>
+  </div>
+
+  <script src="assets/js/data.js"></script>
+  <script src="api/catalogo.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/playlists.js"></script>
+  <script>
+    /* Renderiza a grade com os canais importados. */
+    window.CanaisRenderGrade();
+  </script>
+</body>
+</html>

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>EFTV — Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #050b16; overflow: hidden;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    #wrapper { position: relative; width: 100%; height: 100vh; }
+    video { width: 100%; height: 100%; background: #000; object-fit: contain; }
+    #status {
+      position: absolute; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; padding: 28px; text-align: center;
+      background:
+        radial-gradient(70% 90% at 50% 0%, rgba(47, 155, 255, 0.12), transparent 65%),
+        #050b16;
+      color: #cfdcf2;
+    }
+    #status[hidden] { display: none; }
+    .spinner {
+      width: 44px; height: 44px; border: 4px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #2f9bff; border-radius: 50%; animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .s-title { font-size: 1.05rem; font-weight: 600; color: #fff; }
+    .s-sub { font-size: 0.85rem; max-width: 46ch; line-height: 1.5; }
+    .s-button {
+      margin-top: 6px; padding: 10px 20px; border-radius: 999px; border: 0;
+      background: linear-gradient(135deg, #35a5ff, #0b5bd3);
+      color: #fff; font-weight: 700; cursor: pointer;
+      box-shadow: 0 10px 24px rgba(35, 136, 255, 0.28);
+    }
+    .overlay-badges {
+      position: absolute; left: 10px; bottom: 10px; z-index: 5;
+      display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 20px);
+    }
+    .badge {
+      font-size: 0.68rem; letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.7);
+      background: rgba(0, 0, 0, 0.5); padding: 4px 9px; border-radius: 999px;
+      backdrop-filter: blur(4px);
+    }
+    .badge.demo { color: #ffd7a1; background: rgba(120, 72, 0, 0.72); }
+    .badge:empty { display: none; }
+
+    .live-jump {
+      position: absolute; top: 10px; right: 10px; z-index: 8;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 7px 12px; border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(0, 0, 0, 0.62); color: #fff;
+      font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer;
+      backdrop-filter: blur(6px);
+    }
+    .live-jump[hidden] { display: none; }
+    .live-jump:hover { background: rgba(255, 77, 109, 0.84); border-color: rgba(255, 255, 255, 0.5); }
+    .live-jump-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #37d67a;
+      box-shadow: 0 0 0 3px rgba(55, 214, 122, 0.18);
+    }
+    .live-jump.atrasado { border-color: rgba(255, 176, 32, 0.6); }
+    .live-jump.atrasado .live-jump-dot {
+      background: #ffb020; box-shadow: 0 0 0 3px rgba(255, 176, 32, 0.18);
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
+  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+</head>
+<body>
+  <div id="wrapper">
+    <video id="player" controls playsinline autoplay muted></video>
+
+    <button class="live-jump" id="btn-ao-vivo" type="button" hidden
+            aria-label="Ir para o ponto mais recente da transmissão ao vivo">
+      <i class="live-jump-dot"></i><span id="live-jump-label">Ao vivo</span>
+    </button>
+
+    <div class="overlay-badges">
+      <span class="badge" id="badge-fonte"></span>
+      <span class="badge demo" id="badge-demo"></span>
+    </div>
+
+    <div id="status">
+      <div class="spinner"></div>
+      <div class="s-title">Carregando transmissão...</div>
+      <div class="s-sub" id="status-sub">
+        Se não carregar, escolha outra opção de transmissão na página do canal.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const src = params.get("src");
+      // O mpegts.js executa em um Web Worker: lá, uma URL relativa como
+      // "/api/proxy?..." não tem base e o fetch falha ("Failed to parse URL").
+      // Convertemos para absoluta antes de entregar ao player.
+      const srcAbsoluto = src ? new URL(src, location.href).href : "";
+      const tipo = (params.get("tipo") || "hls").toLowerCase();
+      const fallback = params.get("fallback");
+      const fallbackTipo = (params.get("fallbackTipo") || "ts").toLowerCase();
+      const fallbackAbsoluto = fallback ? new URL(fallback, location.href).href : "";
+      let srcAtual = srcAbsoluto;
+      let tipoAtual = tipo;
+      let tentouFallback = false;
+      let hlsTocou = false;
+      const canal = params.get("canal") || "";
+      const label = params.get("label") || "";
+      const nome = params.get("nome") || "";
+      const demo = params.get("demo") === "1";
+      const aoVivo = params.get("aoVivo") === "1" && !demo;
+
+      const video = document.getElementById("player");
+      const status = document.getElementById("status");
+      const statusSub = document.getElementById("status-sub");
+      const badgeFonte = document.getElementById("badge-fonte");
+      const badgeDemo = document.getElementById("badge-demo");
+      const botaoAoVivo = document.getElementById("btn-ao-vivo");
+      const rotuloAoVivo = document.getElementById("live-jump-label");
+
+      badgeFonte.textContent = [canal, label].filter(Boolean).join(" · ");
+      badgeDemo.textContent = demo ? "fonte de teste" : "";
+
+      if (demo) {
+        statusSub.textContent = nome
+          ? "Reproduzindo: " + nome + " (fonte de teste)."
+          : "Reproduzindo uma fonte de teste.";
+      }
+
+      let hlsPlayer = null;
+      let dashPlayer = null;
+      let mpegtsPlayer = null;
+
+      // Marca que o HLS realmente começou a tocar; antes disso, um erro fatal
+      // pode ser resolvido tentando a fonte alternativa (MPEG-TS).
+      video.addEventListener("playing", () => { hlsTocou = true; }, { once: true });
+
+      function destruirPlayers() {
+        if (hlsPlayer) { try { hlsPlayer.destroy(); } catch (_) {} hlsPlayer = null; }
+        if (dashPlayer) { try { dashPlayer.reset(); } catch (_) {} dashPlayer = null; }
+        if (mpegtsPlayer) { try { mpegtsPlayer.destroy(); } catch (_) {} mpegtsPlayer = null; }
+      }
+
+      function ocultarStatus() { status.hidden = true; }
+
+      function falhar(mensagem) {
+        destruirPlayers();
+        mostrarBotaoAoVivo(false);
+        status.innerHTML =
+          '<div class="s-title">Não foi possível iniciar</div>' +
+          '<div class="s-sub"></div>' +
+          '<button class="s-button" type="button">Tentar novamente</button>';
+        status.querySelector(".s-sub").textContent = mensagem;
+        status.hidden = false;
+        status.querySelector(".s-button").addEventListener("click", (e) => {
+          e.stopPropagation();
+          location.reload();
+        });
+      }
+
+      function tentarFallback() {
+        if (!fallbackAbsoluto || tentouFallback) return false;
+        tentouFallback = true;
+        try { if (hlsPlayer) hlsPlayer.destroy(); } catch (_) {}
+        hlsPlayer = null;
+        srcAtual = fallbackAbsoluto;
+        tipoAtual = fallbackTipo || "ts";
+        mostrarBotaoAoVivo(false);
+        status.hidden = false;
+        status.innerHTML =
+          '<div class="spinner"></div>' +
+          '<div class="s-title">Tentando MPEG-TS...</div>' +
+          '<div class="s-sub">A variante HLS não respondeu; usando a opção alternativa.</div>';
+        tocarFonte();
+        return true;
+      }
+
+      function fimAoVivo() {
+        const faixas = video.seekable;
+        if (!faixas || !faixas.length) return null;
+        try {
+          const fim = faixas.end(faixas.length - 1);
+          return Number.isFinite(fim) ? fim : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function mostrarBotaoAoVivo(mostrar) {
+        if (!botaoAoVivo) return;
+        botaoAoVivo.hidden = !(mostrar && aoVivo);
+        if (!botaoAoVivo.hidden) atualizarBotaoAoVivo();
+      }
+
+      function atualizarBotaoAoVivo() {
+        if (!botaoAoVivo || botaoAoVivo.hidden) return;
+        const fim = fimAoVivo();
+        if (fim == null) return;
+        const atraso = Math.max(0, fim - video.currentTime);
+        const atrasado = atraso > 6;
+        botaoAoVivo.classList.toggle("atrasado", atrasado);
+        const texto = atrasado ? "Voltar ao vivo" : "Ao vivo";
+        if (rotuloAoVivo && rotuloAoVivo.textContent !== texto) rotuloAoVivo.textContent = texto;
+        botaoAoVivo.title = atrasado
+          ? `Você está ${Math.round(atraso)}s atrás. Clique para ir ao ponto mais recente.`
+          : "Você está no ponto mais recente da transmissão.";
+      }
+
+      function irParaAoVivo() {
+        if (!aoVivo) return;
+
+        // MPEG-TS pode ser entregue em blocos finitos. Reconectar busca o
+        // trecho mais recente em vez de pular para o fim do bloco atual.
+        if (tipoAtual === "ts" && mpegtsPlayer) {
+          try { mpegtsPlayer.destroy(); } catch (_) {}
+          mpegtsPlayer = null;
+          mostrarBotaoAoVivo(false);
+          status.hidden = false;
+          status.innerHTML =
+            '<div class="spinner"></div>' +
+            '<div class="s-title">Buscando o ponto ao vivo...</div>';
+          tocarTs();
+          return;
+        }
+
+        const fim = fimAoVivo();
+        if (fim != null) {
+          try { video.currentTime = Math.max(0, fim - 0.5); } catch (_) {}
+        }
+        video.play().catch(() => {});
+        atualizarBotaoAoVivo();
+      }
+
+      if (botaoAoVivo) {
+        botaoAoVivo.addEventListener("click", irParaAoVivo);
+        setInterval(atualizarBotaoAoVivo, 2000);
+      }
+      video.addEventListener("timeupdate", atualizarBotaoAoVivo);
+      video.addEventListener("progress", atualizarBotaoAoVivo);
+      video.addEventListener("seeked", atualizarBotaoAoVivo);
+      video.addEventListener("play", atualizarBotaoAoVivo);
+      video.addEventListener("pause", atualizarBotaoAoVivo);
+
+      function tocarHls() {
+        // hls.js quando disponível; senão suporte nativo (Safari/iOS).
+        if (window.Hls && window.Hls.isSupported()) {
+          hlsPlayer = new window.Hls({
+            lowLatencyMode: true,
+            enableWorker: true,
+            // Em HLS ao vivo, usar Infinity evita a barra de duração finita
+            // (o navegador mostra "AO VIVO" em vez de 13s, 18s, etc.).
+            liveDurationInfinity: true,
+            backBufferLength: 30,
+          });
+          hlsPlayer.loadSource(srcAtual);
+          hlsPlayer.attachMedia(video);
+          hlsPlayer.on(window.Hls.Events.MANIFEST_PARSED, () => {
+            ocultarStatus();
+            video.play().catch(() => {});
+          });
+          hlsPlayer.on(window.Hls.Events.LEVEL_LOADED, (_evt, data) => {
+            if (data && data.details && data.details.live) mostrarBotaoAoVivo(true);
+          });
+          hlsPlayer.on(window.Hls.Events.ERROR, (_evt, data) => {
+            if (tentouFallback || !data || !data.fatal) return;
+            if (!hlsTocou && tentarFallback()) return;
+            falhar(
+              "Erro no HLS (" + data.type + " / " + data.details + "). " +
+              "Pode ser bloqueio de CORS, mistura HTTP/HTTPS ou stream fora do ar."
+            );
+          });
+          return;
+        }
+        if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = srcAtual;
+          video.addEventListener("loadedmetadata", () => {
+            ocultarStatus();
+            video.play().catch(() => {});
+            mostrarBotaoAoVivo(true);
+          }, { once: true });
+          video.addEventListener("error", () => falhar("Falha ao carregar a playlist HLS (suporte nativo)."), { once: true });
+          return;
+        }
+        if (!tentarFallback()) {
+          falhar("Este navegador não suporta HLS (hls.js não carregou).");
+        }
+      }
+
+      function tocarTs() {
+        // MPEG-TS progressivo (muito comum em listas IPTV com links .ts).
+        if (!window.mpegts || typeof window.mpegts.createPlayer !== "function") {
+          falhar("mpegts.js não carregou; não é possível reproduzir este stream MPEG-TS.");
+          return;
+        }
+        try {
+          mpegtsPlayer = window.mpegts.createPlayer(
+            { type: "mse", isLive: true, url: srcAtual },
+            { enableWorker: true, liveBufferLatencyChasing: true }
+          );
+          mpegtsPlayer.attachMediaElement(video);
+          mpegtsPlayer.load();
+          mpegtsPlayer.play().catch(() => {});
+          mpegtsPlayer.on(window.mpegts.Events.ERROR, (_tipo, detalhe) => {
+            falhar(
+              "Erro no MPEG-TS (" + detalhe + "). " +
+              "Verifique se o link está no ar e se o proxy consegue acessá-lo."
+            );
+          });
+          mpegtsPlayer.on(window.mpegts.Events.MEDIA_INFO, () => {
+            ocultarStatus();
+            mostrarBotaoAoVivo(true);
+          });
+          setTimeout(() => { if (video.readyState >= 2) ocultarStatus(); }, 4000);
+        } catch (erro) {
+          falhar("Falha ao iniciar o MPEG-TS: " + erro);
+        }
+      }
+
+      function tocarDash() {
+        if (!window.dashjs) {
+          falhar("dash.js não carregou; não é possível reproduzir este manifesto DASH.");
+          return;
+        }
+        dashPlayer = window.dashjs.MediaPlayer().create();
+        dashPlayer.initialize(video, srcAtual, true);
+        dashPlayer.on(window.dashjs.MediaPlayer.events.PLAYBACK_METADATA_LOADED, ocultarStatus);
+        dashPlayer.on(window.dashjs.MediaPlayer.events.ERROR_METADATA_LOADED, () => falhar("Manifesto DASH inválido."));
+        dashPlayer.on(window.dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
+          ocultarStatus();
+          video.play().catch(() => {});
+          mostrarBotaoAoVivo(true);
+        });
+        dashPlayer.on(window.dashjs.MediaPlayer.events.ERROR, (e) => {
+          const texto = JSON.stringify(e && (e.error || e.event || "")).toLowerCase();
+          if (/protect|drm|key|license|cenc|encrypt/.test(texto)) {
+            falhar(
+              "Este manifesto é protegido por DRM (CENC). Reproduzir exigiria uma licença " +
+              "válida do dono do conteúdo — não há contorno de DRM aqui."
+            );
+            return;
+          }
+          falhar("Erro no DASH: " + (e && e.error) + ". Verifique CORS e se o manifesto está no ar.");
+        });
+        // Alguns manifestos não disparam STREAM_INITIALIZED em todos os builds.
+        setTimeout(() => { if (video.readyState >= 2) ocultarStatus(); }, 4000);
+      }
+
+      function tocarMp4() {
+        mostrarBotaoAoVivo(false);
+        video.src = srcAtual;
+        video.addEventListener("loadeddata", ocultarStatus, { once: true });
+        video.addEventListener("error", () => falhar("Falha ao carregar o arquivo de vídeo."), { once: true });
+      }
+
+      function tocarFonte() {
+        if (tipoAtual === "dash" || /\.mpd(\?|$)/i.test(srcAtual)) {
+          tocarDash();
+        } else if (tipoAtual === "mp4" || /\.mp4(\?|$)/i.test(srcAtual)) {
+          tocarMp4();
+        } else if (tipoAtual === "ts" || /\.ts(\?|$)/i.test(srcAtual)) {
+          tocarTs();
+        } else {
+          tocarHls();
+        }
+      }
+
+      if (!src) {
+        falhar("Parâmetro src ausente.");
+      } else {
+        tocarFonte();
+      }
+    })();
+  </script>
+</body>
+</html>

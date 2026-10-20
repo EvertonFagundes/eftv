@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canal — EFTV</title>
+  <meta name="description" content="Assista ao seu canal na EFTV, com opções de transmissão e informações da programação.">
+  <meta name="theme-color" content="#071426">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" aria-label="EFTV — início">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+        </span>
+        <span class="brand-name">EF<b>TV</b></span>
+      </a>
+
+      <nav class="main-nav" aria-label="Navegação principal">
+        <a href="index.html">Início</a>
+        <a href="index.html#canais" class="is-active">Canais</a>
+        <a href="index.html#playlists">Adicionar</a>
+      </nav>
+
+      <button class="search-trigger" type="button" data-search-open aria-label="Buscar canal">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.8" cy="10.8" r="6.8"></circle>
+          <path d="m16 16 4.2 4.2"></path>
+        </svg>
+        <span>Buscar</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="breadcrumb">
+      <a href="index.html">Início</a>
+      <span class="sep">/</span>
+      <a href="index.html#canais">Canais</a>
+      <span class="sep">/</span>
+      <span class="current" data-canal-nome-breadcrumb>Canal</span>
+    </div>
+
+    <section class="channel-hero">
+      <div class="channel-logo">
+        <img data-canal-logo src="assets/img/eftv-mark.svg" alt="">
+      </div>
+      <div class="meta">
+        <span class="kicker" data-canal-categoria>Canal</span>
+        <h1 data-canal-nome>Canal</h1>
+        <span class="live-flag" data-canal-live-flag><i class="live-dot"></i> Canal ao vivo agora</span>
+      </div>
+      <div class="stats">
+        <span class="chip" data-canal-live-chip><i class="live-dot"></i> AO VIVO</span>
+        <span class="chip chip-plain" data-canal-opcoes>1 opção de transmissão</span>
+      </div>
+    </section>
+
+    <div class="section-head">
+      <span class="chip chip-plain"><strong data-canal-nome-mini>Canal</strong></span>
+      <div class="filter-row">
+        <button class="category-filter" type="button" data-theater-toggle><span>Tela ampla</span></button>
+        <a class="category-filter" href="index.html#canais">Mais canais</a>
+      </div>
+    </div>
+
+    <div class="watch-layout" data-watch-layout>
+      <div class="player-panel">
+        <div class="player-frame" data-player-frame>
+          <iframe src="about:blank" title="Transmissão do canal" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+
+        <div class="player-controlbar">
+          <div class="left">
+            <i class="live-dot"></i>
+            <div>
+              <strong data-canal-nome-mini2>Canal</strong>
+              <small data-canal-live-sub>Transmissão ao vivo</small>
+            </div>
+          </div>
+          <span class="secure-label">EFTV</span>
+        </div>
+
+        <div class="source-picker">
+          <div class="source-picker-label">
+            <strong>Opções de transmissão</strong>
+            <span>Se uma opção não carregar, toque em outra.</span>
+          </div>
+          <div class="player-options" aria-label="Opções de transmissão">
+            <button class="player-option" type="button" data-player-url=""><span>1</span> Opção 1</button>
+            <button class="player-option" type="button" data-player-url=""><span>2</span> Opção 2</button>
+          </div>
+          <p class="source-note" data-source-note></p>
+        </div>
+      </div>
+
+      <aside class="channel-side">
+        <div class="side-heading">
+          <span class="icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Zm5-4 3 3 3-3"></path>
+            </svg>
+          </span>
+          <div>
+            <span>Programação</span>
+            <strong>O que está passando</strong>
+          </div>
+        </div>
+
+        <div class="program-card now-program" data-programa-agora></div>
+
+        <div class="program-card">
+          <small>A seguir</small>
+          <h2 style="font-size:1rem;margin-top:6px" data-programa-seguir>—</h2>
+        </div>
+
+        <div class="program-card">
+          <h2 style="font-size:1rem">O player não abriu?</h2>
+          <p>Use outra opção de transmissão. As fontes ficam organizadas como Opção 1, Opção 2 e assim por diante.</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <span class="footer-brand">
+        <span class="brand-mark small" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+        </span>
+        EFTV
+      </span>
+      <span>Sua biblioteca de canais, direto no navegador.</span>
+      <span class="footer-note">Conteúdo reproduzido a partir das playlists que você importa.</span>
+    </div>
+  </footer>
+
+  <!-- Overlay de busca -->
+  <div class="search-overlay" data-search-overlay aria-hidden="true" role="dialog" aria-label="Buscar canal">
+    <div class="search-box">
+      <div class="row">
+        <input type="search" placeholder="Buscar canal..." data-global-search autocomplete="off">
+        <button class="search-close" type="button" data-search-close aria-label="Fechar busca">✕</button>
+      </div>
+      <div class="search-results" data-search-results></div>
+    </div>
+  </div>
+
+  <script src="assets/js/data.js"></script>
+  <script src="api/catalogo.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/canal.js"></script>
+</body>
+</html>
