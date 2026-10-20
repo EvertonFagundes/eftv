@@ -3,7 +3,7 @@
    porque o catálogo contém dados da playlist do usuário; a única exceção é o
    api/modo.js, que é público e pequeno. */
 
-const CACHE = "eftv-v5";
+const CACHE = "eftv-v6";
 
 const CORE = [
   "./",
@@ -16,6 +16,7 @@ const CORE = [
   "./assets/js/catalogo-base.js",
   "./assets/js/catalogo-loader.js",
   "./assets/js/static-store.js",
+  "./assets/js/local-server.js",
   "./assets/js/app.js",
   "./assets/js/canal.js",
   "./assets/js/playlists.js",

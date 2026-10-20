@@ -8,6 +8,9 @@ mesmo quando o servidor de origem não envia cabeçalhos CORS.
 Uso:
     python3 server.py            # http://127.0.0.1:8124
     PORT=9000 python3 server.py  # outra porta
+    python3 server.py --abrir    # abre o navegador ao subir
+    python3 server.py --parar    # encerra o servidor que estiver rodando
+    python3 server.py "eftv://iniciar?port=8124"   # chamado pelo protocolo
 """
 
 from __future__ import annotations
@@ -15,12 +18,15 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import platform
 import re
 import shutil
+import socket
 import sys
 import threading
 import unicodedata
 import uuid
+import webbrowser
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
@@ -51,6 +57,61 @@ mimetypes.add_type("application/dash+xml", ".mpd")
 mimetypes.add_type("image/svg+xml", ".svg")
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("application/manifest+json", ".webmanifest")
+
+VERSAO = "1.1"
+PROTOCOLO = "eftv"
+
+
+# --------------------------------------------------------------------------- #
+# Protocolo eftv://
+# --------------------------------------------------------------------------- #
+def abrir_navegador(url: str) -> None:
+    """Abre a URL no navegador padrão sem quebrar o servidor se falhar."""
+    try:
+        webbrowser.open(url, new=2)
+    except Exception:  # noqa: BLE001 - o servidor continua mesmo sem navegador
+        pass
+
+
+def analisar_protocolo(argumento: str) -> dict:
+    """Interpreta eftv://acao?porta=8124.
+
+    Devolve {"acao": ..., "porta": ...}. Ações conhecidas: "iniciar" e "parar".
+    """
+    texto = str(argumento or "").strip()
+    if not texto.lower().startswith(PROTOCOLO + "://"):
+        return {"acao": "", "porta": ""}
+
+    partes = urlsplit(texto)
+    acao = (partes.netloc or partes.path.lstrip("/") or "iniciar").lower()
+    if acao not in ("iniciar", "parar"):
+        acao = "iniciar"
+    consulta = parse_qs(partes.query)
+    porta = (consulta.get("porta") or consulta.get("port") or [""])[0].strip()
+    return {"acao": acao, "porta": porta}
+
+
+def servidor_rodando(porta: int) -> bool:
+    """Diz se já existe um EFTV escutando na porta."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.6)
+        return sock.connect_ex(("127.0.0.1", porta)) == 0
+
+
+def encerrar_servidor(porta: int) -> int:
+    """Pede ao servidor rodando que encerre. Devolve o código de saída."""
+    url = f"http://127.0.0.1:{porta}/api/servidor?acao=parar"
+    requisicao = Request(url, method="POST")
+    requisicao.add_header("X-EFTV-Local", "1")
+    try:
+        with urlopen(requisicao, timeout=5) as resposta:
+            print(resposta.read().decode("utf-8", "replace").strip(), flush=True)
+        return 0
+    except HTTPError as exc:
+        print(f"Não foi possível encerrar o servidor (HTTP {exc.code}).", flush=True)
+    except OSError:
+        print(f"Nenhum servidor EFTV rodando na porta {porta}.", flush=True)
+    return 1
 
 
 # --------------------------------------------------------------------------- #
@@ -524,14 +585,23 @@ class Handler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     # ------------------------------------------------------------------ util
-    def _send_json(self, payload, status: int = 200) -> None:
+    def _send_json(self, payload, status: int = 200, cors: str = "") -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if cors == "publico":
+            self._cors_publico()
         self.end_headers()
         self.wfile.write(body)
+
+    def _cors_publico(self) -> None:
+        """Permite que a página do GitHub Pages leia estas rotas do servidor local."""
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-EFTV-Local")
+        self.send_header("Access-Control-Max-Age", "600")
 
     def _same_origin(self) -> bool:
         """Bloqueia POST/DELETE disparados por outras páginas (CSRF local)."""
@@ -589,8 +659,31 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "text/javascript; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
+            self._cors_publico()
             self.end_headers()
             self.wfile.write(data)
+            return
+
+        if route == "/api/status":
+            # Used by the page to know if the local server is running, even
+            # when the page itself was opened on the GitHub Pages.
+            store = load_store()
+            playlists = store.get("playlists", [])
+            total_canais = sum(len(p.get("channels", [])) for p in playlists)
+            self._send_json(
+                {
+                    "ok": True,
+                    "modo": "local",
+                    "versao": VERSAO,
+                    "host": self.server.server_address[0],
+                    "porta": self.server.server_address[1],
+                    "playlists": len(playlists),
+                    "canais": total_canais,
+                    "python": platform.python_version(),
+                    "plataforma": platform.system(),
+                },
+                cors="publico",
+            )
             return
 
         if route == "/api/catalogo.json":
@@ -610,6 +703,27 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         super().do_GET()
+
+    def do_OPTIONS(self) -> None:  # noqa: N802
+        """Preflight de CORS.
+
+        Só a própria página local passa: um site qualquer não consegue
+        disparar rotas do servidor local (proteção contra CSRF).
+        """
+        origem = self.headers.get("Origin", "")
+        host = self.headers.get("Host", "")
+        if origem and origem not in (f"http://{host}", f"https://{host}"):
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", origem or "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-EFTV-Local")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_POST(self) -> None:  # noqa: N802
         parts = urlsplit(self.path)
@@ -645,6 +759,19 @@ class Handler(SimpleHTTPRequestHandler):
                 with STORE_LOCK:
                     save_store({"playlists": []})
                 self._send_json({"ok": True})
+                return
+
+            if route == "/api/servidor":
+                # Só a página local (mesma origem) chega aqui: o preflight
+                # bloqueia qualquer outro site.
+                if self.headers.get("X-EFTV-Local") != "1":
+                    raise ValueError("Ação não autorizada.")
+                query = parse_qs(parts.query)
+                acao = (query.get("acao") or [""])[0].strip()
+                if acao != "parar":
+                    raise ValueError("Ação desconhecida.")
+                self._send_json({"ok": True, "mensagem": "Servidor encerrado."})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return
 
             self._error("Rota não encontrada.", 404)
@@ -872,16 +999,71 @@ class Handler(SimpleHTTPRequestHandler):
         sys.stderr.write("%s - %s %s\n" % (self.address_string(), self.command, caminho))
 
 
+class Servidor(ThreadingHTTPServer):
+    """Servidor que nao reclama quando o navegador fecha a conexao."""
+
+    daemon_threads = True
+
+    def handle_error(self, request, client_address) -> None:  # noqa: D102
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
+            return
+        super().handle_error(request, client_address)
+
+
 def main() -> None:
+    argumentos = sys.argv[1:]
+    protocolo = {"acao": "", "porta": ""}
+    for argumento in argumentos:
+        if argumento.lower().startswith(PROTOCOLO + "://"):
+            protocolo = analisar_protocolo(argumento)
+
+    porta = int(os.environ.get("PORT", "8124"))
+    host = os.environ.get("HOST", "127.0.0.1")
+    abrir = False
+
+    for argumento in argumentos:
+        baixo = argumento.lower()
+        if baixo in ("--abrir", "--open", "-a"):
+            abrir = True
+        elif baixo in ("--parar", "--stop"):
+            protocolo["acao"] = "parar"
+        elif baixo.startswith("--porta=") or baixo.startswith("--port="):
+            porta = int(baixo.split("=", 1)[1])
+        elif baixo.startswith("--host="):
+            host = baixo.split("=", 1)[1]
+
+    if protocolo["porta"]:
+        try:
+            porta = int(protocolo["porta"])
+        except ValueError:
+            pass
+
+    if protocolo["acao"] == "parar":
+        sys.exit(encerrar_servidor(porta))
+
     os.makedirs(DATA_DIR, exist_ok=True)
     os.chdir(ROOT)
     store = load_store()
     if not store.get("playlists"):
         save_store(store)
 
-    httpd = ThreadingHTTPServer((HOST, PORT), Handler)
+    endereco = f"http://127.0.0.1:{porta}/"
+
+    if servidor_rodando(porta):
+        print(f"A EFTV já está rodando em {endereco}", flush=True)
+        if abrir or protocolo["acao"] == "iniciar":
+            abrir_navegador(endereco)
+        sys.exit(0)
+
+    httpd = Servidor((host, porta), Handler)
     httpd.daemon_threads = True
-    print(f"EFTV em http://{HOST}:{PORT}/  (playlists: {STORE_PATH})", flush=True)
+    print(f"EFTV em {endereco}  (playlists: {STORE_PATH})", flush=True)
+    print("Deixe esta janela aberta. Para encerrar, pressione Ctrl+C.", flush=True)
+
+    if abrir or protocolo["acao"] == "iniciar":
+        threading.Timer(0.6, abrir_navegador, args=(endereco,)).start()
+
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

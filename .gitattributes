@@ -1,0 +1,7 @@
+# Normaliza o repositório para LF e mantém as quebras de linha corretas
+# nos scripts que dependem delas (.bat no Windows, .sh no macOS/Linux).
+* text=auto
+
+*.bat text eol=crlf
+*.sh  text eol=lf
+*.py  text eol=lf

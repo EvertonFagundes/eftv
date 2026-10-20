@@ -61,6 +61,24 @@
     </div>
   </div>
 
+  <section class="local-server" id="servidor-local" data-local-server hidden aria-labelledby="servidor-local-titulo">
+    <div class="local-server-copy">
+      <span class="section-kicker"><i class="live-dot"></i> Servidor local</span>
+      <h2 id="servidor-local-titulo">A EFTV completa no seu computador</h2>
+      <p>
+        Com o <code>server.py</code> rodando você ganha proxy de streams (sem bloqueio de CORS),
+        importação de playlist por link e a biblioteca salva no disco.
+      </p>
+      <p class="local-server-status" data-local-status role="status">Verificando o servidor local...</p>
+    </div>
+    <div class="local-server-actions">
+      <button class="btn btn-primary" type="button" data-local-start>Iniciar servidor local</button>
+      <a class="btn btn-ghost" href="http://127.0.0.1:8124/" target="_blank" rel="noopener" data-local-open hidden>Abrir EFTV local</a>
+      <button class="btn btn-ghost" type="button" data-local-stop hidden>Encerrar servidor</button>
+      <button class="btn btn-ghost" type="button" data-local-install>Instalar lançador</button>
+    </div>
+  </section>
+
   <main class="wrap">
     <section class="home-hero" aria-label="EFTV">
       <div class="home-hero-copy">
@@ -243,11 +261,37 @@
     <button class="btn btn-primary" type="button" data-install-close>Entendi</button>
   </dialog>
 
+  <!-- Instalação do lançador do servidor local -->
+  <dialog class="install-dialog" data-local-dialog aria-labelledby="local-dialog-title">
+    <div class="install-dialog-head">
+      <span class="brand-mark small" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+      </span>
+      <div>
+        <strong id="local-dialog-title">Instalar o lançador da EFTV</strong>
+        <span>Uma vez só. Depois é só clicar em Iniciar.</span>
+      </div>
+      <button class="install-dialog-close" type="button" data-local-dialog-close aria-label="Fechar">✕</button>
+    </div>
+    <div class="install-dialog-body">
+      <p><strong>1.</strong> Baixe o instalador do seu sistema:</p>
+      <p class="local-dialog-links">
+        <a class="btn btn-ghost" href="instalar/instalar-eftv.bat" download>Windows (.bat)</a>
+        <a class="btn btn-ghost" href="instalar/instalar-eftv.sh" download>macOS e Linux (.sh)</a>
+      </p>
+      <p><strong>2.</strong> Execute o arquivo baixado. Ele instala o Python (se faltar) e registra o protocolo <code>eftv://</code>, que é o que permite iniciar o servidor pela página.</p>
+      <p><strong>3.</strong> Volte para esta página e clique em <strong>Iniciar servidor local</strong>. A aba <strong>http://127.0.0.1:8124/</strong> abre sozinha.</p>
+      <p>Prefere fazer na mão? Clone o repositório, rode <code>python3 server.py</code> e recarregue esta página: o botão <strong>Abrir EFTV local</strong> aparece sozinho.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-local-dialog-close>Entendi</button>
+  </dialog>
+
   <script src="assets/js/data.js"></script>
   <script src="api/modo.js"></script>
   <script src="assets/js/catalogo-base.js"></script>
   <script src="assets/js/catalogo-loader.js"></script>
   <script src="assets/js/static-store.js"></script>
+  <script src="assets/js/local-server.js"></script>
   <script src="assets/js/app.js"></script>
   <script src="assets/js/playlists.js"></script>
   <script src="assets/js/pwa.js"></script>

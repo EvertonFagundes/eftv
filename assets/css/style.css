@@ -245,6 +245,90 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   white-space: nowrap;
 }
 
+/* ------------------------------------------------- servidor local (cartão) */
+.local-server {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: center;
+  margin: 26px 0 0;
+  padding: 22px 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(140deg, rgba(47, 155, 255, 0.09), rgba(8, 20, 38, 0.6)),
+    var(--panel-3);
+}
+
+.local-server-copy { display: grid; gap: 8px; }
+
+.local-server-copy h2 {
+  margin: 0;
+  font-size: 1.16rem;
+  letter-spacing: -0.01em;
+}
+
+.local-server-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.local-server-copy code {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(47, 155, 255, 0.14);
+  color: var(--brand-2);
+  font-size: 0.84em;
+}
+
+.local-server-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem !important;
+  font-weight: 600;
+}
+
+.local-server-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 3px rgba(143, 166, 200, 0.16);
+}
+
+.local-server-status[data-tom="ok"] { color: var(--ok); }
+.local-server-status[data-tom="ok"]::before {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(62, 224, 143, 0.18);
+}
+
+.local-server-status[data-tom="erro"] { color: #ff9db0; }
+.local-server-status[data-tom="erro"]::before {
+  background: var(--live);
+  box-shadow: 0 0 0 3px rgba(255, 77, 109, 0.18);
+}
+
+.local-server-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.local-server-actions .btn { white-space: nowrap; }
+
+.local-dialog-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.local-dialog-links .btn { margin: 0; }
+
 /* ------------------------------------------------------------ home hero */
 .home-hero {
   display: grid;
@@ -1628,6 +1712,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .section-head { align-items: stretch; }
   .filter-row, .channel-filter { width: 100%; }
   .channel-filter { min-width: 0; }
+  .local-server { grid-template-columns: minmax(0, 1fr); padding: 18px; }
+  .local-server-actions { justify-content: flex-start; }
 }
 
 @media (max-width: 540px) {

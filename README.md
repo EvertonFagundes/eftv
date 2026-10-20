@@ -16,6 +16,7 @@ Player de playlists IPTV para o navegador. Importe sua lista `.m3u` / `.m3u8` po
 - Layout responsivo em azul, para desktop e celular.
 - **Instalação como app (PWA)** no Chrome, Edge, Android e iPhone/iPad.
 - Playlists salvas apenas neste dispositivo — no servidor local (`data/playlists.json`) ou no IndexedDB do navegador (GitHub Pages).
+- **Início do servidor local pela própria página**: um botão na interface sobe o `server.py` do computador do usuário (protocolo `eftv://`) e abre a versão completa em `http://127.0.0.1:8124/`.
 
 ## Requisitos
 
@@ -47,6 +48,42 @@ HOST=0.0.0.0 PORT=8124 python3 server.py
 ```
 
 > Abrir o `index.html` diretamente via `file://` mostra o layout, mas a importação e o proxy do player precisam do `server.py`.
+
+## Iniciar o servidor local pela página
+
+A interface tem um cartão **Servidor local** que faz tudo isso:
+
+1. Verifica se o `server.py` já está rodando em `http://127.0.0.1:8124/`.
+2. Se estiver parado, o botão **Iniciar servidor local** aciona o protocolo `eftv://` e a aba com a versão completa abre sozinha.
+3. Se o servidor já estiver no ar, o botão **Abrir EFTV local** aparece. Na própria página local, há ainda **Encerrar servidor**.
+
+Para o protocolo `eftv://` funcionar, o usuário instala o **lançador** uma única vez:
+
+| Sistema | Arquivo | O que ele faz |
+|---|---|---|
+| Windows | `instalar/instalar-eftv.bat` | instala o Python (se faltar), registra o protocolo `eftv://` no registro do Windows e sobe o servidor |
+| macOS e Linux | `instalar/instalar-eftv.sh` | idem, criando um arquivo `.desktop` com `x-scheme-handler/eftv` |
+
+O instalador também pode ser rodado direto, sem a página:
+
+```bash
+python3 instalar/instalar-eftv.py            # instala, registra e inicia
+python3 instalar/instalar-eftv.py --instalar # só instala e registra
+python3 instalar/instalar-eftv.py --iniciar  # só sobe o servidor
+python3 instalar/instalar-eftv.py --parar    # encerra o servidor
+python3 instalar/instalar-eftv.py --status   # mostra o estado
+```
+
+O `server.py` também aceita atalhos:
+
+```bash
+python3 server.py --abrir     # abre o navegador ao subir
+python3 server.py --parar     # encerra o servidor que estiver rodando
+python3 server.py --porta=9000
+python3 server.py "eftv://iniciar?porta=8124"   # chamada do navegador
+```
+
+O registro do protocolo acontece **apenas no seu usuário** (`HKCU` no Windows, `~/.local/share/applications` no macOS e Linux). Nada é instalado em nível de sistema e o Python usado é o mesmo do instalador.
 
 ## Como adicionar canais
 
@@ -89,6 +126,7 @@ O GitHub Pages não executa Python, então essa versão funciona de forma difere
 - **Importação por arquivo:** funciona normalmente; a playlist fica no IndexedDB do navegador.
 - **Importação por link:** só funciona se o servidor da playlist permitir CORS. Não existe proxy no Pages.
 - **Reprodução:** os streams são abertos diretamente pelo navegador. Provedores que bloqueiam CORS ou usam HTTP em uma página HTTPS podem não tocar.
+- **Servidor local:** o cartão **Servidor local** detecta um `server.py` rodando em `http://127.0.0.1:8124/` e, com o lançador instalado, também consegue iniciá-lo a partir da própria página.
 - **Dados:** cada navegador/dispositivo tem sua própria biblioteca; não há sincronização nem armazenamento no GitHub.
 - **Proxy completo, importação por link sem CORS e mais recursos:** rode o `server.py` localmente.
 
@@ -112,11 +150,15 @@ assets/js/data.js             categorias base, helpers e busca
 assets/js/catalogo-base.js    mescla os canais importados com a base
 assets/js/catalogo-loader.js  carrega o catálogo local em segundo plano
 assets/js/static-store.js     IndexedDB e importação no modo GitHub Pages
+assets/js/local-server.js     detecta, inicia e acompanha o servidor local
 assets/js/app.js              busca, filtros, categorias, trilho e grade
 assets/js/playlists.js        formulário, upload e lista de playlists
 assets/js/canal.js            cabeçalho do canal, troca de fonte e tela ampla
 assets/js/pwa.js              instalação como app
 api/modo.js                   identifica o modo local ou estático
+instalar/instalar-eftv.py     instalador e lançador (multiplataforma)
+instalar/instalar-eftv.bat    instalador para Windows
+instalar/instalar-eftv.sh     instalador para macOS e Linux
 manifest.webmanifest          manifesto do PWA
 sw.js                         service worker do app shell
 assets/img/                   marca, favicon e ícones do app
@@ -135,8 +177,12 @@ data/playlists.json           playlists importadas (criado localmente, fora do G
 | `DELETE` | `/api/playlists?id=...` | remove uma playlist |
 | `POST` | `/api/playlists/clear` | remove todas as playlists |
 | `GET` | `/api/catalogo.json` | catálogo completo em JSON |
+| `GET` | `/api/status` | estado do servidor (versão, porta, playlists, canais) |
 | `GET` | `/api/modo.js` | informa o modo da interface (`local`) |
 | `GET` | `/api/proxy?url=...` | proxy de stream, segmento, chave ou imagem |
+| `POST` | `/api/servidor?acao=parar` | encerra o servidor (somente a página local) |
+
+`/api/status` e `/api/modo.js` respondem com `Access-Control-Allow-Origin: *` para que a página do GitHub Pages consiga consultá-las. Nenhuma das duas expõe dados das playlists. O encerramento do servidor exige a mesma origem e o cabeçalho `X-EFTV-Local`, então nenhum site de fora consegue desligá-lo.
 
 ## Limites e configuração
 
@@ -160,6 +206,8 @@ A grade mostra 240 canais por vez, com o botão **Mostrar mais canais**. A busca
 - O service worker guarda apenas o app shell e o `api/modo.js` público. O catálogo local (`/api/catalogo.json`) **não** é armazenado no cache do PWA.
 - No GitHub Pages, as playlists ficam no IndexedDB do seu navegador e não são enviadas ao GitHub.
 - O servidor usa apenas a biblioteca padrão do Python e não envia telemetria.
+- O instalador do lançador registra o protocolo `eftv://` **apenas no seu usuário**: chave `HKCU` no Windows e `~/.local/share/applications/eftv.desktop` no macOS e Linux. Nada é instalado em nível de sistema.
+- A rota `/api/status` é pública, mas devolve apenas versão, porta e contadores. Nenhum dado das playlists sai do computador.
 
 ## Formatos e limitações
 
