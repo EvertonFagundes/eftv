@@ -237,7 +237,8 @@ data/playlists.json           playlists importadas (criado localmente, fora do G
 | `POST` | `/api/playlists/refresh` | relê a URL de `{ "id": "..." }` |
 | `DELETE` | `/api/playlists?id=...` | remove uma playlist |
 | `POST` | `/api/playlists/clear` | remove todas as playlists |
-| `GET` | `/api/catalogo.json` | catálogo completo em JSON |
+| `GET` | `/api/catalogo.json` | catálogo completo em JSON (comprimido com gzip) |
+| `GET` | `/api/canal?slug=...` | detalhes de um canal, com as fontes de transmissão |
 | `GET` | `/api/status` | estado do servidor (versão, porta, endereços de rede, playlists, canais) |
 | `GET` | `/api/modo.js` | informa o modo da interface (`local`) |
 | `GET` | `/api/proxy?url=...` | proxy de stream, segmento, chave ou imagem |

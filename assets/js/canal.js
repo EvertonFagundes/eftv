@@ -29,7 +29,11 @@
     // No servidor local as fontes de transmissão não vêm no catálogo: ele
     // pode ter dezenas de milhares de canais e carregaria URLs demais.
     // Elas chegam aqui sob demanda, só quando a página do canal é aberta.
-    if (!canal.fontes || !canal.fontes.length) {
+    // No modo estático (GitHub Pages) as fontes já são montadas no navegador.
+    if (
+      (!canal.fontes || !canal.fontes.length) &&
+      window.CANAIS_MODO === "local"
+    ) {
       try {
         const resp = await fetch("/api/canal?slug=" + encodeURIComponent(slug), {
           cache: "no-store",
