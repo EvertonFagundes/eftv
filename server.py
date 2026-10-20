@@ -22,6 +22,7 @@ import platform
 import re
 import shutil
 import socket
+import subprocess
 import sys
 import threading
 import unicodedata
@@ -65,8 +66,121 @@ PROTOCOLO = "eftv"
 # --------------------------------------------------------------------------- #
 # Protocolo eftv://
 # --------------------------------------------------------------------------- #
+def eh_android() -> bool:
+    """Diz se estamos no Android (Termux, Pydroid, ...)."""
+    if os.environ.get("ANDROID_ROOT") or os.environ.get("ANDROID_DATA"):
+        return True
+    if "com.termux" in os.environ.get("PREFIX", ""):
+        return True
+    return os.path.isdir("/data/data/com.termux/files")
+
+
+def enderecos_locais() -> list[str]:
+    """IPs IPv4 da máquina, para acessar o servidor de outros aparelhos.
+
+    A ideia é usar o celular como servidor e abrir a EFTV na smart TV, no
+    tablet ou no notebook pela rede Wi-Fi. Preferimos a interface de Wi-Fi
+    (wlan0) e ignoramos interfaces virtuais (VPN, Docker, WSL, bridges).
+    """
+    achados: list[tuple[int, str]] = []
+    vistos: set[str] = set()
+
+    def add(ip: str, interface: str = "") -> None:
+        if not ip or ip in vistos:
+            return
+        if ip.startswith("127.") or ip.startswith("169.254."):
+            return
+        vistos.add(ip)
+        achados.append((_prioridade_interface(interface), ip))
+
+    # 1) Socket UDP "conectado": não envia nada, mas revela o IP de saída
+    #    (ou seja, o da interface que realmente sai para a internet).
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(0.3)
+            sock.connect(("8.8.8.8", 80))
+            add(sock.getsockname()[0])
+    except OSError:
+        pass
+
+    # 2) Nome da máquina.
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            add(info[4][0])
+    except OSError:
+        pass
+
+    # 3) "ip addr" (Linux, Termux, Android): funciona mesmo sem internet.
+    if shutil.which("ip"):
+        try:
+            saida = subprocess.run(
+                ["ip", "-4", "-o", "addr", "show"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=4,
+            ).stdout
+            for linha in saida.splitlines():
+                partes = linha.split()
+                if "inet" not in partes:
+                    continue
+                interface = partes[1] if len(partes) > 1 else ""
+                add(partes[partes.index("inet") + 1].split("/")[0], interface)
+        except (OSError, subprocess.SubprocessError, IndexError):
+            pass
+
+    achados.sort(key=lambda par: par[0])
+    return [ip for _, ip in achados]
+
+
+def _prioridade_interface(interface: str) -> int:
+    """Ordena as interfaces: Wi-Fi primeiro, virtuais por último."""
+    nome = (interface or "").lower()
+    if not nome:
+        return 1
+    if any(x in nome for x in ("wlan", "wifi", "wlp", "eth", "en", "ap")):
+        return 0
+    if any(
+        x in nome
+        for x in ("docker", "veth", "br-", "virbr", "tun", "tap", "rmnet", "wsl", "vsock", "lo")
+    ):
+        return 3
+    return 2
+
+
+def urls_de_acesso(porta: int) -> list[str]:
+    """Endereços para abrir a EFTV: loopback e os IPs da rede local."""
+    urls = [f"http://127.0.0.1:{porta}/"]
+    for ip in enderecos_locais():
+        urls.append(f"http://{ip}:{porta}/")
+    return urls
+
+
+def abrir_navegador_android(url: str) -> bool:
+    """Abre o navegador do Android a partir do Termux. True se conseguiu."""
+    if not eh_android():
+        return False
+    for comando in (
+        ["termux-open-url", url],
+        ["am", "start", "-a", "android.intent.action.VIEW", "-d", url],
+    ):
+        if shutil.which(comando[0]):
+            try:
+                subprocess.Popen(
+                    comando,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return True
+            except OSError:
+                continue
+    return False
+
+
 def abrir_navegador(url: str) -> None:
     """Abre a URL no navegador padrão sem quebrar o servidor se falhar."""
+    if abrir_navegador_android(url):
+        return
     try:
         webbrowser.open(url, new=2)
     except Exception:  # noqa: BLE001 - o servidor continua mesmo sem navegador
@@ -677,10 +791,12 @@ class Handler(SimpleHTTPRequestHandler):
                     "versao": VERSAO,
                     "host": self.server.server_address[0],
                     "porta": self.server.server_address[1],
+                    "urls": urls_de_acesso(self.server.server_address[1]),
                     "playlists": len(playlists),
                     "canais": total_canais,
                     "python": platform.python_version(),
                     "plataforma": platform.system(),
+                    "android": eh_android(),
                 },
                 cors="publico",
             )
@@ -1011,6 +1127,27 @@ class Servidor(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
+def banner_inicial(host: str, porta: int) -> None:
+    """Mostra os endereços para usar a EFTV, inclusive em outros aparelhos."""
+    urls = urls_de_acesso(porta)
+    print("", flush=True)
+    print("  EFTV no ar!", flush=True)
+    print(f"  Neste aparelho:  {urls[0]}", flush=True)
+    for url in urls[1:]:
+        print(f"  Na rede Wi-Fi:   {url}", flush=True)
+    if len(urls) > 1:
+        print(
+            "  Na smart TV (ou tablet, notebook), abra o navegador e digite",
+            flush=True,
+        )
+        print("  o endereço \"Na rede Wi-Fi\".", flush=True)
+    else:
+        print("  Para usar em outros aparelhos da rede, start com --lan.", flush=True)
+    print(f"  Playlists: {STORE_PATH}", flush=True)
+    print("  Deixe esta janela aberta. Para encerrar, pressione Ctrl+C.", flush=True)
+    print("", flush=True)
+
+
 def main() -> None:
     argumentos = sys.argv[1:]
     protocolo = {"acao": "", "porta": ""}
@@ -1032,6 +1169,8 @@ def main() -> None:
             porta = int(baixo.split("=", 1)[1])
         elif baixo.startswith("--host="):
             host = baixo.split("=", 1)[1]
+        elif baixo in ("--lan", "--rede"):
+            host = "0.0.0.0"
 
     if protocolo["porta"]:
         try:
@@ -1058,8 +1197,7 @@ def main() -> None:
 
     httpd = Servidor((host, porta), Handler)
     httpd.daemon_threads = True
-    print(f"EFTV em {endereco}  (playlists: {STORE_PATH})", flush=True)
-    print("Deixe esta janela aberta. Para encerrar, pressione Ctrl+C.", flush=True)
+    banner_inicial(host, porta)
 
     if abrir or protocolo["acao"] == "iniciar":
         threading.Timer(0.6, abrir_navegador, args=(endereco,)).start()

@@ -2,6 +2,7 @@
    A página (inclusive a versão do GitHub Pages) consegue iniciar o server.py
    do computador do usuário pelo protocolo eftv://, acompanhar o estado do
    servidor e abrir a versão completa em http://127.0.0.1:8124/.
+   No Android, o servidor roda pelo Termux e a página mostra o passo a passo.
    No modo local (servidor já no ar) este arquivo só mostra o status. */
 
 (function () {
@@ -14,15 +15,24 @@
   if (!secao) return;
 
   const statusEl = document.querySelector("[data-local-status]");
+  const redeEl = document.querySelector("[data-local-rede]");
   const btnIniciar = document.querySelector("[data-local-start]");
   const btnAbrir = document.querySelector("[data-local-open]");
   const btnParar = document.querySelector("[data-local-stop]");
   const btnInstalar = document.querySelector("[data-local-install]");
+  const btnAndroid = document.querySelector("[data-local-android]");
   const dialog = document.querySelector("[data-local-dialog]");
   const fecharDialog = document.querySelector("[data-local-dialog-close]");
 
+  const cardAndroid = document.querySelector("[data-android-card]");
+  const btnCopiar = document.querySelector("[data-copiar-comando]");
+  const btnTermux = document.querySelector("[data-abrir-termux]");
+  const comandoEl = document.querySelector("[data-android-comando]");
+
   const porta = Number(secao.dataset.porta || PORTA_PADRAO) || PORTA_PADRAO;
   const base = `http://127.0.0.1:${porta}`;
+  const ehAndroid = /Android/i.test(navigator.userAgent);
+  const ehHostLocal = /^(127\.0\.0\.1|localhost|::1)$/i.test(location.hostname);
 
   let aba = null;
   let iniciando = false;
@@ -36,6 +46,23 @@
 
   function mostrar(el, visivel) {
     if (el) el.hidden = !visivel;
+  }
+
+  /* ------------------------------------------------- endereços de rede */
+  function mostrarRede(urls) {
+    if (!redeEl) return;
+    const externos = (urls || []).filter((u) => !/127\.0\.0\.1|localhost/.test(u));
+    if (!externos.length) {
+      redeEl.hidden = true;
+      redeEl.textContent = "";
+      return;
+    }
+    redeEl.hidden = false;
+    redeEl.innerHTML =
+      "Outros aparelhos na mesma rede: " +
+      externos
+        .map((u) => `<code>${window.canaisEscape ? window.canaisEscape(u) : u}</code>`)
+        .join(" · ");
   }
 
   /* ------------------------------------------------------------- sondagem */
@@ -55,6 +82,7 @@
       mostrar(btnIniciar, !iniciando);
       mostrar(btnAbrir, false);
       mostrar(btnParar, false);
+      mostrarRede([]);
       return;
     }
     mostrar(btnIniciar, false);
@@ -62,10 +90,16 @@
     if (btnAbrir) btnAbrir.href = `${base}/`;
     const playlists = dados.playlists || 0;
     const canais = dados.canais || 0;
+    mostrarRede(dados.urls);
+
+    // Quando a página é servida pelo próprio servidor, o endereço correto é o
+    // que o navegador está usando (pode ser o IP da rede, em uma smart TV).
+    const endereco = window.CANAIS_MODO === "local" ? location.origin : base;
+    const onde = ehHostLocal ? "" : " · você está em outro aparelho";
     status(
-      `Servidor local ativo em ${base} · ${playlists} ${
+      `Servidor local ativo em ${endereco} · ${playlists} ${
         playlists === 1 ? "playlist" : "playlists"
-      } · ${canais} ${canais === 1 ? "canal" : "canais"}`,
+      } · ${canais} ${canais === 1 ? "canal" : "canais"}${onde}`,
       "ok"
     );
   }
@@ -193,6 +227,48 @@
     else dialog.removeAttribute("open");
   }
 
+  /* -------------------------------------------------------------- Android */
+  function mostrarCardAndroid() {
+    if (!cardAndroid) return;
+    cardAndroid.hidden = false;
+    cardAndroid.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function copiarComando() {
+    if (!comandoEl || !btnCopiar) return;
+    const texto = (comandoEl.textContent || "").trim();
+    const feito = () => {
+      const antigo = btnCopiar.textContent;
+      btnCopiar.textContent = "Copiado!";
+      setTimeout(() => {
+        btnCopiar.textContent = antigo;
+      }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(feito, () => {});
+      return;
+    }
+    // Fallback para navegadores sem API de área de transferência.
+    const area = document.createElement("textarea");
+    area.value = texto;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    try {
+      document.execCommand("copy");
+      feito();
+    } catch (_) {
+      // Sem área de transferência: o comando fica visível para copiar à mão.
+    }
+    area.remove();
+  }
+
+  function abrirTermux() {
+    // Intent do Android: abre o Termux instalado no aparelho.
+    window.location.href = "intent://#Intent;package=com.termux;end";
+  }
+
   /* ------------------------------------------------------------- início */
   function init() {
     if (btnAbrir) btnAbrir.href = `${base}/`;
@@ -200,7 +276,18 @@
     btnIniciar && btnIniciar.addEventListener("click", iniciar);
     btnParar && btnParar.addEventListener("click", parar);
     btnInstalar && btnInstalar.addEventListener("click", abrirDialog);
+    btnAndroid && btnAndroid.addEventListener("click", mostrarCardAndroid);
     fecharDialog && fecharDialog.addEventListener("click", fechar);
+    btnCopiar && btnCopiar.addEventListener("click", copiarComando);
+    btnTermux && btnTermux.addEventListener("click", abrirTermux);
+
+    // No Android não existe o protocolo eftv://: o servidor sobe pelo Termux.
+    if (ehAndroid) {
+      mostrar(btnIniciar, false);
+      mostrar(btnInstalar, false);
+      mostrar(btnAndroid, true);
+      if (cardAndroid) cardAndroid.hidden = false;
+    }
 
     // Modo local: a própria página já é servida pelo server.py.
     if (window.CANAIS_MODO === "local") {
@@ -208,7 +295,12 @@
       mostrar(btnIniciar, false);
       mostrar(btnAbrir, true);
       mostrar(btnParar, true);
-      status(`Servidor local ativo em ${base}.`, "ok");
+      const onde = ehHostLocal ? "" : " · você está em outro aparelho";
+      status(`Servidor local ativo em ${location.origin}${onde}`, "ok");
+      // O servidor responde com os números oficiais e os endereços de rede.
+      sondar().then((dados) => {
+        if (dados) aplicarEstado(dados);
+      });
       return;
     }
 
@@ -216,7 +308,7 @@
     status("Verificando o servidor local...", "neutro");
     verificar().then((dados) => {
       if (!dados) {
-        mostrar(btnIniciar, true);
+        mostrar(btnIniciar, !ehAndroid);
         status("Servidor local parado. Inicie para usar a EFTV completa.", "neutro");
       }
     });

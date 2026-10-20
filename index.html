@@ -70,12 +70,39 @@
         importação de playlist por link e a biblioteca salva no disco.
       </p>
       <p class="local-server-status" data-local-status role="status">Verificando o servidor local...</p>
+      <p class="local-server-rede" data-local-rede hidden></p>
     </div>
     <div class="local-server-actions">
       <button class="btn btn-primary" type="button" data-local-start>Iniciar servidor local</button>
       <a class="btn btn-ghost" href="http://127.0.0.1:8124/" target="_blank" rel="noopener" data-local-open hidden>Abrir EFTV local</a>
       <button class="btn btn-ghost" type="button" data-local-stop hidden>Encerrar servidor</button>
       <button class="btn btn-ghost" type="button" data-local-install>Instalar lançador</button>
+      <button class="btn btn-ghost" type="button" data-local-android hidden>Rode no Android</button>
+    </div>
+  </section>
+
+  <section class="android-card" id="android" data-android-card hidden aria-labelledby="android-titulo">
+    <div class="android-copy">
+      <span class="section-kicker">Android</span>
+      <h2 id="android-titulo">Rode a EFTV no seu celular</h2>
+      <p>
+        Com o <strong>Termux</strong> (app gratuito) o mesmo <code>server.py</code> roda no Android.
+        Depois, a smart TV, o tablet ou o notebook acessam a EFTV pela rede Wi-Fi.
+      </p>
+      <ol class="android-steps">
+        <li>Instale o <strong>Termux</strong> (F-Droid ou Google Play) e abra o app.</li>
+        <li>Cole o comando abaixo no Termux e toque em Enter. Ele instala o Python, baixa a EFTV e sobe o servidor.</li>
+        <li>Abra <code>http://127.0.0.1:8124/</code> no Chrome do celular. Na smart TV, digite o endereço <strong>Na rede Wi-Fi</strong> mostrado no Termux.</li>
+      </ol>
+      <div class="code-row">
+        <code class="code-block" data-android-comando>pkg install -y python git &amp;&amp; git clone https://github.com/EvertonFagundes/eftv.git ~/eftv &amp;&amp; bash ~/eftv/instalar/instalar-eftv-termux.sh</code>
+        <button class="btn btn-ghost" type="button" data-copiar-comando>Copiar</button>
+        <button class="btn btn-primary" type="button" data-abrir-termux>Abrir o Termux</button>
+      </div>
+      <p class="android-note">
+        Depois de instalar, o Termux cria os comandos <code>eftv</code> (sobe o servidor),
+        <code>eftv-parar</code> (encerra) e <code>eftv-atualizar</code> (atualiza o código).
+      </p>
     </div>
   </section>
 
@@ -282,6 +309,9 @@
       <p><strong>2.</strong> Execute o arquivo baixado. Ele instala o Python (se faltar) e registra o protocolo <code>eftv://</code>, que é o que permite iniciar o servidor pela página.</p>
       <p><strong>3.</strong> Volte para esta página e clique em <strong>Iniciar servidor local</strong>. A aba <strong>http://127.0.0.1:8124/</strong> abre sozinha.</p>
       <p>Prefere fazer na mão? Clone o repositório, rode <code>python3 server.py</code> e recarregue esta página: o botão <strong>Abrir EFTV local</strong> aparece sozinho.</p>
+      <p class="local-dialog-links">
+        <button class="btn btn-ghost" type="button" data-local-android>No Android? Veja como rodar no Termux</button>
+      </p>
     </div>
     <button class="btn btn-primary" type="button" data-local-dialog-close>Entendi</button>
   </dialog>

@@ -17,6 +17,8 @@ Player de playlists IPTV para o navegador. Importe sua lista `.m3u` / `.m3u8` po
 - **Instalação como app (PWA)** no Chrome, Edge, Android e iPhone/iPad.
 - Playlists salvas apenas neste dispositivo — no servidor local (`data/playlists.json`) ou no IndexedDB do navegador (GitHub Pages).
 - **Início do servidor local pela própria página**: um botão na interface sobe o `server.py` do computador do usuário (protocolo `eftv://`) e abre a versão completa em `http://127.0.0.1:8124/`.
+- **Acesso pela rede Wi-Fi**: com `--lan` o servidor também atende smart TVs, tablets e notebooks da mesma rede, mantendo o proxy de streams.
+- **Roda no Android**: o mesmo `server.py` funciona no celular pelo Termux, com instalador próprio.
 
 ## Requisitos
 
@@ -80,10 +82,68 @@ O `server.py` também aceita atalhos:
 python3 server.py --abrir     # abre o navegador ao subir
 python3 server.py --parar     # encerra o servidor que estiver rodando
 python3 server.py --porta=9000
+python3 server.py --lan       # escuta também na rede Wi-Fi
 python3 server.py "eftv://iniciar?porta=8124"   # chamada do navegador
 ```
 
 O registro do protocolo acontece **apenas no seu usuário** (`HKCU` no Windows, `~/.local/share/applications` no macOS e Linux). Nada é instalado em nível de sistema e o Python usado é o mesmo do instalador.
+
+## Acesso pela rede local (smart TV, tablet, notebook)
+
+Com `--lan` (ou `HOST=0.0.0.0`) o servidor escuta também na interface de rede, e o terminal mostra os endereços:
+
+```text
+  EFTV no ar!
+  Neste aparelho:  http://127.0.0.1:8124/
+  Na rede Wi-Fi:   http://192.168.0.14:8124/
+  Na smart TV (ou tablet, notebook), abra o navegador e digite
+  o endereço "Na rede Wi-Fi".
+```
+
+A partir daí, qualquer aparelho da mesma rede abre `http://192.168.0.14:8124/` no navegador e usa a EFTV completa — o proxy de streams continua funcionando, porque quem busca o conteúdo é o servidor (o celular ou o notebook), não a TV.
+
+Detalhes que importam nesse cenário:
+
+- **Celular e TV precisam estar na mesma rede Wi-Fi**, e o roteador não pode ter "isolamento de clientes" (AP isolation) ligado.
+- **A TV precisa de internet** para carregar `hls.js`, `mpegts.js` e `dash.js` do CDN. O conteúdo em si vem do servidor.
+- **Fora de `localhost` não há contexto seguro**: a TV não instala o EFTV como app e o service worker não é registrado (a interface continua funcionando normalmente).
+- O endereço do celular pode mudar quando o Wi-Fi reconecta. Parafixar, reserve um IP no roteador ou use um nome DNS local.
+- Na interface, o cartão **Servidor local** mostra os endereços de rede e avisa quando a página está sendo aberta de outro aparelho.
+
+## No Android (Termux)
+
+O mesmo `server.py` roda no Android pelo **Termux** (app gratuito, sem root). No Android não existe o protocolo `eftv://`, então a página mostra um cartão específico com o passo a passo e o comando pronto para copiar.
+
+Instalação manual no Termux:
+
+```bash
+pkg install -y python git
+git clone https://github.com/EvertonFagundes/eftv.git ~/eftv
+bash ~/eftv/instalar/instalar-eftv-termux.sh
+```
+
+O instalador do Termux:
+
+- instala o Python e o Git se faltarem;
+- baixa (ou atualiza) a cópia do código em `~/eftv`;
+- cria os comandos `eftv`, `eftv-parar` e `eftv-atualizar` em `~/bin` (e adiciona `~/bin` ao `PATH`);
+- sobe o servidor com `--lan --abrir`, ou seja, **escutando na rede Wi-Fi e abrindo o navegador do Android**.
+
+Depois de instalado, no Termux:
+
+```bash
+eftv            # sobe o servidor (Ctrl+C para parar)
+eftv-parar      # encerra
+eftv-atualizar  # git pull do código
+```
+
+Para o servidor continuar rodando com a tela apagada, instale o addon **Termux:API** e rode `termux-wake-lock`, ou use o **Termux:Boot** para iniciar junto com o aparelho.
+
+No Android, o `server.py` também:
+
+- abre o navegador do próprio celular (`termux-open-url` ou `am start`), já que `webbrowser` do Python não acha navegador no Android;
+- mostra o endereço IP do Wi-Fi no terminal, que é o que você digita na smart TV;
+- descobre o Wi-Fi (`wlan0`) e ignora interfaces virtuais (VPN, tethering, bridges).
 
 ## Como adicionar canais
 
@@ -159,6 +219,7 @@ api/modo.js                   identifica o modo local ou estático
 instalar/instalar-eftv.py     instalador e lançador (multiplataforma)
 instalar/instalar-eftv.bat    instalador para Windows
 instalar/instalar-eftv.sh     instalador para macOS e Linux
+instalar/instalar-eftv-termux.sh  instalador e lançador para Termux (Android)
 manifest.webmanifest          manifesto do PWA
 sw.js                         service worker do app shell
 assets/img/                   marca, favicon e ícones do app
@@ -177,7 +238,7 @@ data/playlists.json           playlists importadas (criado localmente, fora do G
 | `DELETE` | `/api/playlists?id=...` | remove uma playlist |
 | `POST` | `/api/playlists/clear` | remove todas as playlists |
 | `GET` | `/api/catalogo.json` | catálogo completo em JSON |
-| `GET` | `/api/status` | estado do servidor (versão, porta, playlists, canais) |
+| `GET` | `/api/status` | estado do servidor (versão, porta, endereços de rede, playlists, canais) |
 | `GET` | `/api/modo.js` | informa o modo da interface (`local`) |
 | `GET` | `/api/proxy?url=...` | proxy de stream, segmento, chave ou imagem |
 | `POST` | `/api/servidor?acao=parar` | encerra o servidor (somente a página local) |
@@ -190,7 +251,7 @@ As variáveis abaixo podem ser definidas antes de iniciar o servidor:
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `HOST` | `127.0.0.1` | endereço de escuta |
+| `HOST` | `127.0.0.1` | endereço de escuta (use `0.0.0.0` ou `--lan` para a rede local) |
 | `PORT` | `8124` | porta HTTP |
 | `MAX_PLAYLIST_MB` | `128` | tamanho máximo de uma playlist |
 | `MAX_CHANNELS` | `50000` | canais importados por playlist |
@@ -206,6 +267,7 @@ A grade mostra 240 canais por vez, com o botão **Mostrar mais canais**. A busca
 - O service worker guarda apenas o app shell e o `api/modo.js` público. O catálogo local (`/api/catalogo.json`) **não** é armazenado no cache do PWA.
 - No GitHub Pages, as playlists ficam no IndexedDB do seu navegador e não são enviadas ao GitHub.
 - O servidor usa apenas a biblioteca padrão do Python e não envia telemetria.
+- Por padrão o servidor escuta **somente em `127.0.0.1`**. Com `--lan` ele passa a atender a rede local: qualquer aparelho da mesma rede acessa a interface e as playlists importadas. Use `--lan` só em redes confiáveis.
 - O instalador do lançador registra o protocolo `eftv://` **apenas no seu usuário**: chave `HKCU` no Windows e `~/.local/share/applications/eftv.desktop` no macOS e Linux. Nada é instalado em nível de sistema.
 - A rota `/api/status` é pública, mas devolve apenas versão, porta e contadores. Nenhum dado das playlists sai do computador.
 
