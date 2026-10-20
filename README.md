@@ -168,6 +168,16 @@ No Android, o `server.py` também:
 - mostra o endereço IP do Wi-Fi no terminal, que é o que você digita na smart TV;
 - descobre o Wi-Fi (`wlan0`) e ignora interfaces virtuais (VPN, tethering, bridges).
 
+### O celular como servidor, para a smart TV
+
+Se o servidor rodar no **celular** (e não no notebook), a smart TV acessa o endereço do celular. O caminho é o mesmo do Termux acima, com três cuidados a mais:
+
+1. **Deixe o Termux rodando.** Ele precisa ficar aberto (pode estar com a tela apagada). Instale o addon **Termux:API** para o `termux-wake-lock` manter o aparelho acordado; o instalador já tenta ligar o wake lock sozinho.
+2. **Deixe o celular carregando** numa tomada. Servir vídeo consome bateria.
+3. **Fixe o IP do celular** nas configurações de Wi-Fi do Android (rede → **Configurações de IP → Estático**). Sem isso, cada vez que o celular reconecta no Wi-Fi ele ganha um IP novo e o favorito da TV deixa de funcionar. Se o seu roteador resolve nomes locais, dá para usar `http://nome-do-celular:8124/` em vez do número.
+
+Depois é só abrir o endereço **Na rede Wi-Fi** no navegador da TV e salvar como favorito. Nada mais precisa ser feito no celular: ele fica na tomada, com o Termux rodando, e a TV acessa os canais que o celular busca e repassa.
+
 ## Como adicionar canais
 
 1. Abra a página inicial.

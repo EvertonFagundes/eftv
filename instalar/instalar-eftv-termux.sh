@@ -97,6 +97,23 @@ EOF
 
 chmod +x "$BIN/eftv" "$BIN/eftv-parar" "$BIN/eftv-atualizar"
 
+# ------------------------------------------------- iniciar com o aparelho
+# O Termux:Boot roda este script quando o Android lanca o aparelho.
+BOOT="$HOME/.termux/boot"
+if mkdir -p "$BOOT" 2>/dev/null; then
+  cat > "$BOOT/eftv" <<EOF
+#!/data/data/com.termux/files/usr/bin/bash
+# Iniciado automaticamente pelo Termux:Boot quando o aparelho liga.
+export PATH="\$HOME/bin:\$PATH"
+termux-wake-lock >/dev/null 2>&1
+"$PYTHON" "$DEST/server.py" --lan
+EOF
+  chmod +x "$BOOT/eftv"
+  tem_boot=1
+else
+  tem_boot=0
+fi
+
 # Coloca o ~/bin no PATH das próximas sessoes.
 for arquivo in "$HOME/.bashrc" "$HOME/.profile"; do
   touch "$arquivo"
@@ -112,6 +129,10 @@ echo
 
 if [ "$apenas_instalar" -eq 1 ]; then
   echo "  Instalacao concluida. Rode \"eftv\" para iniciar o servidor."
+  if [ "$tem_boot" -eq 1 ]; then
+    echo
+    echo "  Para iniciar junto com o aparelho, instale o addon Termux:Boot."
+  fi
   echo
   exit 0
 fi
@@ -119,8 +140,14 @@ fi
 # Mantem o processo vivo quando o Android tentar matar o Termux.
 if command -v termux-wake-lock >/dev/null 2>&1; then
   termux-wake-lock >/dev/null 2>&1 || true
+  echo "  Wake lock ligado: o servidor continua rodando com a tela apagada."
+else
+  echo "  Aviso: instale o addon Termux:API para o servidor continuar com"
+  echo "  a tela apagada (comando: pkg install termux-api)."
 fi
 
 echo "  Iniciando a EFTV (Ctrl+C para parar)..."
+echo
+echo "  A TV precisa do endereco \"Na rede Wi-Fi\" que aparecera logo abaixo."
 echo
 exec "$PYTHON" "$DEST/server.py" --lan --abrir
