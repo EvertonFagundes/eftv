@@ -176,6 +176,75 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   color: var(--muted);
 }
 
+.install-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(62, 224, 143, 0.3);
+  background: rgba(62, 224, 143, 0.08);
+  color: #b9f5d5;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.install-trigger:hover {
+  background: rgba(62, 224, 143, 0.14);
+  border-color: rgba(62, 224, 143, 0.52);
+  transform: translateY(-1px);
+}
+
+.install-trigger svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Aviso exibido apenas no modo estático (GitHub Pages). */
+.static-banner {
+  border-bottom: 1px solid rgba(255, 176, 32, 0.2);
+  background: rgba(255, 176, 32, 0.07);
+  color: #ffd9a0;
+  font-size: 0.8rem;
+}
+
+.static-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.static-banner a {
+  margin-left: auto;
+  color: #ffe9c2;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.static-badge {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 176, 32, 0.35);
+  background: rgba(255, 176, 32, 0.12);
+  color: #ffd08a;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------ home hero */
 .home-hero {
   display: grid;
@@ -1321,6 +1390,191 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 .playlist-empty[hidden] { display: none !important; }
 
+/* ------------------------------------------------------ categorias / ao vivo */
+.section-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.section-link {
+  padding: 9px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.045);
+  color: #c9e9ff;
+  font-size: 0.84rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.section-link:hover {
+  background: rgba(47, 155, 255, 0.12);
+  border-color: rgba(47, 155, 255, 0.5);
+  color: #fff;
+}
+
+#playlists, #categorias, #ao-vivo, #canais { scroll-margin-top: 96px; }
+
+.category-section { margin: 6px 0 36px; }
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 13px;
+}
+
+.category-card {
+  --cat-color: #4fb5ff;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 150% at 100% 0%, color-mix(in srgb, var(--cat-color) 16%, transparent), transparent 62%),
+    linear-gradient(160deg, rgba(16, 34, 58, 0.9), rgba(7, 18, 33, 0.96));
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.category-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--cat-color) 58%, transparent);
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.32),
+    0 0 0 1px color-mix(in srgb, var(--cat-color) 14%, transparent);
+}
+
+.category-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  border: 1px solid color-mix(in srgb, var(--cat-color) 34%, transparent);
+  background: color-mix(in srgb, var(--cat-color) 12%, transparent);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.category-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.category-info strong {
+  font-size: 0.96rem;
+  letter-spacing: -0.015em;
+}
+
+.category-info small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.category-arrow {
+  margin-left: auto;
+  color: color-mix(in srgb, var(--cat-color) 75%, white);
+  font-size: 1.05rem;
+  opacity: 0.55;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.category-card:hover .category-arrow {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+.category-chip {
+  border-color: color-mix(in srgb, var(--cat-color, #4fb5ff) 30%, var(--line-strong));
+}
+
+.category-chip.active {
+  border-color: color-mix(in srgb, var(--cat-color, #4fb5ff) 62%, transparent);
+  background: color-mix(in srgb, var(--cat-color, #4fb5ff) 18%, transparent);
+  color: #fff;
+}
+
+.live-section { margin: 6px 0 38px; }
+
+.live-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(205px, 238px);
+  gap: 15px;
+  overflow-x: auto;
+  padding: 2px 2px 12px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(47, 155, 255, 0.42) transparent;
+}
+
+.live-rail::-webkit-scrollbar { height: 7px; }
+.live-rail::-webkit-scrollbar-thumb { background: rgba(47, 155, 255, 0.38); border-radius: 99px; }
+.live-rail .channel-card { scroll-snap-align: start; }
+
+/* -------------------------------------------------------------- instalação */
+.install-dialog {
+  width: min(100% - 32px, 520px);
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 22px;
+  background: linear-gradient(160deg, var(--panel-2), var(--bg-soft));
+  color: var(--text);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.65);
+}
+
+.install-dialog::backdrop {
+  background: rgba(2, 7, 15, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.install-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.install-dialog-head > div { display: grid; gap: 2px; }
+.install-dialog-head strong { font-size: 1rem; }
+.install-dialog-head span { color: var(--muted); font-size: 0.78rem; }
+
+.install-dialog-close {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.install-dialog-body {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.install-dialog-body p { margin: 0; }
+.install-dialog-body strong { color: var(--text); }
+.install-dialog > .btn { margin: 0 18px 18px; }
+
 /* --------------------------------------------------------- responsivo */
 @media (max-width: 1040px) {
   .watch-layout { grid-template-columns: minmax(0, 1fr); }
@@ -1337,6 +1591,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 }
 
 @media (max-width: 820px) {
+  #playlists, #categorias, #ao-vivo, #canais { scroll-margin-top: 132px; }
   .header-inner {
     flex-wrap: wrap;
     gap: 10px;
@@ -1382,6 +1637,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .search-trigger kbd { display: none; }
   .search-trigger span { display: none; }
   .search-trigger { padding: 10px; }
+  .install-trigger { padding: 9px 11px; font-size: 0.78rem; }
   .home-hero { padding-top: 42px; }
   .home-hero h1 { font-size: clamp(2.45rem, 12vw, 3.4rem); }
   .home-hero p { font-size: 0.96rem; }
@@ -1398,6 +1654,22 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .footer-note { margin-left: 0; }
   .search-overlay { padding-top: 5vh; }
   .not-found { padding: 26px; margin: 50px 0 70px; }
+  .category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .category-card { padding: 11px; gap: 9px; }
+  .category-icon { width: 38px; height: 38px; border-radius: 11px; font-size: 1.05rem; }
+  .category-info strong { font-size: 0.86rem; }
+  .category-info small { font-size: 0.68rem; }
+  .category-arrow { display: none; }
+  .live-rail { grid-auto-columns: 76vw; }
+  .static-banner-inner { align-items: flex-start; }
+  .static-banner a { margin-left: 0; }
+  .install-dialog-head { padding: 14px; }
+  .install-dialog-body { padding: 14px; }
+  .install-dialog > .btn { margin: 0 14px 14px; }
+}
+
+@media (max-width: 400px) {
+  .category-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,7 +1,7 @@
 /* EFTV - importação de playlists .m3u/.m3u8.
-   Fala com a API do server.py: adiciona por URL, envia arquivo, atualiza e
-   remove playlists. Depois de cada mudança recarrega o catálogo e re-renderiza
-   a grade sem recarregar a página. */
+   No servidor local fala com a API do server.py. No GitHub Pages usa o
+   armazenamento local (IndexedDB) do modo estático. Depois de cada mudança
+   atualiza a lista, o catálogo e a grade sem recarregar a página. */
 
 (function () {
   const escapeHtml = window.canaisEscape || ((v) => String(v));
@@ -16,9 +16,10 @@
   const lista = document.querySelector("[data-playlist-list]");
   const vazio = document.querySelector("[data-playlist-empty]");
   const botaoLimpar = document.querySelector("[data-playlist-clear]");
+  const estatico = !!window.CANAIS_STATIC && !!window.EFTVStatic;
 
   let playlists = Array.isArray(window.CANAIS_EXTRA_PLAYLISTS)
-    ? window.CANAIS_EXTRA_PLAYLISTS
+    ? window.CANAIS_EXTRA_PLAYLISTS.slice()
     : [];
   let ocupado = false;
 
@@ -100,10 +101,11 @@
         const qtd = Number(p.count) || 0;
         const qtdTexto = qtd.toLocaleString("pt-BR");
         const url = (p.url || "").trim();
+        const urlExibida = window.canaisMascararUrl ? window.canaisMascararUrl(url) : url;
         const link = url
           ? `<div class="playlist-source">
                <span class="playlist-source-label">Link:</span>
-               <code class="playlist-link">${escapeHtml(url)}</code>
+               <code class="playlist-link">${escapeHtml(urlExibida)}</code>
                <button class="playlist-btn mini" type="button" data-copy="${id}">Copiar link</button>
              </div>`
           : `<div class="playlist-source">
@@ -132,15 +134,34 @@
     if (botaoLimpar) botaoLimpar.hidden = playlists.length === 0;
   }
 
+  async function carregarLista() {
+    if (estatico) {
+      const itens = await window.EFTVStatic.listar();
+      playlists = itens.map(window.EFTVStatic.resumir);
+    } else {
+      playlists = Array.isArray(window.CANAIS_EXTRA_PLAYLISTS)
+        ? window.CANAIS_EXTRA_PLAYLISTS.slice()
+        : [];
+    }
+    renderLista();
+  }
+
   /* ------------------------------------------------------ catálogo / grade */
   async function recarregarCatalogo() {
+    if (estatico) {
+      await window.EFTVStatic.reconstruir();
+      await carregarLista();
+      if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
+      return;
+    }
+
     const dados = await pedir("/api/catalogo.json");
     if (typeof window.CanaisAplicarCatalogo !== "function") {
       throw new Error("Catálogo do site não carregou. Recarregue a página.");
     }
     window.CanaisAplicarCatalogo(dados);
     playlists = Array.isArray(dados.playlists) ? dados.playlists : [];
-    if (typeof window.CanaisRenderGrade === "function") window.CanaisRenderGrade();
+    if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
     if (typeof window.CanaisAplicarFiltro === "function") window.CanaisAplicarFiltro();
     renderLista();
   }
@@ -150,12 +171,19 @@
     ocupar(true);
     mostrarStatus("Buscando playlist e lendo os canais...", null);
     try {
-      const dados = await pedir("/api/playlists", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      await recarregarCatalogo();
+      const dados = estatico
+        ? await window.EFTVStatic.adicionarUrl(url)
+        : await pedir("/api/playlists", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+      if (estatico) {
+        await carregarLista();
+        if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
+      } else {
+        await recarregarCatalogo();
+      }
       if (inputUrl) inputUrl.value = "";
       mostrarStatus(dados.message || "Playlist adicionada.", "ok");
     } catch (erro) {
@@ -169,16 +197,23 @@
     ocupar(true);
     mostrarStatus(`Lendo "${file.name}"...`, null);
     try {
-      const texto = await file.text();
-      const dados = await pedir(
-        "/api/playlists/upload?name=" + encodeURIComponent(file.name.replace(/\.(m3u8?)$/i, "")),
-        {
-          method: "POST",
-          headers: { "Content-Type": "text/plain; charset=utf-8" },
-          body: texto,
-        }
-      );
-      await recarregarCatalogo();
+      let dados;
+      if (estatico) {
+        dados = await window.EFTVStatic.adicionarArquivo(file);
+        await carregarLista();
+        if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
+      } else {
+        const texto = await file.text();
+        dados = await pedir(
+          "/api/playlists/upload?name=" + encodeURIComponent(file.name.replace(/\.(m3u8?)$/i, "")),
+          {
+            method: "POST",
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+            body: texto,
+          }
+        );
+        await recarregarCatalogo();
+      }
       if (inputFile) inputFile.value = "";
       if (nomeArquivo) nomeArquivo.textContent = "Nenhum arquivo selecionado";
       mostrarStatus(dados.message || "Playlist importada.", "ok");
@@ -247,8 +282,14 @@
         ocupar(true);
         mostrarStatus("Removendo playlist...", null);
         try {
-          await pedir("/api/playlists?id=" + encodeURIComponent(id), { method: "DELETE" });
-          await recarregarCatalogo();
+          if (estatico) {
+            await window.EFTVStatic.remover(id);
+            await carregarLista();
+            if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
+          } else {
+            await pedir("/api/playlists?id=" + encodeURIComponent(id), { method: "DELETE" });
+            await recarregarCatalogo();
+          }
           mostrarStatus("Playlist removida.", "ok");
         } catch (erro) {
           mostrarStatus(erro.message, "error");
@@ -264,12 +305,19 @@
         ocupar(true);
         mostrarStatus("Buscando a versão mais recente da playlist...", null);
         try {
-          const dados = await pedir("/api/playlists/refresh", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id }),
-          });
-          await recarregarCatalogo();
+          let dados;
+          if (estatico) {
+            dados = await window.EFTVStatic.atualizar(id);
+            await carregarLista();
+            if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
+          } else {
+            dados = await pedir("/api/playlists/refresh", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id }),
+            });
+            await recarregarCatalogo();
+          }
           mostrarStatus(dados.message || "Playlist atualizada.", "ok");
         } catch (erro) {
           mostrarStatus(erro.message, "error");
@@ -287,8 +335,14 @@
       ocupar(true);
       mostrarStatus("Removendo playlists...", null);
       try {
-        await pedir("/api/playlists/clear", { method: "POST" });
-        await recarregarCatalogo();
+        if (estatico) {
+          await window.EFTVStatic.limpar();
+          await carregarLista();
+          if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
+        } else {
+          await pedir("/api/playlists/clear", { method: "POST" });
+          await recarregarCatalogo();
+        }
         mostrarStatus("Todas as playlists foram removidas.", "ok");
       } catch (erro) {
         mostrarStatus(erro.message, "error");
@@ -298,5 +352,12 @@
     });
   }
 
-  renderLista();
+  document.addEventListener("eftv:catalogo-pronto", () => {
+    carregarLista().catch(() => {});
+  });
+
+  carregarLista().catch(() => renderLista());
+  if (window.CANAIS_CATALOGO_PRONTO) {
+    carregarLista().catch(() => {});
+  }
 })();

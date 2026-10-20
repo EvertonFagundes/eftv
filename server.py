@@ -19,6 +19,7 @@ import re
 import shutil
 import sys
 import threading
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -49,6 +50,7 @@ mimetypes.add_type("audio/x-mpegurl", ".m3u")
 mimetypes.add_type("application/dash+xml", ".mpd")
 mimetypes.add_type("image/svg+xml", ".svg")
 mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 # --------------------------------------------------------------------------- #
@@ -318,6 +320,101 @@ def mensagem_importacao(total: int, truncada: bool, nome: str) -> str:
 # --------------------------------------------------------------------------- #
 # Catálogo consumido pelo site
 # --------------------------------------------------------------------------- #
+CATEGORIAS = [
+    {"id": "esportes", "nome": "Esportes"},
+    {"id": "noticias", "nome": "Notícias"},
+    {"id": "abertos", "nome": "Abertos"},
+    {"id": "filmes", "nome": "Filmes"},
+    {"id": "series", "nome": "Séries"},
+    {"id": "novelas", "nome": "Novelas"},
+    {"id": "documentarios", "nome": "Documentários"},
+    {"id": "infantil", "nome": "Infantil"},
+    {"id": "animes", "nome": "Animes"},
+    {"id": "variedades", "nome": "Variedades"},
+    {"id": "musica", "nome": "Música"},
+    {"id": "religiosos", "nome": "Religiosos"},
+    {"id": "24h", "nome": "24 Horas"},
+    {"id": "streaming", "nome": "Streaming"},
+    {"id": "adultos", "nome": "Adultos"},
+    {"id": "outros", "nome": "Outros"},
+]
+
+
+def normalizar_grupo(valor: str) -> str:
+    texto = unicodedata.normalize("NFD", valor or "")
+    texto = "".join(ch for ch in texto if unicodedata.category(ch) != "Mn")
+    return re.sub(r"\s+", " ", texto).strip().lower()
+
+
+def categorizar_grupo(grupo: str) -> str:
+    """Mapeia o group-title da playlist para uma categoria visível no site."""
+    g = normalizar_grupo(grupo)
+    if not g:
+        return "outros"
+    if any(chave in g for chave in ("adult", "xxx", "bella da semana", "18+")):
+        return "adultos"
+    if g.startswith("filme"):
+        return "infantil" if "infantil" in g else "filmes"
+    if g.startswith("serie"):
+        return "animes" if ("crunchyroll" in g or "anime" in g) else "series"
+    if g.startswith("canais"):
+        if re.search(
+            r"(esport|espn|sportv|premiere|jogos do dia|campeonatos estaduais|ppv|nba|dazn|liga futsal)",
+            g,
+        ):
+            return "esportes"
+        if "noticia" in g:
+            return "noticias"
+        if "abertos" in g or "globos" in g or "recordtv" in g:
+            return "abertos"
+        if re.search(r"(hbo|telecine|paramount|max|prime video|disney|apple tv)", g):
+            return "streaming"
+        if "[24h] series" in g:
+            return "series"
+        if "[24h] desenhos" in g:
+            return "infantil"
+        if "[24h] animes" in g:
+            return "animes"
+        if "[24h] musicas" in g:
+            return "musica"
+        if "[24h] outros" in g:
+            return "24h"
+        if "24 horas" in g:
+            return "24h"
+        if "infantis" in g:
+            return "infantil"
+        if "religiosos" in g:
+            return "religiosos"
+        if "documentarios" in g:
+            return "documentarios"
+        if "variedades" in g or "reality" in g or "[24h] youtube" in g or "[24h] pegadinhas" in g:
+            return "variedades"
+        if "filmes e series" in g or "legendados" in g:
+            return "filmes"
+        if "adultos" in g:
+            return "adultos"
+        return "outros"
+    if "esport" in g:
+        return "esportes"
+    if "noticia" in g:
+        return "noticias"
+    if "documentari" in g:
+        return "documentarios"
+    if "novela" in g:
+        return "novelas"
+    if "anime" in g:
+        return "animes"
+    if "infantil" in g or "desenho" in g:
+        return "infantil"
+    if "religios" in g:
+        return "religiosos"
+    if "musica" in g:
+        return "musica"
+    if re.search(r"(show|stand up|programas de tv|reels|shorts)", g):
+        return "variedades"
+    return "outros"
+
+
 def build_catalog() -> dict:
     store = load_store()
     canais = []
@@ -368,7 +465,7 @@ def build_catalog() -> dict:
                 {
                     "slug": f"ext-{pid}-{index}",
                     "nome": name,
-                    "categoria": "importados",
+                    "categoria": categorizar_grupo(group),
                     "grupo": group,
                     "logo": proxy_url(logo) if is_http_url(logo) else logo,
                     "aoVivo": eh_ao_vivo,
@@ -390,35 +487,9 @@ def build_catalog() -> dict:
 
     return {
         "playlists": playlists,
-        "categorias": [{"id": "importados", "nome": "Importados"}] if canais else [],
+        "categorias": CATEGORIAS if canais else [],
         "canais": canais,
     }
-
-
-CATALOGO_JS = """(function () {
-  if (!window.CANAIS_DATA) return;
-  var extra = %s;
-
-  window.CANAIS_EXTRA = extra;
-  window.CANAIS_BASE = window.CANAIS_BASE || {
-    canais: (window.CANAIS_DATA.canais || []).slice(),
-    categorias: (window.CANAIS_DATA.categorias || []).slice()
-  };
-
-  window.CanaisAplicarCatalogo = function (novo) {
-    var base = window.CANAIS_BASE;
-    var categorias = base.categorias.slice();
-    (novo.categorias || []).forEach(function (cat) {
-      if (!categorias.some(function (c) { return c.id === cat.id; })) categorias.push(cat);
-    });
-    window.CANAIS_DATA.categorias = categorias;
-    window.CANAIS_DATA.canais = base.canais.concat(novo.canais || []);
-    window.CANAIS_EXTRA_PLAYLISTS = novo.playlists || [];
-  };
-
-  window.CanaisAplicarCatalogo(extra);
-})();
-"""
 
 
 # --------------------------------------------------------------------------- #
@@ -512,20 +583,18 @@ class Handler(SimpleHTTPRequestHandler):
             )
             return
 
-        if route == "/api/catalogo.json":
-            self._send_json({"ok": True, **build_catalog()})
-            return
-
-        if route == "/api/catalogo.js":
-            catalogo = build_catalog()
-            body = (CATALOGO_JS % json.dumps(catalogo, ensure_ascii=False)).replace("</", "<\\/")
-            data = body.encode("utf-8")
+        if route == "/api/modo.js":
+            data = b'window.CANAIS_MODO = "local";\n'
             self.send_response(200)
             self.send_header("Content-Type", "text/javascript; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(data)
+            return
+
+        if route == "/api/catalogo.json":
+            self._send_json({"ok": True, **build_catalog()})
             return
 
         if route == "/api/proxy":

@@ -3,10 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Canal — EFTV</title>
+  <title>Carregando canal — EFTV</title>
   <meta name="description" content="Assista ao seu canal na EFTV, com opções de transmissão e informações da programação.">
   <meta name="theme-color" content="#071426">
+  <meta name="application-name" content="EFTV">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EFTV">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
@@ -21,9 +28,19 @@
 
       <nav class="main-nav" aria-label="Navegação principal">
         <a href="index.html">Início</a>
-        <a href="index.html#canais" class="is-active">Canais</a>
+        <a href="index.html#categorias">Categorias</a>
+        <a href="index.html#ao-vivo">Ao vivo</a>
         <a href="index.html#playlists">Adicionar</a>
       </nav>
+
+      <button class="install-trigger" type="button" data-install-app aria-label="Instalar app" title="Instalar app" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v11"></path>
+          <path d="m7 9 5 5 5-5"></path>
+          <path d="M5 19h14"></path>
+        </svg>
+        <span>Instalar app</span>
+      </button>
 
       <button class="search-trigger" type="button" data-search-open aria-label="Buscar canal">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -36,13 +53,21 @@
     </div>
   </header>
 
+  <div class="static-banner" data-static-banner hidden>
+    <div class="wrap static-banner-inner">
+      <span class="static-badge">GitHub Pages</span>
+      <span>Versão web: importe por arquivo ou por links com CORS. Para o modo completo com proxy, rode a EFTV localmente.</span>
+      <a href="https://github.com/EvertonFagundes/eftv#como-rodar" target="_blank" rel="noopener">Como rodar</a>
+    </div>
+  </div>
+
   <main class="wrap">
     <div class="breadcrumb">
       <a href="index.html">Início</a>
       <span class="sep">/</span>
       <a href="index.html#canais">Canais</a>
       <span class="sep">/</span>
-      <span class="current" data-canal-nome-breadcrumb>Canal</span>
+      <span class="current" data-canal-nome-breadcrumb>Carregando…</span>
     </div>
 
     <section class="channel-hero">
@@ -50,9 +75,9 @@
         <img data-canal-logo src="assets/img/eftv-mark.svg" alt="">
       </div>
       <div class="meta">
-        <span class="kicker" data-canal-categoria>Canal</span>
-        <h1 data-canal-nome>Canal</h1>
-        <span class="live-flag" data-canal-live-flag><i class="live-dot"></i> Canal ao vivo agora</span>
+        <span class="kicker" data-canal-categoria>Carregando…</span>
+        <h1 data-canal-nome>Carregando canal…</h1>
+        <span class="live-flag" data-canal-live-flag><i class="live-dot"></i> Carregando informações…</span>
       </div>
       <div class="stats">
         <span class="chip" data-canal-live-chip><i class="live-dot"></i> AO VIVO</span>
@@ -61,7 +86,7 @@
     </section>
 
     <div class="section-head">
-      <span class="chip chip-plain"><strong data-canal-nome-mini>Canal</strong></span>
+      <span class="chip chip-plain"><strong data-canal-nome-mini>Carregando…</strong></span>
       <div class="filter-row">
         <button class="category-filter" type="button" data-theater-toggle><span>Tela ampla</span></button>
         <a class="category-filter" href="index.html#canais">Mais canais</a>
@@ -78,7 +103,7 @@
           <div class="left">
             <i class="live-dot"></i>
             <div>
-              <strong data-canal-nome-mini2>Canal</strong>
+              <strong data-canal-nome-mini2>Carregando…</strong>
               <small data-canal-live-sub>Transmissão ao vivo</small>
             </div>
           </div>
@@ -150,9 +175,31 @@
     </div>
   </div>
 
+  <dialog class="install-dialog" data-install-dialog aria-labelledby="install-title">
+    <div class="install-dialog-head">
+      <span class="brand-mark small" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+      </span>
+      <div>
+        <strong id="install-title">Instalar a EFTV</strong>
+        <span>Tenha um atalho como um aplicativo.</span>
+      </div>
+      <button class="install-dialog-close" type="button" data-install-close aria-label="Fechar">✕</button>
+    </div>
+    <div class="install-dialog-body">
+      <p>No <strong>Chrome, Edge ou Android</strong>, toque em <strong>Instalar app</strong> e confirme. No <strong>iPhone/iPad</strong>, toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.</p>
+      <p>O atalho abre a EFTV em tela cheia, com seus canais salvos neste dispositivo.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-install-close>Entendi</button>
+  </dialog>
+
   <script src="assets/js/data.js"></script>
-  <script src="api/catalogo.js"></script>
+  <script src="api/modo.js"></script>
+  <script src="assets/js/catalogo-base.js"></script>
+  <script src="assets/js/catalogo-loader.js"></script>
+  <script src="assets/js/static-store.js"></script>
   <script src="assets/js/app.js"></script>
   <script src="assets/js/canal.js"></script>
+  <script src="assets/js/pwa.js"></script>
 </body>
 </html>

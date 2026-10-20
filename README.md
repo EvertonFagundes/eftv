@@ -1,27 +1,29 @@
 # EFTV
 
-Player local de playlists IPTV para o navegador. Importe sua lista `.m3u` / `.m3u8` por link ou arquivo e assista aos seus canais ao vivo ou sob demanda — sem cadastro e sem depender de um serviço externo.
+Player de playlists IPTV para o navegador. Importe sua lista `.m3u` / `.m3u8` por link ou arquivo e assista aos seus canais ao vivo ou sob demanda — sem cadastro e sem depender de um serviço externo.
 
 > **A EFTV não inclui canais nem links de terceiros.** Cada usuário adiciona a própria playlist pela interface. Use apenas conteúdo que você tem direito de assistir e redistribuir.
 
 ## Recursos
 
 - Importação de playlist por **URL** ou **arquivo local**.
-- Canais organizados em uma grade com busca, filtros e carregamento gradual.
+- Categorias em destaque: **Esportes**, **Notícias**, **Abertos**, **Filmes**, **Séries**, **Novelas**, **Documentários**, **Infantil**, **Animes**, **Variedades**, **Música**, **Religiosos**, **24 Horas**, **Streaming**, **Adultos** e **Outros**.
+- Trilho **Ao vivo**, grade completa, busca, filtros e carregamento gradual.
 - Player com suporte a **HLS**, **MPEG-TS**, **DASH** e arquivos **MP4**.
 - Botão **Ao vivo / Voltar ao vivo** para saltar ao ponto mais recente da transmissão.
 - Proxy local para streams, segmentos, chaves e logos, evitando bloqueios de CORS e conteúdo misto.
 - Conversão automática de links Xtream `.ts` para a variante HLS `.m3u8`, com fallback para `.ts`.
 - Layout responsivo em azul, para desktop e celular.
-- Playlists salvas apenas neste computador, em `data/playlists.json`.
+- **Instalação como app (PWA)** no Chrome, Edge, Android e iPhone/iPad.
+- Playlists salvas apenas neste dispositivo — no servidor local (`data/playlists.json`) ou no IndexedDB do navegador (GitHub Pages).
 
 ## Requisitos
 
-- Python 3.10 ou superior.
+- Python 3.10 ou superior (para o modo local).
 - Navegador moderno com suporte a MSE (Chrome, Edge, Firefox, Brave ou Safari recente).
 - Acesso à internet para carregar as bibliotecas do player (hls.js, mpegts.js e dash.js via CDN) e para acessar os streams importados.
 
-## Como rodar
+## Como rodar localmente
 
 ```bash
 git clone https://github.com/EvertonFagundes/eftv.git
@@ -51,7 +53,7 @@ HOST=0.0.0.0 PORT=8124 python3 server.py
 1. Abra a página inicial.
 2. No bloco **Adicionar playlist**, cole o link da sua lista `.m3u` / `.m3u8` e clique em **Adicionar link**.
 3. Ou clique em **Escolher arquivo** e envie uma lista do seu computador.
-4. Os canais aparecem na seção **Canais**. Use a busca ou os filtros **Ao vivo**, **Sob demanda** e **Importados**.
+4. Os canais aparecem nas seções **Categorias**, **Ao vivo** e **Todos os canais**. Use a busca ou os filtros por categoria e por **Ao vivo** / **Sob demanda**.
 
 A lista de playlists mostra o link usado na importação e permite **copiar**, **atualizar** e **remover** cada playlist.
 
@@ -65,22 +67,54 @@ A EFTV lê listas M3U/M3U8 com entradas `#EXTINF`, incluindo atributos comuns co
 https://exemplo.com/ao-vivo/canal.m3u8
 ```
 
-Também é aceita uma lista simples com uma URL por linha.
+Também é aceita uma lista simples com uma URL por linha. O `group-title` é usado para distribuir o canal nas categorias da interface.
+
+## Instalar como aplicativo
+
+Com a página aberta em **HTTPS** (GitHub Pages) ou em **localhost**, o navegador pode instalar a EFTV como um app:
+
+- **Chrome, Edge ou Android:** clique no botão **Instalar app** no cabeçalho e confirme. O ícone também pode aparecer na barra de endereço.
+- **iPhone/iPad (Safari):** toque em **Compartilhar** e depois em **Adicionar à Tela de Início**.
+- O app abre em tela cheia e usa o mesmo armazenamento local do navegador.
+- O service worker mantém o app shell disponível offline; os streams continuam precisando de internet.
+
+O botão **Instalar app** só aparece quando a instalação é possível (ou abre as instruções manuais quando o navegador não oferece o prompt).
+
+## GitHub Pages (modo estático)
+
+Página publicada: **https://evertonfagundes.github.io/eftv/**
+
+O GitHub Pages não executa Python, então essa versão funciona de forma diferente do servidor local:
+
+- **Importação por arquivo:** funciona normalmente; a playlist fica no IndexedDB do navegador.
+- **Importação por link:** só funciona se o servidor da playlist permitir CORS. Não existe proxy no Pages.
+- **Reprodução:** os streams são abertos diretamente pelo navegador. Provedores que bloqueiam CORS ou usam HTTP em uma página HTTPS podem não tocar.
+- **Dados:** cada navegador/dispositivo tem sua própria biblioteca; não há sincronização nem armazenamento no GitHub.
+- **Proxy completo, importação por link sem CORS e mais recursos:** rode o `server.py` localmente.
+
+Para publicar a sua própria cópia, envie os arquivos para um repositório e ative **Settings → Pages → Deploy from a branch → main / (root)**. O arquivo `.nojekyll` já está incluído.
 
 ## Estrutura
 
 ```text
-index.html              página inicial, importação e grade de canais
-canal.html?c=<slug>     página do canal, player e programação
-embed/player.html       player interno (HLS, TS, DASH e MP4)
-assets/css/style.css    tema azul e layout responsivo
-assets/js/data.js       dados base e helpers de busca
-assets/js/app.js        busca, filtros, grade e contadores
-assets/js/playlists.js  formulário, upload e lista de playlists
-assets/js/canal.js      cabeçalho do canal, troca de fonte e tela ampla
-assets/img/             marca e favicon da EFTV
-server.py               servidor local, API e proxy de streams
-data/playlists.json     playlists importadas (criado localmente, fora do Git)
+index.html                    página inicial, categorias, ao vivo e grade
+canal.html?c=<slug>           página do canal, player e programação
+embed/player.html             player interno (HLS, TS, DASH e MP4)
+assets/css/style.css          tema azul e layout responsivo
+assets/js/data.js             categorias base, helpers e busca
+assets/js/catalogo-base.js    mescla os canais importados com a base
+assets/js/catalogo-loader.js  carrega o catálogo local em segundo plano
+assets/js/static-store.js     IndexedDB e importação no modo GitHub Pages
+assets/js/app.js              busca, filtros, categorias, trilho e grade
+assets/js/playlists.js        formulário, upload e lista de playlists
+assets/js/canal.js            cabeçalho do canal, troca de fonte e tela ampla
+assets/js/pwa.js              instalação como app
+api/modo.js                   identifica o modo local ou estático
+manifest.webmanifest          manifesto do PWA
+sw.js                         service worker do app shell
+assets/img/                   marca, favicon e ícones do app
+server.py                     servidor local, API e proxy de streams
+data/playlists.json           playlists importadas (criado localmente, fora do Git)
 ```
 
 ## API local
@@ -94,7 +128,7 @@ data/playlists.json     playlists importadas (criado localmente, fora do Git)
 | `DELETE` | `/api/playlists?id=...` | remove uma playlist |
 | `POST` | `/api/playlists/clear` | remove todas as playlists |
 | `GET` | `/api/catalogo.json` | catálogo completo em JSON |
-| `GET` | `/api/catalogo.js` | catálogo em JavaScript para a interface |
+| `GET` | `/api/modo.js` | informa o modo da interface (`local`) |
 | `GET` | `/api/proxy?url=...` | proxy de stream, segmento, chave ou imagem |
 
 ## Limites e configuração
@@ -108,14 +142,16 @@ As variáveis abaixo podem ser definidas antes de iniciar o servidor:
 | `MAX_PLAYLIST_MB` | `128` | tamanho máximo de uma playlist |
 | `MAX_CHANNELS` | `50000` | canais importados por playlist |
 
-A grade mostra 240 canais por vez, com o botão **Mostrar mais canais**. A busca e os filtros continuam valendo para a lista inteira.
+A grade mostra 240 canais por vez, com o botão **Mostrar mais canais**. A busca e os filtros continuam valendo para a lista inteira. O catálogo grande é carregado em segundo plano; a página exibe **Carregando seus canais...** enquanto isso.
 
 ## Privacidade e segurança
 
 - `data/playlists.json` guarda as URLs e os canais importados, incluindo possíveis usuários, senhas e tokens da sua playlist.
 - O arquivo é criado com permissão `0600` e a pasta `/data/` não é servida publicamente.
-- O link completo da playlist aparece na interface local para você não perder a referência. **Não compartilhe capturas de tela ou o arquivo `data/playlists.json`.**
+- O link da playlist aparece com usuário, senha e tokens mascarados na tela; o botão **Copiar link** copia o endereço completo. **Não compartilhe capturas de tela ou o arquivo `data/playlists.json`.**
 - O repositório ignora `data/*.json`; nenhuma playlist de usuário é enviada ao Git.
+- O service worker guarda apenas o app shell e o `api/modo.js` público. O catálogo local (`/api/catalogo.json`) **não** é armazenado no cache do PWA.
+- No GitHub Pages, as playlists ficam no IndexedDB do seu navegador e não são enviadas ao GitHub.
 - O servidor usa apenas a biblioteca padrão do Python e não envia telemetria.
 
 ## Formatos e limitações
@@ -132,6 +168,7 @@ A grade mostra 240 canais por vez, com o botão **Mostrar mais canais**. A busca
 - Canais `.mp4`, `.mkv`, `.avi` e similares são tratados como **Sob demanda**.
 - A latência de transmissões ao vivo depende do provedor e do tamanho dos segmentos HLS; o botão **Ao vivo** reduz o atraso local.
 - A programação exibida é básica: a EFTV usa o nome do grupo e informações genéricas da playlist, sem EPG externo.
+- No modo GitHub Pages não há proxy: provedores com CORS restrito podem exigir o servidor local.
 
 ## Aviso legal
 

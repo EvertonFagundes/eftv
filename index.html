@@ -6,7 +6,14 @@
   <title>EFTV — Seus canais, em um só lugar</title>
   <meta name="description" content="EFTV: importe sua playlist M3U/M3U8 e assista aos seus canais ao vivo ou sob demanda no navegador.">
   <meta name="theme-color" content="#071426">
+  <meta name="application-name" content="EFTV">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EFTV">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
@@ -21,9 +28,19 @@
 
       <nav class="main-nav" aria-label="Navegação principal">
         <a href="index.html" class="is-active">Início</a>
-        <a href="index.html#canais">Canais</a>
+        <a href="index.html#categorias">Categorias</a>
+        <a href="index.html#ao-vivo">Ao vivo</a>
         <a href="index.html#playlists">Adicionar</a>
       </nav>
+
+      <button class="install-trigger" type="button" data-install-app aria-label="Instalar app" title="Instalar app" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v11"></path>
+          <path d="m7 9 5 5 5-5"></path>
+          <path d="M5 19h14"></path>
+        </svg>
+        <span>Instalar app</span>
+      </button>
 
       <button class="search-trigger" type="button" data-search-open aria-label="Buscar canal">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -36,6 +53,14 @@
     </div>
   </header>
 
+  <div class="static-banner" data-static-banner hidden>
+    <div class="wrap static-banner-inner">
+      <span class="static-badge">GitHub Pages</span>
+      <span>Versão web: importe por arquivo ou por links com CORS. Para o modo completo com proxy, rode a EFTV localmente.</span>
+      <a href="https://github.com/EvertonFagundes/eftv#como-rodar" target="_blank" rel="noopener">Como rodar</a>
+    </div>
+  </div>
+
   <main class="wrap">
     <section class="home-hero" aria-label="EFTV">
       <div class="home-hero-copy">
@@ -43,11 +68,11 @@
         <h1>Seus canais,<br><span class="gradient-text">em um só lugar.</span></h1>
         <p>
           Importe sua playlist <code>.m3u</code> ou <code>.m3u8</code> e acompanhe
-          ao vivo ou sob demanda. Sua biblioteca fica salva neste computador.
+          ao vivo ou sob demanda. Sua biblioteca fica salva neste dispositivo.
         </p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#playlists">Adicionar playlist</a>
-          <a class="btn btn-ghost" href="#canais">Explorar canais</a>
+          <a class="btn btn-ghost" href="#categorias">Explorar categorias</a>
         </div>
         <div class="hero-metrics" aria-label="Resumo da biblioteca">
           <div class="metric"><strong id="contador-canais">0</strong><span>canais</span></div>
@@ -84,7 +109,7 @@
           <h2 id="playlists-titulo">Adicionar playlist</h2>
           <p class="playlist-sub">
             Cole o link de uma lista <code>.m3u</code> / <code>.m3u8</code> ou envie um arquivo.
-            Os canais entram na grade abaixo e ficam salvos neste computador.
+            Os canais entram na grade abaixo e ficam salvos neste dispositivo.
           </p>
         </div>
         <button class="playlist-btn ghost" type="button" data-playlist-clear hidden>Remover todas</button>
@@ -128,11 +153,33 @@
       </div>
     </section>
 
+    <section class="category-section" id="categorias" data-category-section hidden aria-labelledby="categorias-titulo">
+      <div class="section-head">
+        <div>
+          <span class="section-kicker">Explore por assunto</span>
+          <h2 id="categorias-titulo">Categorias</h2>
+        </div>
+        <span class="section-hint" data-category-summary></span>
+      </div>
+      <div class="category-grid" data-category-grid></div>
+    </section>
+
+    <section class="live-section" id="ao-vivo" data-live-section hidden aria-labelledby="ao-vivo-titulo">
+      <div class="section-head">
+        <div>
+          <span class="section-kicker"><i class="live-dot"></i> Agora</span>
+          <h2 id="ao-vivo-titulo">Ao vivo</h2>
+        </div>
+        <button class="section-link" type="button" data-filter-live>Ver todos ao vivo →</button>
+      </div>
+      <div class="live-rail" data-live-rail></div>
+    </section>
+
     <section id="canais" class="library-section" aria-labelledby="canais-titulo">
       <div class="section-head">
         <div>
-          <span class="section-kicker">Sua programação</span>
-          <h2 id="canais-titulo">Canais</h2>
+          <span class="section-kicker">Sua biblioteca completa</span>
+          <h2 id="canais-titulo">Todos os canais</h2>
         </div>
         <div class="filter-row">
           <input class="channel-filter" type="search" placeholder="Filtrar por nome ou grupo..." data-channel-filter>
@@ -143,7 +190,6 @@
         <button class="category-filter active" type="button" data-category-filter="">Todas</button>
         <button class="category-filter" type="button" data-category-filter="__ao_vivo">Ao vivo</button>
         <button class="category-filter" type="button" data-category-filter="__sob_demanda">Sob demanda</button>
-        <button class="category-filter" type="button" data-category-filter="importados">Importados</button>
       </div>
 
       <div class="channel-grid" data-channel-grid></div>
@@ -178,13 +224,39 @@
     </div>
   </div>
 
+  <!-- Instalação do app -->
+  <dialog class="install-dialog" data-install-dialog aria-labelledby="install-title">
+    <div class="install-dialog-head">
+      <span class="brand-mark small" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+      </span>
+      <div>
+        <strong id="install-title">Instalar a EFTV</strong>
+        <span>Tenha um atalho como um aplicativo.</span>
+      </div>
+      <button class="install-dialog-close" type="button" data-install-close aria-label="Fechar">✕</button>
+    </div>
+    <div class="install-dialog-body">
+      <p>No <strong>Chrome, Edge ou Android</strong>, toque em <strong>Instalar app</strong> e confirme. No <strong>iPhone/iPad</strong>, toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.</p>
+      <p>O atalho abre a EFTV em tela cheia, com seus canais salvos neste dispositivo.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-install-close>Entendi</button>
+  </dialog>
+
   <script src="assets/js/data.js"></script>
-  <script src="api/catalogo.js"></script>
+  <script src="api/modo.js"></script>
+  <script src="assets/js/catalogo-base.js"></script>
+  <script src="assets/js/catalogo-loader.js"></script>
+  <script src="assets/js/static-store.js"></script>
   <script src="assets/js/app.js"></script>
   <script src="assets/js/playlists.js"></script>
+  <script src="assets/js/pwa.js"></script>
   <script>
-    /* Renderiza a grade com os canais importados. */
-    window.CanaisRenderGrade();
+    if (typeof window.CanaisRenderTudo === "function") {
+      window.CanaisRenderTudo();
+    } else if (typeof window.CanaisRenderGrade === "function") {
+      window.CanaisRenderGrade();
+    }
   </script>
 </body>
 </html>
