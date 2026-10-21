@@ -20,9 +20,10 @@
       return dados.canais
         .filter(
           (c) =>
-            norm(c.nome).includes(q) ||
-            norm(c.categoria).includes(q) ||
-            norm(c.grupo || "").includes(q)
+            (!window.CANAIS_ADULTOS || !window.canaisEhAdulto(c)) &&
+            (norm(c.nome).includes(q) ||
+              norm(c.categoria).includes(q) ||
+              norm(c.grupo || "").includes(q))
         )
         .slice(0, limite)
         .map((c) => ({ titulo: c.nome, link: `canal.html?c=${c.slug}`, categoria: c.categoria }));
@@ -63,6 +64,10 @@
     const cat = (filtroAtual.categoria || "").trim();
 
     let filtrados = lista;
+    // Canais 18+ ficam fora da grade enquanto o usuario nao os liberar.
+    if (!window.CANAIS_ADULTOS) {
+      filtrados = filtrados.filter((c) => !window.canaisEhAdulto(c));
+    }
     if (q) {
       filtrados = filtrados.filter((c) => {
         const nome = norm(c.nome || "");
@@ -129,7 +134,11 @@
     if (!secao || !grade || !filtros) return;
 
     const canais = (window.CANAIS_DATA && window.CANAIS_DATA.canais) || [];
-    const total = canais.length;
+    // Canais 18+ somem da grade, da busca e do resumo enquanto ocultos.
+    const visiveis = window.CANAIS_ADULTOS
+      ? canais
+      : canais.filter((c) => !window.canaisEhAdulto(c));
+    const total = visiveis.length;
 
     // Recria apenas os chips de categoria; os chips de status ficam fixos.
     filtros.querySelectorAll("[data-cat-chip]").forEach((el) => el.remove());
@@ -144,7 +153,7 @@
 
     const contagem = new Map();
     const aoVivoPorCategoria = new Map();
-    canais.forEach((c) => {
+    visiveis.forEach((c) => {
       const id = c.categoria || "outros";
       contagem.set(id, (contagem.get(id) || 0) + 1);
       if (c.aoVivo !== false) {
@@ -154,6 +163,7 @@
 
     const metas = (window.CANAIS_CATEGORIAS || [])
       .filter((meta) => (contagem.get(meta.id) || 0) > 0)
+      .filter((meta) => !(meta.id === "adultos" && !window.CANAIS_ADULTOS))
       .sort((a, b) => {
         const ordem = window.CANAIS_CATEGORIAS.map((x) => x.id);
         return ordem.indexOf(a.id) - ordem.indexOf(b.id);
@@ -226,7 +236,10 @@
     if (!secao || !trilho) return;
 
     const canais = (window.CANAIS_DATA && window.CANAIS_DATA.canais) || [];
-    const aoVivo = canais.filter((c) => c.aoVivo !== false).slice(0, LIMITE_AO_VIVO);
+    const visiveis = window.CANAIS_ADULTOS
+      ? canais
+      : canais.filter((c) => !window.canaisEhAdulto(c));
+    const aoVivo = visiveis.filter((c) => c.aoVivo !== false).slice(0, LIMITE_AO_VIVO);
     secao.hidden = aoVivo.length === 0;
     trilho.innerHTML = aoVivo.map(cardHTML).join("");
     ligarFallbackLogos(trilho);
@@ -244,8 +257,11 @@
     grade.innerHTML = visiveis.map(cardHTML).join("");
     ligarFallbackLogos(grade);
 
-    const total = dados.canais.length;
-    const aoVivoTotal = dados.canais.filter((c) => c.aoVivo !== false).length;
+    const visiveisTodos = window.CANAIS_ADULTOS
+      ? dados.canais
+      : dados.canais.filter((c) => !window.canaisEhAdulto(c));
+    const total = visiveisTodos.length;
+    const aoVivoTotal = visiveisTodos.filter((c) => c.aoVivo !== false).length;
     const totalPlaylists = (window.CANAIS_EXTRA_PLAYLISTS || []).length;
 
     const contador = document.getElementById("contador-canais");
@@ -424,13 +440,54 @@
     window.CanaisAplicarFiltro = aplicar;
   }
 
+  /* ------------------------------------------------------ canais 18+ (ocultos)
+     A categoria fica escondida: some da grade, da busca e dos chips. O
+     botao discreto do rodape libera (e volta a esconder) quando o usuario
+     quiser. A escolha fica salva neste navegador. */
+  function initAdultos() {
+    const botao = document.querySelector("[data-adultos-toggle]");
+    if (!botao) return;
+    const canais = (window.CANAIS_DATA && window.CANAIS_DATA.canais) || [];
+    const quantos = canais.filter((c) => window.canaisEhAdulto(c)).length;
+    botao.hidden = quantos === 0;
+    if (!quantos) return;
+    botao.setAttribute("aria-pressed", window.CANAIS_ADULTOS ? "true" : "false");
+    botao.title = window.CANAIS_ADULTOS
+      ? "Ocultar os canais 18+"
+      : `Mostrar os canais 18+ (${quantos})`;
+  }
+
+  function ligarBotaoAdultos() {
+    const botao = document.querySelector("[data-adultos-toggle]");
+    const msg = document.querySelector("[data-adultos-msg]");
+    if (!botao || botao.dataset.pronto) return;
+    botao.dataset.pronto = "1";
+    botao.addEventListener("click", () => {
+      const ligando = !window.CANAIS_ADULTOS;
+      window.CANAIS_LIBERAR_ADULTOS(ligando);
+      initAdultos();
+      if (!msg) return;
+      msg.hidden = false;
+      msg.textContent = ligando ? "canais 18+ visíveis" : "canais 18+ ocultos";
+      clearTimeout(Number(msg.dataset.timer) || 0);
+      msg.dataset.timer = String(
+        setTimeout(() => {
+          msg.hidden = true;
+        }, 2600)
+      );
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     initBusca();
     initFiltroCanais();
+    ligarBotaoAdultos();
+    initAdultos();
     renderTudo();
   });
 
   document.addEventListener("eftv:catalogo-pronto", () => {
+    initAdultos();
     renderTudo();
   });
 })();

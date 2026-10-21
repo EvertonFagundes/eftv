@@ -116,6 +116,27 @@
       const botoes = [...document.querySelectorAll("[data-player-url]")];
       if (!frame || !botoes.length) return;
 
+      // Canal 18+ aberto direto pelo link: a categoria fica oculta por
+      // padrao, entao a transmissao so comeca depois de um clique.
+      const gate = document.querySelector("[data-age-gate]");
+      if (!window.CANAIS_ADULTOS && window.canaisEhAdulto(canal)) {
+        frame.setAttribute("src", "about:blank");
+        botoes.forEach((btn) => btn.remove());
+        if (gate) {
+          gate.hidden = false;
+          const mostrar = gate.querySelector("[data-age-show]");
+          if (mostrar) {
+            mostrar.addEventListener("click", () => {
+              window.CANAIS_LIBERAR_ADULTOS(true);
+              gate.hidden = true;
+              location.reload();
+            });
+          }
+        }
+        atualizarNotaFonte(null);
+        return;
+      }
+
       if (!fontes.length) {
         botoes.forEach((btn) => btn.remove());
         frame.setAttribute("src", "about:blank");

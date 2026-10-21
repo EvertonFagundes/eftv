@@ -19,6 +19,7 @@ Player de playlists IPTV para o navegador. Importe sua lista `.m3u` / `.m3u8` po
 - **Início do servidor local pela própria página**: um botão na interface sobe o `server.py` do computador do usuário (protocolo `eftv://`) e abre a versão completa em `http://127.0.0.1:8124/`.
 - **Acesso pela rede Wi-Fi**: com `--lan` o servidor também atende smart TVs, tablets e notebooks da mesma rede, mantendo o proxy de streams.
 - **Roda no Android**: o mesmo `server.py` funciona no celular pelo Termux, com instalador próprio.
+- **Categoria 18+ discreta**: os canais adultos ficam ocultos por padrão (fora da grade, da busca e dos filtros) e só aparecem ao tocar no botão **18+** no rodapé. Abrir o link direto de um canal adulto mostra uma barreira de confirmação.
 
 ## Requisitos
 

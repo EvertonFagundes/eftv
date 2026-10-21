@@ -123,3 +123,37 @@ window.canaisLogoFallback = function (nome = "") {
     `font-size="58" font-weight="700" fill="#5fa8ff">${iniciais}</text></svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 };
+
+/* ------------------------------------------------------- canais 18+ (adultos)
+   Ficam ocultos por padrao: somem da grade, da busca e dos chips de
+   categoria. O usuario libera explicitamente pelo botao discreto do
+   rodape, e a escolha fica salva neste navegador. */
+window.CANAIS_ADULTOS = (function () {
+  try {
+    return localStorage.getItem("eftv-adultos") === "1";
+  } catch (_) {
+    return false;
+  }
+})();
+
+window.CANAIS_LIBERAR_ADULTOS = function (ligar) {
+  window.CANAIS_ADULTOS = !!ligar;
+  try {
+    localStorage.setItem("eftv-adultos", ligar ? "1" : "0");
+  } catch (_) {
+    // Navegador sem armazenamento: vale so para esta sessao.
+  }
+  if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
+  document.dispatchEvent(new CustomEvent("eftv:adultos"));
+  return window.CANAIS_ADULTOS;
+};
+
+/* Reconhece um canal 18+ pela categoria ou pelo grupo da playlist. */
+window.canaisEhAdulto = function (canal) {
+  if (!canal) return false;
+  if ((canal.categoria || "") === "adultos") return true;
+  const grupo = window.canaisNormalize
+    ? window.canaisNormalize(canal.grupo || "")
+    : String(canal.grupo || "").toLowerCase();
+  return /adult|xxx|18\+|bella da semana/.test(grupo);
+};
