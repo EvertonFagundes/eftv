@@ -79,6 +79,8 @@ dica_apt() {
 
 if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
   preparar_apt
+  echo "  Atualizando a lista de pacotes..."
+  pkg update -y >/dev/null 2>&1 || true
   echo "  Instalando o Python..."
   if ! pkg install -y python; then
     echo "  [ERRO] Nao foi possivel instalar o Python."
@@ -249,8 +251,12 @@ EOF
 
 cat > "$BIN/eftv-atualizar" <<EOF
 #!/data/data/com.termux/files/usr/bin/bash
-# Atualiza a copia do codigo da EFTV.
-git -C "$DEST" pull --ff-only
+# Atualiza a copia do codigo da EFTV. Com git usa o repositorio; sem git
+# (instalacao pelo .zip) baixa o pacote novo, sem tocar em data/.
+if [ -d "$DEST/.git" ] && command -v git >/dev/null 2>&1; then
+  exec git -C "$DEST" pull --ff-only
+fi
+exec "$PYTHON" "$DEST/instalar/atualizar.py" "$DEST"
 EOF
 
 chmod +x "$BIN/eftv" "$BIN/eftv-parar" "$BIN/eftv-servidor" "$BIN/eftv-atualizar"
