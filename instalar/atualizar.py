@@ -22,26 +22,40 @@ URL = "https://evertonfagundes.github.io/eftv/eftv-android.zip"
 URL_ALT = "https://raw.githubusercontent.com/EvertonFagundes/eftv/main/eftv-android.zip"
 
 
+def _comando(url: str, destino: str) -> bool:
+    """Tenta curl e wget; cada um pode estar quebrado (upgrade incompleto)."""
+    tentativas = []
+    if shutil.which("curl"):
+        tentativas.append([
+            "curl", "-fL", "--connect-timeout", "25", "--max-time", "240",
+            "-o", destino, url,
+        ])
+    if shutil.which("wget"):
+        tentativas.append(["wget", "-q", "--timeout=30", "-O", destino, url])
+
+    for comando in tentativas:
+        try:
+            subprocess.check_call(
+                comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            if os.path.getsize(destino) > 1024:
+                return True
+        except Exception:  # noqa: BLE001 - tenta o proximo programa
+            continue
+    return False
+
+
 def baixar(destino: str) -> bool:
     for url in (URL, URL_ALT):
         print(f"  Baixando {url}")
         try:
-            if shutil.which("curl"):
-                subprocess.check_call(
-                    ["curl", "-fL", "--connect-timeout", "25", "--max-time", "240",
-                     "-o", destino, url],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
-            elif shutil.which("wget"):
-                subprocess.check_call(
-                    ["wget", "-q", "--timeout=30", "-O", destino, url],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
-            else:
-                import urllib.request
+            if _comando(url, destino):
+                return True
 
-                with urllib.request.urlopen(url, timeout=60) as resposta, open(destino, "wb") as saida:
-                    shutil.copyfileobj(resposta, saida)
+            import urllib.request
+
+            with urllib.request.urlopen(url, timeout=60) as resposta, open(destino, "wb") as saida:
+                shutil.copyfileobj(resposta, saida)
             if os.path.getsize(destino) > 1024:
                 return True
         except Exception as erro:  # noqa: BLE001 - tenta a proxima origem

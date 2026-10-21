@@ -115,6 +115,19 @@ git_com_limite() {
   fi
 }
 
+baixar_arquivo() {
+  # Tenta o curl e, se ele falhar (binario quebrado por upgrade incompleto,
+  # por exemplo), tenta o wget antes de desistir do endereco.
+  local url="$1" destino="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL --connect-timeout 25 --max-time 180 --retry 1 -o "$destino" "$url" 2>/dev/null && return 0
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    wget -q --timeout=30 --tries=2 -O "$destino" "$url" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
 baixar_zip() {
   # Sem o git, ou com o git indisponivel: tenta o .zip do repositorio.
   for url in \
@@ -124,13 +137,7 @@ baixar_zip() {
     "https://github.com/EvertonFagundes/eftv/archive/refs/heads/main.zip"; do
     echo "    $url"
     rm -f "$TMPZIP"
-    if command -v curl >/dev/null 2>&1; then
-      curl -fL --connect-timeout 25 --max-time 180 --retry 2 -o "$TMPZIP" "$url" 2>/dev/null || continue
-    elif command -v wget >/dev/null 2>&1; then
-      wget -q --timeout=30 --tries=2 -O "$TMPZIP" "$url" || continue
-    else
-      continue
-    fi
+    baixar_arquivo "$url" "$TMPZIP" || continue
     rm -rf "$TMPDIR"
     mkdir -p "$TMPDIR"
     if ! "$PYTHON" -c "
