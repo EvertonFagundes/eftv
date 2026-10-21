@@ -111,7 +111,15 @@
       </div>
       <p class="android-note">
         Depois de instalar, o Termux cria os comandos <code>eftv</code> (sobe o servidor),
-        <code>eftv-parar</code> (encerra) e <code>eftv-atualizar</code> (atualiza o código).
+        <code>eftv-servidor</code> (sobe sem abrir o navegador), <code>eftv-parar</code> (encerra) e
+        <code>eftv-atualizar</code> (atualiza o código).
+      </p>
+      <p class="android-note">
+        Se o <code>git clone</code> falhar porque a rede usa um espelho do GitHub fora do ar,
+        baixe o <a href="eftv-android.zip" download>pacote completo</a> pelo navegador do celular e
+        no Termux rode: <code>pkg install -y unzip</code>,
+        <code>unzip ~/eftv-android.zip -d ~</code> e
+        <code>bash ~/eftv/instalar/instalar-eftv-termux.sh</code>.
       </p>
     </div>
   </section>

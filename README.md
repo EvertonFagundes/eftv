@@ -145,6 +145,16 @@ git clone https://github.com/EvertonFagundes/eftv.git ~/eftv
 bash ~/eftv/instalar/instalar-eftv-termux.sh
 ```
 
+Se o `git clone` falhar — o que costuma acontecer quando o aparelho usa um **espelho do GitHub** configurado no `git` e ele está fora do ar — o instalador tenta sozinho: o clone normal, o clone ignorando a configuração global (ou seja, sem espelho) e por fim o `.zip`. Se ainda assim falhar, ele mostra o caminho manual. O mais curto é baixar o **pacote completo** pelo navegador do celular e descompactar no Termux:
+
+```bash
+pkg install -y unzip
+unzip ~/eftv-android.zip -d ~
+bash ~/eftv/instalar/instalar-eftv-termux.sh
+```
+
+O pacote é gerado por `instalar/gerar-pacote.py` e publicado em `https://evertonfagundes.github.io/eftv/eftv-android.zip`.
+
 O instalador do Termux:
 
 - instala o Python e o Git se faltarem;

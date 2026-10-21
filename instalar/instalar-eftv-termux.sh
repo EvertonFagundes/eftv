@@ -53,8 +53,8 @@ fi
 if ! command -v git >/dev/null 2>&1; then
   echo "  Instalando o Git..."
   pkg install -y git || {
-    echo "  [ERRO] Nao foi possivel instalar o Git. Rode: pkg update && pkg install git"
-    exit 1
+    echo "  Aviso: Git nao instalado. Vou baixar a EFTV em .zip."
+    TEM_GIT=0
   }
 fi
 
@@ -62,17 +62,131 @@ PYTHON="python3"
 command -v "$PYTHON" >/dev/null 2>&1 || PYTHON="python"
 
 # --------------------------------------------------------------- codigo
-if [ -d "$DEST/.git" ]; then
-  if [ "$atualizar" -eq 1 ]; then
-    echo "  Atualizando a EFTV..."
-    git -C "$DEST" pull --ff-only || echo "  (aviso: nao foi possivel atualizar)"
+TMPZIP="$HOME/eftv-download.zip"
+TMPDIR="$HOME/eftv-download"
+TMP_LOG="$HOME/eftv-git.log"
+LIMITE_SEGUNDOS=90
+
+# Roda o git com limite de tempo: se a rede travar, o script segue para
+# a proxima alternativa em vez de ficar parado.
+git_com_limite() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$LIMITE_SEGUNDOS" git "$@"
   else
-    echo "  Codigo ja existe em $DEST"
+    git "$@"
   fi
-else
-  echo "  Baixando a EFTV..."
+}
+
+baixar_zip() {
+  # Sem o git, ou com o git indisponivel: tenta o .zip do repositorio.
+  for url in \
+    "https://evertonfagundes.github.io/eftv/eftv-android.zip" \
+    "https://codeload.github.com/EvertonFagundes/eftv/zip/refs/heads/main" \
+    "https://github.com/EvertonFagundes/eftv/archive/refs/heads/main.zip"; do
+    echo "    $url"
+    rm -f "$TMPZIP"
+    if command -v curl >/dev/null 2>&1; then
+      curl -fL --connect-timeout 25 --max-time 180 --retry 2 -o "$TMPZIP" "$url" 2>/dev/null || continue
+    elif command -v wget >/dev/null 2>&1; then
+      wget -q --timeout=30 --tries=2 -O "$TMPZIP" "$url" || continue
+    else
+      continue
+    fi
+    rm -rf "$TMPDIR"
+    mkdir -p "$TMPDIR"
+    if ! "$PYTHON" -c "
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as z:
+    z.extractall(sys.argv[2])
+" "$TMPZIP" "$TMPDIR" 2>/dev/null; then
+      continue
+    fi
+    # O zip tem uma pasta "eftv-main" na raiz: o conteudo dela e o repo.
+    for pasta in "$TMPDIR"/*; do
+      [ -d "$pasta" ] || continue
+      rm -rf "$DEST"
+      mv "$pasta" "$DEST"
+      break
+    done
+    rm -rf "$TMPDIR" "$TMPZIP"
+    [ -f "$DEST/server.py" ] && return 0
+  done
+  return 1
+}
+
+obter_codigo() {
+  if [ -d "$DEST/.git" ]; then
+    if [ "$atualizar" -eq 1 ]; then
+      echo "  Atualizando a EFTV..."
+      git -C "$DEST" pull --ff-only || echo "  (aviso: nao foi possivel atualizar)"
+    else
+      echo "  Codigo ja existe em $DEST"
+    fi
+    return 0
+  fi
+
   mkdir -p "$(dirname "$DEST")"
-  git clone --depth 1 "$REPO" "$DEST"
+
+  # 1) Git clone normal: usa a configuracao do aparelho (pode ter espelho).
+  # O limite de tempo evita ficar preso quando a rede nao responde.
+  if command -v git >/dev/null 2>&1; then
+    echo "  Baixando a EFTV com git..."
+    if git_com_limite clone --depth 1 "$REPO" "$DEST" > "$TMP_LOG" 2>&1; then
+      sed 's/^/    /' "$TMP_LOG"
+      [ -f "$DEST/server.py" ] && return 0
+    else
+      sed 's/^/    /' "$TMP_LOG"
+    fi
+    rm -rf "$DEST"
+
+    # 2) Git clone ignorando a configuracao global: contorna espelho quebrado.
+    echo "  Tentando de novo, direto do GitHub (sem espelho)..."
+    CASA_VAZIA="$(mktemp -d)"
+    if HOME="$CASA_VAZIA" git_com_limite clone --depth 1 "$REPO" "$DEST" > "$TMP_LOG" 2>&1; then
+      sed 's/^/    /' "$TMP_LOG"
+      [ -f "$DEST/server.py" ] && { rm -rf "$CASA_VAZIA"; return 0; }
+    else
+      sed 's/^/    /' "$TMP_LOG"
+    fi
+    rm -rf "$DEST" "$CASA_VAZIA"
+  fi
+
+  # 3) Ultimo recurso: o .zip do repositorio.
+  echo "  Baixando a EFTV em .zip..."
+  if baixar_zip; then
+    return 0
+  fi
+
+  return 1
+}
+
+if ! obter_codigo; then
+  echo
+  echo "  [ERRO] Nao foi possivel baixar a EFTV."
+  echo
+  echo "  O aparelho pode estar usando um espelho do GitHub que esta fora"
+  echo "  do ar. Tente uma destas opcoes:"
+  echo
+  echo "  a) Baixe o pacote no navegador do celular:"
+  echo "     https://evertonfagundes.github.io/eftv/eftv-android.zip"
+  echo "     e depois, no Termux, cole estas tres linhas:"
+  echo "       pkg install -y unzip"
+  echo "       unzip ~/eftv-android.zip -d ~"
+  echo "       bash ~/eftv/instalar/instalar-eftv-termux.sh"
+  echo
+  echo "  b) Ou baixe direto do GitHub:"
+  echo "     https://github.com/EvertonFagundes/eftv/archive/refs/heads/main.zip"
+  echo "     e no Termux:"
+  echo "       pkg install -y unzip"
+  echo "       unzip ~/eftv-main.zip -d ~"
+  echo "       bash ~/eftv/instalar/instalar-eftv-termux.sh"
+  echo
+  echo "  c) Verifique o espelho configurado no git:"
+  echo "       git config --global --get-regexp insteadOf"
+  echo "     e remova a regra com:"
+  echo "       git config --global --unset-all url.<endereco>.insteadOf"
+  echo
+  exit 1
 fi
 
 # ------------------------------------------------------- comando "eftv"
