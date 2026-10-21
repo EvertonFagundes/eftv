@@ -42,20 +42,56 @@ if [ ! -d /data/data/com.termux/files ] && [ -z "${PREFIX:-}" ]; then
   exit 1
 fi
 
+# ---------------------------------------------------------- preparacao do apt
+# Erros de "rename failed" e "Could not open file .../partial/arquivo.deb"
+# aparecem quando a pasta de cache do apt sumiu ou quando o aparelho esta
+# sem espaco. Recriar a pasta e o primeiro passo.
+preparar_apt() {
+  local cache livre_kb
+  cache="$(dirname "$(dirname "${PREFIX:-/data/data/com.termux/files/usr}")")/cache/apt/archives"
+  mkdir -p "$cache/partial" 2>/dev/null || true
+
+  livre_kb="$(df -P "$HOME" 2>/dev/null | awk 'NR==2 {print $4}')"
+  case "$livre_kb" in
+    ''|*[!0-9]*) ;;
+    *)
+      if [ "$livre_kb" -lt 300000 ]; then
+        echo "  Aviso: ha apenas $((livre_kb / 1024)) MB livres. O apt precisa de"
+        echo "  uns 600 MB para atualizar o Python. Libere espaco antes."
+      fi
+      ;;
+  esac
+}
+
+dica_apt() {
+  echo
+  echo "  Se apareceu \"rename failed\" ou \"Could not open file .../partial/\","
+  echo "  o cache do apt esta quebrado ou falta espaco. Rode:"
+  echo
+  echo "    apt clean"
+  echo "    mkdir -p /data/data/com.termux/cache/apt/archives/partial"
+  echo "    termux-change-repo      # troque o espelho"
+  echo "    pkg update -y && pkg install -y python"
+  echo
+  echo "  Para conferir o espaco livre:  df -h /data"
+  echo
+}
+
 if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+  preparar_apt
   echo "  Instalando o Python..."
-  pkg install -y python || {
-    echo "  [ERRO] Nao foi possivel instalar o Python. Rode: pkg update && pkg install python"
+  if ! pkg install -y python; then
+    echo "  [ERRO] Nao foi possivel instalar o Python."
+    dica_apt
     exit 1
-  }
+  fi
 fi
 
 if ! command -v git >/dev/null 2>&1; then
   echo "  Instalando o Git..."
-  pkg install -y git || {
-    echo "  Aviso: Git nao instalado. Vou baixar a EFTV em .zip."
-    TEM_GIT=0
-  }
+  if ! pkg install -y git; then
+    echo "  Aviso: nao foi possivel instalar o Git. Vou baixar a EFTV em .zip."
+  fi
 fi
 
 PYTHON="python3"

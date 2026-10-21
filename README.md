@@ -156,6 +156,18 @@ bash ~/eftv/instalar/instalar-eftv-termux.sh
 
 O pacote é gerado por `instalar/gerar-pacote.py` e publicado em `https://evertonfagundes.github.io/eftv/eftv-android.zip`.
 
+Se o próprio `pkg install` falhar com `rename failed` ou `Could not open file .../cache/apt/archives/partial/...`, o cache do `apt` está quebrado ou falta espaço no aparelho. O conserto:
+
+```bash
+df -h /data                                        # conferir o espaço livre
+apt clean
+mkdir -p /data/data/com.termux/cache/apt/archives/partial
+termux-change-repo                                 # trocar o espelho
+pkg update -y && pkg install -y python
+```
+
+O instalador já recria a pasta `partial` e avisa quando o espaço está baixo, mas se o disco estiver cheio é preciso liberar espaço antes.
+
 O instalador do Termux:
 
 - instala o Python e o Git se faltarem;
