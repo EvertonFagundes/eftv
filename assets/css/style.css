@@ -1214,6 +1214,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   color: #dff3ff;
 }
 
+/* O "Só ao vivo" e uma chave de dois estados ao lado do campo de filtro. */
+.category-filter[aria-pressed="true"] {
+  background: rgba(47, 155, 255, 0.16);
+  border-color: rgba(47, 155, 255, 0.46);
+  color: #dff3ff;
+}
+
+.filter-row .category-filter { white-space: nowrap; }
+
 .channel-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));

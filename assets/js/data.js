@@ -157,3 +157,26 @@ window.canaisEhAdulto = function (canal) {
     : String(canal.grupo || "").toLowerCase();
   return /adult|xxx|18\+|bella da semana/.test(grupo);
 };
+
+/* --------------------------------------------------------- filtro "so ao vivo"
+   Quando ligado, a grade mostra apenas o que esta transmitindo AGORA
+   (canais ao vivo). Filmes e series sob demanda ficam de fora — eles nao
+   estao "sem sinal": sao arquivos prontos, disponiveis quando quiser.
+   A escolha fica salva neste navegador. */
+window.CANAIS_SO_AO_VIVO = (function () {
+  try {
+    return localStorage.getItem("eftv-so-ao-vivo") === "1";
+  } catch (_) {
+    return false;
+  }
+})();
+
+window.CANAIS_LIGAR_SO_AO_VIVO = function (ligar) {
+  window.CANAIS_SO_AO_VIVO = !!ligar;
+  try {
+    localStorage.setItem("eftv-so-ao-vivo", ligar ? "1" : "0");
+  } catch (_) {
+    // Navegador sem armazenamento: vale so para esta sessao.
+  }
+  return window.CANAIS_SO_AO_VIVO;
+};

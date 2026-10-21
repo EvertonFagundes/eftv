@@ -57,17 +57,24 @@
 
   /* Lista filtrada sobre os dados (não sobre o DOM). Assim a busca e o filtro
      continuam funcionando mesmo quando a grade mostra só uma parte dos canais. */
+  function semOcultos() {
+    const canais = (window.CANAIS_DATA && window.CANAIS_DATA.canais) || [];
+    return window.CANAIS_ADULTOS ? canais : canais.filter((c) => !window.canaisEhAdulto(c));
+  }
+
+  /* O que deve aparecer na grade: sem 18+ (se ocultos) e, com o "Só ao vivo"
+     ligado, apenas os canais que estao transmitindo neste momento. */
+  function visiveisAgora() {
+    const lista = semOcultos();
+    return window.CANAIS_SO_AO_VIVO ? lista.filter((c) => c.aoVivo !== false) : lista;
+  }
+
   function canaisFiltrados() {
-    const dados = window.CANAIS_DATA;
-    const lista = (dados && dados.canais) || [];
+    const lista = visiveisAgora();
     const q = norm(filtroAtual.texto || "");
     const cat = (filtroAtual.categoria || "").trim();
 
     let filtrados = lista;
-    // Canais 18+ ficam fora da grade enquanto o usuario nao os liberar.
-    if (!window.CANAIS_ADULTOS) {
-      filtrados = filtrados.filter((c) => !window.canaisEhAdulto(c));
-    }
     if (q) {
       filtrados = filtrados.filter((c) => {
         const nome = norm(c.nome || "");
@@ -133,12 +140,23 @@
     const filtros = document.getElementById("filtros");
     if (!secao || !grade || !filtros) return;
 
-    const canais = (window.CANAIS_DATA && window.CANAIS_DATA.canais) || [];
     // Canais 18+ somem da grade, da busca e do resumo enquanto ocultos.
-    const visiveis = window.CANAIS_ADULTOS
-      ? canais
-      : canais.filter((c) => !window.canaisEhAdulto(c));
+    const semAdultos = semOcultos();
+    const visiveis = visiveisAgora();
     const total = visiveis.length;
+
+    // Contagem dos chips fixos (Todas / Ao vivo / Sob demanda): eles comparam
+    // alternativas, entao contam sem considerar o "Só ao vivo".
+    const contagemStatus = { "": semAdultos.length, __ao_vivo: 0, __sob_demanda: 0 };
+    semAdultos.forEach((c) => {
+      if (c.aoVivo !== false) contagemStatus.__ao_vivo += 1;
+      else contagemStatus.__sob_demanda += 1;
+    });
+    const rotulos = { "": "Todas", __ao_vivo: "Ao vivo", __sob_demanda: "Sob demanda" };
+    Object.keys(rotulos).forEach((id) => {
+      const chip = filtros.querySelector(`[data-category-filter="${id}"]`);
+      if (chip) chip.textContent = `${rotulos[id]} (${fmt.format(contagemStatus[id])})`;
+    });
 
     // Recria apenas os chips de categoria; os chips de status ficam fixos.
     filtros.querySelectorAll("[data-cat-chip]").forEach((el) => el.remove());
@@ -235,11 +253,7 @@
     const trilho = document.querySelector("[data-live-rail]");
     if (!secao || !trilho) return;
 
-    const canais = (window.CANAIS_DATA && window.CANAIS_DATA.canais) || [];
-    const visiveis = window.CANAIS_ADULTOS
-      ? canais
-      : canais.filter((c) => !window.canaisEhAdulto(c));
-    const aoVivo = visiveis.filter((c) => c.aoVivo !== false).slice(0, LIMITE_AO_VIVO);
+    const aoVivo = semOcultos().filter((c) => c.aoVivo !== false).slice(0, LIMITE_AO_VIVO);
     secao.hidden = aoVivo.length === 0;
     trilho.innerHTML = aoVivo.map(cardHTML).join("");
     ligarFallbackLogos(trilho);
@@ -257,11 +271,8 @@
     grade.innerHTML = visiveis.map(cardHTML).join("");
     ligarFallbackLogos(grade);
 
-    const visiveisTodos = window.CANAIS_ADULTOS
-      ? dados.canais
-      : dados.canais.filter((c) => !window.canaisEhAdulto(c));
-    const total = visiveisTodos.length;
-    const aoVivoTotal = visiveisTodos.filter((c) => c.aoVivo !== false).length;
+    const total = visiveisAgora().length;
+    const aoVivoTotal = semOcultos().filter((c) => c.aoVivo !== false).length;
     const totalPlaylists = (window.CANAIS_EXTRA_PLAYLISTS || []).length;
 
     const contador = document.getElementById("contador-canais");
@@ -478,11 +489,39 @@
     });
   }
 
+  /* ------------------------------------------------------- "Só ao vivo" (filtro)
+     Mostra apenas os canais que estao transmitindo neste momento. Salvo no
+     navegador: uma vez ligado, a grade abre assim na proxima visita. */
+  function pintarSoAoVivo() {
+    const botao = document.querySelector("[data-so-ao-vivo]");
+    if (!botao) return;
+    const ligado = !!window.CANAIS_SO_AO_VIVO;
+    botao.setAttribute("aria-pressed", ligado ? "true" : "false");
+    botao.title = ligado
+      ? "Mostrar também os filmes e séries sob demanda"
+      : "Mostrar só os canais que estão transmitindo neste momento";
+  }
+
+  function initSoAoVivo() {
+    const botao = document.querySelector("[data-so-ao-vivo]");
+    if (!botao) return;
+    if (!botao.dataset.pronto) {
+      botao.dataset.pronto = "1";
+      botao.addEventListener("click", () => {
+        window.CANAIS_LIGAR_SO_AO_VIVO(!window.CANAIS_SO_AO_VIVO);
+        pintarSoAoVivo();
+        renderTudo();
+      });
+    }
+    pintarSoAoVivo();
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     initBusca();
     initFiltroCanais();
     ligarBotaoAdultos();
     initAdultos();
+    initSoAoVivo();
     renderTudo();
   });
 

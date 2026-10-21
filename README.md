@@ -20,6 +20,7 @@ Player de playlists IPTV para o navegador. Importe sua lista `.m3u` / `.m3u8` po
 - **Acesso pela rede Wi-Fi**: com `--lan` o servidor também atende smart TVs, tablets e notebooks da mesma rede, mantendo o proxy de streams.
 - **Roda no Android**: o mesmo `server.py` funciona no celular pelo Termux, com instalador próprio.
 - **Categoria 18+ discreta**: os canais adultos ficam ocultos por padrão (fora da grade, da busca e dos filtros) e só aparecem ao tocar no botão **18+** no rodapé. Abrir o link direto de um canal adulto mostra uma barreira de confirmação.
+- **Filtro “Só ao vivo”**: um botão ao lado do campo de filtro mostra apenas os canais que estão transmitindo no momento — filmes e séries sob demanda ficam de fora (eles não estão “sem sinal”: são arquivos prontos). A escolha fica salva, e cada chip de filtro já mostra a sua contagem.
 
 ## Requisitos
 
