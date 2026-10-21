@@ -81,6 +81,7 @@ baixar_zip() {
   # Sem o git, ou com o git indisponivel: tenta o .zip do repositorio.
   for url in \
     "https://evertonfagundes.github.io/eftv/eftv-android.zip" \
+    "https://raw.githubusercontent.com/EvertonFagundes/eftv/main/eftv-android.zip" \
     "https://codeload.github.com/EvertonFagundes/eftv/zip/refs/heads/main" \
     "https://github.com/EvertonFagundes/eftv/archive/refs/heads/main.zip"; do
     echo "    $url"
