@@ -117,7 +117,9 @@ netsh advfirewall firewall add rule name="EFTV (servidor local na rede)" dir=in 
 
 ### Deixar pronto para outra pessoa usar
 
-Para que o servidor suba sozinho com o notebook (sem terminal e sem precisar de ninguém), rode `instalar/iniciar-eftv-automatico.bat` uma única vez. Ele cria um atalho na inicialização do Windows que sobe o servidor em segundo plano, já com `--lan`.
+O servidor **não precisa** ficar ligado o tempo todo: a página sobe o `server.py` na hora em que você toca em "Iniciar servidor", e ele só fica vivo enquanto aquele terminal estiver aberto. É a opção que menos pesa no notebook.
+
+Se quiser que ele suba sozinho com o Windows — sabendo que o processo fica rodando o tempo todo, usando memória e processador — rode `instalar/iniciar-eftv-automatico.bat` uma única vez. Ele cria um atalho na inicialização do Windows que sobe o servidor em segundo plano, já com `--lan`. Para desfazer, rode `instalar/remover-inicio-automatico.bat`.
 
 Aí o uso na smart TV fica:
 

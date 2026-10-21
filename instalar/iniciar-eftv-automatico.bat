@@ -21,6 +21,7 @@ if not defined PYEXE (
 )
 
 set "RAIZ=%~dp0.."
+for %%I in ("%~dp0..") do set "RAIZ=%%~fI"
 if not exist "%~dp0..\server.py" (
   echo.
   echo   [ERRO] Este script precisa ficar dentro da pasta do projeto EFTV,
@@ -43,8 +44,9 @@ echo.
 echo   Ele sobe o servidor em segundo plano, escutando tambem na rede
 echo   Wi-Fi, para o celular e a smart TV acessarem.
 echo.
-echo   Para desativar, apague o arquivo acima ou rode:
-echo     del "%ALVO%"
+echo   Atencao: o servidor fica rodando o tempo todo, usando memoria e
+echo   processador. Se o notebook ficar lento, rode:
+echo     instalar\remover-inicio-automatico.bat
 echo.
 pause
 exit /b 0
@@ -72,6 +74,10 @@ goto :eof
 REM ----------------------------------------------------------------------
 :escrever_inicializador
 > "%ALVO%" echo @echo off
->> "%ALVO%" echo start "" "!PYEXE!" "!RAIZ!\server.py" --lan
+if "!PYEXE!"=="py -3" (
+  >> "%ALVO%" echo start "" /b py -3 "!RAIZ!\server.py" --lan
+) else (
+  >> "%ALVO%" echo start "" "!PYEXE!" "!RAIZ!\server.py" --lan
+)
 >> "%ALVO%" echo exit
 goto :eof
