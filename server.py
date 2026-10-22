@@ -52,10 +52,113 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 
+import logging
+import sys
+
+# Configuração mínima de logging ao iniciar o servidor (apenas um handler,
+# sem formatação pesada para não atrapalhar o uso no Termux).
+if not logging.getLogger().hasHandlers():
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("[dns] %(message)s")
+    handler.setFormatter(formatter)
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.INFO)
+
 STORE_LOCK = threading.Lock()
 CATALOGO_LOCK = threading.Lock()
 STORE_CACHE: dict = {"chave": None, "dados": {"playlists": []}}
 CATALOGO_CACHE: dict = {"chave": None, "json": b"", "gzip": b""}
+
+# --------------------------------------------------------------- DNS (saída)
+# Algumas operadoras não resolvem certos nomes: o Chromium nem percebe, porque
+# ele usa DNS criptografado, mas o servidor depende do resolvedor do sistema e
+# recebe "No address associated with hostname" — nenhum stream abre. Aconteceu
+# de verdade no celular com dados móveis (rtv30t.com não resolvia na operadora,
+# mas resolvia no Wi-Fi). Se o resolvedor local falhar, o nome é perguntado no
+# DoH da Cloudflare/Google e o IP de lá é usado: o nome continua o mesmo no
+# cabeçalho Host e no SNI do TLS, muda só quem responde a consulta.
+_DNS_CACHE: dict = {}
+_DNS_CACHE_TTL = 600  # segundos
+_DNS_LOCAL = threading.local()
+_LOG_DNS: dict = {}
+_getaddrinfo_sistema = socket.getaddrinfo
+_URLS_DOH = (
+    "https://cloudflare-dns.com/dns-query?name={nome}&type={tipo}",
+    "https://dns.google/resolve?name={nome}&type={tipo}",
+    # Endereços diretos: valem até quando o resolvedor local não responde
+    # nem a Cloudflare (conexão por IP puro, sem depender de DNS nenhum).
+    "https://1.1.1.1/dns-query?name={nome}&type={tipo}",
+    "https://8.8.8.8/resolve?name={nome}&type={tipo}",
+)
+
+
+def _consulta_doh(nome: str, tipo: str) -> list:
+    chave = f"{tipo}:{nome}"
+    guardado = _DNS_CACHE.get(chave)
+    if guardado and guardado[0] > time.time():
+        return guardado[1]
+    ips: list = []
+    for modelo in _URLS_DOH:
+        try:
+            requisicao = Request(
+                modelo.format(nome=quote(nome), tipo=tipo),
+                headers={"Accept": "application/dns-json", "User-Agent": USER_AGENT},
+            )
+            with urlopen(requisicao, timeout=4) as resposta:
+                dados = json.loads(resposta.read(16384).decode("utf-8", "replace"))
+            ips = [
+                str(item.get("data", "")).strip()
+                for item in dados.get("Answer") or []
+                if item.get("type") in (1, 28) and str(item.get("data", "")).strip()
+            ]
+        except Exception:  # noqa: BLE001 - tenta o próximo provedor
+            ips = []
+        if ips:
+            break
+    if ips:
+        _DNS_CACHE[chave] = (time.time() + _DNS_CACHE_TTL, ips)
+    return ips
+
+
+def _anotar_fallback(host: str, ip: str) -> None:
+    # Log via o módulo já configurado no topo do arquivo; se der erro, ignora.
+    try:
+        logging.info("resolvedor local nao resolveu %s; usei DoH (%s)", host, ip)
+    except Exception:
+        pass
+
+
+def getaddrinfo_resiliente(host, port, family=0, type=0, proto=0, flags=0):
+    """getaddrinfo do sistema com queda para DNS-over-HTTPS.
+
+    O jeito normal vem primeiro. Só se o resolvedor local falhar é que o DoH é
+    consultado — com um bloqueio para não chamar a si mesmo, já que a consulta
+    DoH também precisa de DNS (a exceção da chamada aninhada sobe direto).
+    """
+    try:
+        return _getaddrinfo_sistema(host, port, family, type, proto, flags)
+    except socket.gaierror as erro:
+        if getattr(_DNS_LOCAL, "consultando", False) or not isinstance(host, str) or not host:
+            raise
+        _DNS_LOCAL.consultando = True
+        try:
+            ips = _consulta_doh(host, "AAAA" if family == socket.AF_INET6 else "A")
+        finally:
+            _DNS_LOCAL.consultando = False
+        if not ips:
+            raise
+        ultimo_erro = erro
+        for ip in ips:
+            try:
+                _anotar_fallback(host, ip)
+                return _getaddrinfo_sistema(ip, port, family, type, proto, flags)
+            except socket.gaierror as exc2:
+                ultimo_erro = exc2
+        raise ultimo_erro from erro
+
+
+socket.getaddrinfo = getaddrinfo_resiliente
 
 mimetypes.add_type("application/vnd.apple.mpegurl", ".m3u8")
 mimetypes.add_type("audio/x-mpegurl", ".m3u")
