@@ -2003,3 +2003,105 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================ botão de voltar (smart TV) */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 8px;
+  padding: 12px 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  text-decoration: none;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.back-btn svg { width: 20px; height: 20px; flex: none; }
+
+.back-btn:hover,
+.back-btn:focus-visible {
+  background: rgba(47, 155, 255, 0.16);
+  border-color: rgba(47, 155, 255, 0.46);
+  color: #dff3ff;
+}
+
+/* No televisor a navegação é pela seta do controle: o foco precisa saltar aos olhos. */
+.back-btn:focus-visible {
+  outline: 3px solid rgba(47, 155, 255, 0.55);
+  outline-offset: 3px;
+}
+
+/* ---------------------------------- servidor local: cartão compacto
+   Quem já está com o servidor no ar vê só a linha de status; as opções ficam
+   atrás do botão "Opções do servidor". A tela começa nos canais. */
+.local-server.is-compacto {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px 20px;
+}
+
+.local-server.is-compacto .local-server-copy { gap: 6px; }
+
+.local-server.is-compacto .local-server-copy h2,
+.local-server.is-compacto .local-server-copy > p:not(.local-server-status),
+.local-server.is-compacto .local-server-lan,
+.local-server.is-compacto .local-server-actions > *:not([data-local-expand]) {
+  display: none;
+}
+
+.local-server.is-compacto .local-server-copy p,
+.local-server.is-compacto .local-server-rede { font-size: 0.83rem; }
+
+.btn-mini {
+  padding: 7px 13px;
+  font-size: 0.8rem;
+}
+
+/* --------------------------------------- painel de importação recolhido */
+.playlist-panel:not(.is-aberto) {
+  margin: 0 0 26px;
+  padding: 10px 14px;
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: none;
+}
+
+.playlist-panel:not(.is-aberto)::before { display: none; }
+
+.playlist-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.playlist-expand:hover,
+.playlist-expand:focus-visible {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(123, 220, 255, 0.38);
+}
+
+.playlist-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

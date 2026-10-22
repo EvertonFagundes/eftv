@@ -21,6 +21,8 @@ Player de playlists IPTV para o navegador. Importe sua lista `.m3u` / `.m3u8` po
 - **Roda no Android**: o mesmo `server.py` funciona no celular pelo Termux, com instalador próprio.
 - **Categoria 18+ discreta**: os canais adultos ficam ocultos por padrão (fora da grade, da busca e dos filtros) e só aparecem ao tocar no botão **18+** no rodapé. Abrir o link direto de um canal adulto mostra uma barreira de confirmação.
 - **Filtro “Só ao vivo”**: um botão ao lado do campo de filtro mostra apenas os canais que estão transmitindo no momento — filmes e séries sob demanda ficam de fora (eles não estão “sem sinal”: são arquivos prontos). A escolha fica salva, e cada chip de filtro já mostra a sua contagem.
+- **Botão Voltar grande na página do canal**: feito para o controle remoto da smart TV, que nem sempre consegue voltar. Ele devolve para a tela anterior — com a categoria, o texto filtrado e a posição da rolagem que estavam antes de abrir o canal — e funciona mesmo sem JavaScript (cai na lista de canais).
+- **Layout pensado para assistir**: a página começa nos canais (herói → Ao vivo → Categorias → Todos os canais), o formulário de importação `.m3u` fica recolhido num botão discreto no fim da página, e o cartão do servidor aparece como uma linha de status com as opções atrás de **Opções do servidor**.
 
 ## Requisitos
 
@@ -137,7 +139,8 @@ Detalhes que importam nesse cenário:
 - **A TV precisa de internet** para carregar `hls.js`, `mpegts.js` e `dash.js` do CDN. O conteúdo em si vem do servidor.
 - **Fora de `localhost` não há contexto seguro**: a TV não instala o EFTV como app e o service worker não é registrado (a interface continua funcionando normalmente).
 - O endereço do celular pode mudar quando o Wi-Fi reconecta. Parafixar, reserve um IP no roteador ou use um nome DNS local.
-- Na interface, o cartão **Servidor local** mostra os endereços de rede e avisa quando a página está sendo aberta de outro aparelho.
+- Na interface, o cartão **Servidor local** mostra os endereços de rede e avisa quando a página está sendo aberta de outro aparelho. Com o servidor no ar ele aparece compacto, só com a linha de status — as opções (e os endereços) ficam atrás do botão **Opções do servidor**.
+- Na página do canal há um botão **Voltar** grande, no alto: serve para o controle remoto da TV e devolve para a mesma tela em que a pessoa estava (categoria filtrada e rolagem preservadas).
 
 ### Só funciona no Wi-Fi? É o endereço errado
 

@@ -10,6 +10,7 @@
   const INTERVALO = 800;
   const TENTATIVAS = 75; // ~60 segundos
   const ABERTURA_OTIMISTA = 6000; // abre a aba local mesmo sem confirmar
+  const fmt = new Intl.NumberFormat("pt-BR");
 
   const secao = document.querySelector("[data-local-server]");
   if (!secao) return;
@@ -22,6 +23,7 @@
   const btnParar = document.querySelector("[data-local-stop]");
   const btnInstalar = document.querySelector("[data-local-install]");
   const btnAndroid = document.querySelector("[data-local-android]");
+  const btnExpand = document.querySelector("[data-local-expand]");
   const dialog = document.querySelector("[data-local-dialog]");
   const fecharDialog = document.querySelector("[data-local-dialog-close]");
 
@@ -166,6 +168,9 @@
       mostrar(btnAbrir, false);
       mostrar(btnParar, false);
       mostrarRede([]);
+      // Sem servidor o cartão inteiro volta a aparecer: é nele que está a explicação.
+      if (secao) secao.classList.remove("is-compacto");
+      mostrar(btnExpand, false);
       return;
     }
     mostrar(btnIniciar, false);
@@ -176,13 +181,21 @@
     ultimoStatus = dados;
     mostrarRede(dados.urls);
 
+    // No modo local, quem já está com o servidor no ar não precisa do cartão
+    // de apresentação: ele vira uma linha de status, com as opções atrás de
+    // um botão discreto — a tela começa nos canais.
+    const compacto =
+      window.CANAIS_MODO === "local" && !!secao && !secao.dataset.expandido;
+    if (secao) secao.classList.toggle("is-compacto", compacto);
+    mostrar(btnExpand, compacto);
+
     // Quando a página é servida pelo próprio servidor, o endereço correto é o
     // que o navegador está usando (pode ser o IP da rede, em uma smart TV).
     const onde = ehHostLocal ? "" : " · você está em outro aparelho";
     status(
-      `Servidor local ativo em ${enderecoLocal()} · ${playlists} ${
+      `Servidor local ativo em ${enderecoLocal()} · ${fmt.format(playlists)} ${
         playlists === 1 ? "playlist" : "playlists"
-      } · ${canais} ${canais === 1 ? "canal" : "canais"}${onde}`,
+      } · ${fmt.format(canais)} ${canais === 1 ? "canal" : "canais"}${onde}`,
       "ok"
     );
   }
@@ -420,12 +433,23 @@
       });
 
     // No Android não existe o protocolo eftv://: o servidor sobe pelo Termux.
+    // O cartão de instalação (com o comando do Termux) só serve para quem
+    // ainda não tem servidor: no modo local ele só empurrava os canais para
+    // baixo, confundindo quem veio para assistir.
     if (ehAndroid) {
       mostrar(btnIniciar, false);
       mostrar(btnInstalar, false);
-      mostrar(btnAndroid, true);
-      if (cardAndroid) cardAndroid.hidden = false;
+      const semServidor = window.CANAIS_MODO !== "local";
+      mostrar(btnAndroid, semServidor);
+      if (cardAndroid && semServidor) cardAndroid.hidden = false;
     }
+
+    btnExpand &&
+      btnExpand.addEventListener("click", () => {
+        if (secao) secao.dataset.expandido = "1";
+        if (secao) secao.classList.remove("is-compacto");
+        mostrar(btnExpand, false);
+      });
 
     // Mantém o estado em dia enquanto a página estiver aberta. É esta checagem
     // que devolve o aparelho para o 127.0.0.1 quando o endereço do Wi-Fi some

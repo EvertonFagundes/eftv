@@ -28,9 +28,9 @@
 
       <nav class="main-nav" aria-label="Navegação principal">
         <a href="index.html" class="is-active">Início</a>
-        <a href="index.html#categorias">Categorias</a>
         <a href="index.html#ao-vivo">Ao vivo</a>
-        <a href="index.html#playlists">Adicionar</a>
+        <a href="index.html#categorias">Categorias</a>
+        <a href="index.html#canais">Canais</a>
       </nav>
 
       <button class="install-trigger" type="button" data-install-app aria-label="Instalar app" title="Instalar app" hidden>
@@ -87,6 +87,7 @@
       <button class="btn btn-ghost" type="button" data-local-stop hidden>Encerrar servidor</button>
       <button class="btn btn-ghost" type="button" data-local-install>Instalar lançador</button>
       <button class="btn btn-ghost" type="button" data-local-android hidden>Rode no Android</button>
+      <button class="btn btn-ghost btn-mini" type="button" data-local-expand hidden>Opções do servidor</button>
     </div>
   </section>
 
@@ -130,11 +131,11 @@
         <span class="eyebrow"><i class="spark"></i> Streaming local, sem complicação</span>
         <h1>Seus canais,<br><span class="gradient-text">em um só lugar.</span></h1>
         <p>
-          Importe sua playlist <code>.m3u</code> ou <code>.m3u8</code> e acompanhe
-          ao vivo ou sob demanda. Sua biblioteca fica salva neste dispositivo.
+          Assista aos seus canais ao vivo ou sob demanda, com busca e categorias.
+          Tudo direto no navegador, e a biblioteca fica salva neste dispositivo.
         </p>
         <div class="hero-actions">
-          <a class="btn btn-primary" href="#playlists">Adicionar playlist</a>
+          <a class="btn btn-primary" href="#ao-vivo">Assistir ao vivo</a>
           <a class="btn btn-ghost" href="#categorias">Explorar categorias</a>
         </div>
         <div class="hero-metrics" aria-label="Resumo da biblioteca">
@@ -165,55 +166,15 @@
       </div>
     </section>
 
-    <section class="playlist-panel" id="playlists" aria-labelledby="playlists-titulo">
-      <div class="playlist-head">
+    <section class="live-section" id="ao-vivo" data-live-section hidden aria-labelledby="ao-vivo-titulo">
+      <div class="section-head">
         <div>
-          <span class="playlist-kicker">Sua biblioteca</span>
-          <h2 id="playlists-titulo">Adicionar playlist</h2>
-          <p class="playlist-sub">
-            Cole o link de uma lista <code>.m3u</code> / <code>.m3u8</code> ou envie um arquivo.
-            Os canais entram na grade abaixo e ficam salvos neste dispositivo.
-          </p>
+          <span class="section-kicker"><i class="live-dot"></i> Agora</span>
+          <h2 id="ao-vivo-titulo">Ao vivo</h2>
         </div>
-        <button class="playlist-btn ghost" type="button" data-playlist-clear hidden>Remover todas</button>
+        <button class="section-link" type="button" data-filter-live>Ver todos ao vivo →</button>
       </div>
-
-      <form class="playlist-form" data-playlist-form>
-        <div class="playlist-url-row">
-          <input
-            class="channel-filter playlist-url"
-            type="url"
-            inputmode="url"
-            placeholder="https://exemplo.com/lista.m3u8"
-            aria-label="Link da playlist M3U ou M3U8"
-            autocomplete="off"
-            spellcheck="false"
-            data-playlist-url
-          >
-          <button class="playlist-btn primary" type="submit" data-playlist-add>Adicionar link</button>
-        </div>
-
-        <div class="playlist-or"><span>ou envie um arquivo</span></div>
-
-        <div class="playlist-file-row">
-          <label class="playlist-btn" for="playlist-file">Escolher arquivo .m3u/.m3u8</label>
-          <input
-            id="playlist-file"
-            type="file"
-            accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain"
-            data-playlist-file
-            hidden
-          >
-          <span class="playlist-file-name" data-playlist-file-name>Nenhum arquivo selecionado</span>
-        </div>
-
-        <p class="playlist-status" data-playlist-status hidden role="status"></p>
-      </form>
-
-      <div class="playlist-list" data-playlist-list></div>
-      <div class="playlist-empty" data-playlist-empty>
-        Nenhuma playlist adicionada ainda. Cole um link acima ou envie um arquivo para começar.
-      </div>
+      <div class="live-rail" data-live-rail></div>
     </section>
 
     <section class="category-section" id="categorias" data-category-section hidden aria-labelledby="categorias-titulo">
@@ -225,17 +186,6 @@
         <span class="section-hint" data-category-summary></span>
       </div>
       <div class="category-grid" data-category-grid></div>
-    </section>
-
-    <section class="live-section" id="ao-vivo" data-live-section hidden aria-labelledby="ao-vivo-titulo">
-      <div class="section-head">
-        <div>
-          <span class="section-kicker"><i class="live-dot"></i> Agora</span>
-          <h2 id="ao-vivo-titulo">Ao vivo</h2>
-        </div>
-        <button class="section-link" type="button" data-filter-live>Ver todos ao vivo →</button>
-      </div>
-      <div class="live-rail" data-live-rail></div>
     </section>
 
     <section id="canais" class="library-section" aria-labelledby="canais-titulo">
@@ -261,7 +211,70 @@
       <div class="load-more-row">
         <button class="category-filter load-more" type="button" data-load-more hidden>Mostrar mais canais</button>
       </div>
-      <div class="no-results" data-no-results hidden>Nenhum canal por aqui ainda. Adicione sua primeira playlist acima.</div>
+      <div class="no-results" data-no-results hidden>Nenhum canal por aqui. Mude o filtro ou toque em “Adicionar playlist”, no fim da página.</div>
+    </section>
+
+    <!-- Importar playlist: recolhido por padrão, para não poluir a tela de
+         quem só quer assistir. Abre sozinho quando ainda não há nenhuma. -->
+    <section class="playlist-panel" id="playlists" data-playlist-panel aria-labelledby="playlists-titulo">
+      <button class="playlist-expand" type="button" data-playlist-toggle aria-expanded="false"
+              aria-controls="playlists-corpo">
+        <span aria-hidden="true">＋</span> Adicionar playlist
+      </button>
+
+      <div class="playlist-corpo" id="playlists-corpo" data-playlist-body hidden>
+        <div class="playlist-head">
+          <div>
+            <span class="playlist-kicker">Sua biblioteca</span>
+            <h2 id="playlists-titulo">Adicionar playlist</h2>
+            <p class="playlist-sub">
+              Cole o link de uma lista <code>.m3u</code> / <code>.m3u8</code> ou envie um arquivo.
+              Os canais entram na grade e ficam salvos neste dispositivo.
+            </p>
+          </div>
+          <div class="playlist-head-actions">
+            <button class="playlist-btn ghost" type="button" data-playlist-toggle aria-expanded="true">Ocultar</button>
+            <button class="playlist-btn ghost" type="button" data-playlist-clear hidden>Remover todas</button>
+          </div>
+        </div>
+
+        <form class="playlist-form" data-playlist-form>
+          <div class="playlist-url-row">
+            <input
+              class="channel-filter playlist-url"
+              type="url"
+              inputmode="url"
+              placeholder="https://exemplo.com/lista.m3u8"
+              aria-label="Link da playlist M3U ou M3U8"
+              autocomplete="off"
+              spellcheck="false"
+              data-playlist-url
+            >
+            <button class="playlist-btn primary" type="submit" data-playlist-add>Adicionar link</button>
+          </div>
+
+          <div class="playlist-or"><span>ou envie um arquivo</span></div>
+
+          <div class="playlist-file-row">
+            <label class="playlist-btn" for="playlist-file">Escolher arquivo .m3u/.m3u8</label>
+            <input
+              id="playlist-file"
+              type="file"
+              accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain"
+              data-playlist-file
+              hidden
+            >
+            <span class="playlist-file-name" data-playlist-file-name>Nenhum arquivo selecionado</span>
+          </div>
+
+          <p class="playlist-status" data-playlist-status hidden role="status"></p>
+        </form>
+
+        <div class="playlist-list" data-playlist-list></div>
+        <div class="playlist-empty" data-playlist-empty>
+          Nenhuma playlist adicionada ainda. Cole um link acima ou envie um arquivo para começar.
+        </div>
+      </div>
     </section>
   </main>
 

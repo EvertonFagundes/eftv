@@ -18,6 +18,36 @@
   const botaoLimpar = document.querySelector("[data-playlist-clear]");
   const estatico = !!window.CANAIS_STATIC && !!window.EFTVStatic;
 
+  /* ---------------------------------------------- painel de importação
+     Quem só assiste não precisa ver o formulário de importação. O painel fica     recolhido no fim da página, atrás de um botão discreto, e abre sozinho
+     apenas quando ainda não existe nenhuma playlist (primeiro uso). */
+  const painel = document.querySelector("[data-playlist-panel]");
+  const corpoPainel = document.querySelector("[data-playlist-body]");
+  const botoesToggle = document.querySelectorAll("[data-playlist-toggle]");
+  let painelDecidido = false;
+  let painelAbertoPorFaltaDePlaylist = false;
+
+  function definirPainel(aberto) {
+    if (!painel || !corpoPainel) return;
+    corpoPainel.hidden = !aberto;
+    painel.classList.toggle("is-aberto", aberto);
+    botoesToggle.forEach((btn) =>
+      btn.setAttribute("aria-expanded", aberto ? "true" : "false")
+    );
+    const expandir = painel.querySelector(".playlist-expand");
+    if (expandir) expandir.hidden = aberto;
+  }
+
+  botoesToggle.forEach((botao) => {
+    botao.addEventListener("click", () => {
+      painelDecidido = true;
+      definirPainel(!!(corpoPainel && corpoPainel.hidden));
+      if (!corpoPainel.hidden && painel) {
+        painel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    });
+  });
+
   let playlists = Array.isArray(window.CANAIS_EXTRA_PLAYLISTS)
     ? window.CANAIS_EXTRA_PLAYLISTS.slice()
     : [];
@@ -132,6 +162,19 @@
 
     if (vazio) vazio.hidden = playlists.length !== 0;
     if (botaoLimpar) botaoLimpar.hidden = playlists.length === 0;
+
+    // Primeiro uso (nenhuma playlist): o formulário aparece sozinho, senão a
+    // pessoa não teria por onde começar. Se depois uma playlist entrar, o
+    // painel volta a ficar recolhido — a tela é para assistir.
+    if (playlists.length === 0) {
+      if (!painelDecidido && !painelAbertoPorFaltaDePlaylist) {
+        painelAbertoPorFaltaDePlaylist = true;
+        definirPainel(true);
+      }
+    } else if (painelAbertoPorFaltaDePlaylist) {
+      painelAbertoPorFaltaDePlaylist = false;
+      definirPainel(false);
+    }
   }
 
   async function carregarLista() {
@@ -139,9 +182,11 @@
       const itens = await window.EFTVStatic.listar();
       playlists = itens.map(window.EFTVStatic.resumir);
     } else {
-      playlists = Array.isArray(window.CANAIS_EXTRA_PLAYLISTS)
-        ? window.CANAIS_EXTRA_PLAYLISTS.slice()
-        : [];
+      // No servidor a lista de playlists chega junto com o catálogo. Antes
+      // disso não há o que mostrar: renderizar agora piscaria "nenhuma
+      // playlist" e abriria o painel como se faltasse importar.
+      if (!Array.isArray(window.CANAIS_EXTRA_PLAYLISTS)) return;
+      playlists = window.CANAIS_EXTRA_PLAYLISTS.slice();
     }
     renderLista();
   }

@@ -243,6 +243,33 @@
     initTelaAmpla();
   }
 
+  /* --------------------------------------------------------------- voltar
+     O link grande no topo resolve quando o controle remoto da smart TV não
+     consegue voltar: ele usa o histórico (devolvendo a tela anterior com os
+     filtros e a posição da rolagem) e, se a página foi aberta direto no
+     canal, segue para a lista de canais pelo próprio href. */
+  function ligarBotaoVoltar() {
+    const botao = document.querySelector("[data-voltar]");
+    if (!botao || botao.dataset.pronto) return;
+    botao.dataset.pronto = "1";
+    botao.addEventListener("click", (evento) => {
+      const veioDaqui =
+        document.referrer && document.referrer.startsWith(location.origin);
+      // Sem histórico (página aberta direto no canal) o href do link resolve:
+      // cai na lista de canais, que é sempre um caminho válido.
+      if (veioDaqui && window.history.length > 1) {
+        evento.preventDefault();
+        window.history.back();
+      }
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ligarBotaoVoltar);
+  } else {
+    ligarBotaoVoltar();
+  }
+
   if (!window.CANAIS_CATALOGO_PRONTO) {
     document.addEventListener("eftv:catalogo-pronto", iniciar, { once: true });
   } else {

@@ -303,7 +303,91 @@
     }
 
     atualizarChipsAtivos();
+    // Toda mudança de filtro já atualiza a tela guardada na sessão: é ela que
+    // devolve a pessoa para a mesma tela quando ela volta do canal.
+    salvarEstadoGrade();
   }
+
+  /* ------------------------------------------------- estado da tela anterior
+     Ao voltar (botão do navegador ou do controle remoto da smart TV) a página
+     recarrega e perderia a categoria escolhida, o texto digitado e a posição
+     da rolagem — parecia que tinha caído na tela inicial de novo. Guardamos
+     isso na sessão e restauramos apenas quando a navegação é "voltar". */
+  const ESTADO_CHAVE = "eftv-estado-grade";
+  let scrollPendente = 0;
+
+  function salvarEstadoGrade() {
+    // Só existe estado a guardar na página da grade: o canal.html carrega este
+    // mesmo arquivo e, sem a guarda, apagaria o estado salvo do índice.
+    if (!document.querySelector("[data-channel-grid]")) return;
+    try {
+      sessionStorage.setItem(
+        ESTADO_CHAVE,
+        JSON.stringify({
+          categoria: filtroAtual.categoria || "",
+          texto: filtroAtual.texto || "",
+          limite: limiteGrade,
+          scroll: Math.round(window.scrollY || 0),
+        })
+      );
+    } catch (_) {
+      // Sem armazenamento nesta sessão: a próxima volta abre do topo.
+    }
+  }
+
+  function ehNavegacaoDeVolta() {
+    try {
+      const nav = performance.getEntriesByType
+        ? performance.getEntriesByType("navigation")
+        : null;
+      if (nav && nav.length) return nav[0].type === "back_forward";
+      if (performance.navigation) return performance.navigation.type === 2;
+    } catch (_) {
+      return false;
+    }
+    return false;
+  }
+
+  function restaurarEstadoGrade() {
+    if (!ehNavegacaoDeVolta() || location.hash) return;
+    let estado = null;
+    try {
+      estado = JSON.parse(sessionStorage.getItem(ESTADO_CHAVE) || "null");
+    } catch (_) {
+      return;
+    }
+    if (!estado) return;
+    filtroAtual = {
+      texto: estado.texto || "",
+      categoria: estado.categoria || "",
+    };
+    if (Number(estado.limite) > 0) limiteGrade = Number(estado.limite);
+    scrollPendente = Number(estado.scroll) || 0;
+  }
+
+  // Roda no momento em que o arquivo carrega, antes do primeiro render (inclusive
+  // antes do script final do index.html que monta a grade).
+  restaurarEstadoGrade();
+
+  function aplicarScrollPendente() {
+    if (!scrollPendente) return;
+    const alvo = scrollPendente;
+    scrollPendente = 0;
+    let tentativas = 0;
+    const tentar = () => {
+      window.scrollTo(0, alvo);
+      tentativas += 1;
+      // A grade só cresce quando o catálogo chega (listas grandes levam uns
+      // segundos): enquanto a página for curta, a rolagem é engolida pelo
+      // tamanho do documento. Insiste até ela grudar no lugar certo.
+      if (window.scrollY >= alvo - 20 || tentativas >= 14) return;
+      setTimeout(tentar, 500);
+    };
+    requestAnimationFrame(tentar);
+  }
+
+  // Guarda o estado no momento em que a pessoa sai para abrir um canal.
+  window.addEventListener("pagehide", salvarEstadoGrade);
 
   function renderTudo() {
     renderCategorias();
@@ -522,7 +606,11 @@
     ligarBotaoAdultos();
     initAdultos();
     initSoAoVivo();
+    // Volta da tela anterior: o texto digitado volta para o campo de filtro.
+    const campo = document.querySelector("[data-channel-filter]");
+    if (campo && filtroAtual.texto) campo.value = filtroAtual.texto;
     renderTudo();
+    aplicarScrollPendente();
   });
 
   document.addEventListener("eftv:catalogo-pronto", () => {

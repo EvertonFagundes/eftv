@@ -28,9 +28,9 @@
 
       <nav class="main-nav" aria-label="Navegação principal">
         <a href="index.html">Início</a>
-        <a href="index.html#categorias">Categorias</a>
         <a href="index.html#ao-vivo">Ao vivo</a>
-        <a href="index.html#playlists">Adicionar</a>
+        <a href="index.html#categorias">Categorias</a>
+        <a href="index.html#canais">Canais</a>
       </nav>
 
       <button class="install-trigger" type="button" data-install-app aria-label="Instalar app" title="Instalar app" hidden>
@@ -62,6 +62,19 @@
   </div>
 
   <main class="wrap">
+    <!-- No televisor o controle remoto nem sempre consegue voltar: este botão
+         grande fica logo acima do vídeo e devolve para a tela anterior (com os
+         filtros e a posição da rolagem que estavam antes de abrir o canal).
+         É um link de verdade: se o JavaScript ainda não tiver carregado, ele
+         leva para a lista de canais mesmo assim. -->
+    <a class="back-btn" href="index.html#canais" data-voltar aria-label="Voltar para a tela anterior">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 5l-7 7 7 7"></path>
+      </svg>
+      <span>Voltar</span>
+    </a>
+
     <div class="breadcrumb">
       <a href="index.html">Início</a>
       <span class="sep">/</span>
