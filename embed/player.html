@@ -390,7 +390,37 @@
           );
           // Os ouvintes são registrados antes do load: assim um erro rápido
           // (link fora do ar, timeout) não passa despercebido.
+          let tentouReconectar = false;
           mpegtsPlayer.on(window.mpegts.Events.ERROR, (_tipo, detalhe) => {
+            // Primeira falha: tenta reconectar uma vez (comum quando o stream
+            // sofre uma pequena interrupção ou o proxy renegocia a conexão).
+            if (!tentouReconectar) {
+              tentouReconectar = true;
+              mpegtsPlayer.detachMediaElement();
+              mpegtsPlayer = null;
+              setTimeout(() => {
+                try {
+                  if (!mpegtsPlayer) {
+                    mpegtsPlayer = window.mpegts.createPlayer(
+                      { type: "mse", isLive: true, url: srcAtual },
+                      { enableWorker: true, liveBufferLatencyChasing: true }
+                    );
+                    mpegtsPlayer.on(window.mpegts.Events.ERROR, (_tipo2, detalhe2) => {
+                      falhar(
+                        "Erro no MPEG-TS (" + detalhe2 + "). " +
+                        "Verifique se o link está no ar e se o proxy consegue acessá-lo."
+                      );
+                    });
+                    mpegtsPlayer.attachMediaElement(video);
+                    mpegtsPlayer.load();
+                    mpegtsPlayer.play().catch(() => {});
+                  }
+                } catch (erro) {
+                  falhar("Falha ao reiniciar o MPEG-TS: " + erro);
+                }
+              }, 3000);
+              return;
+            }
             falhar(
               "Erro no MPEG-TS (" + detalhe + "). " +
               "Verifique se o link está no ar e se o proxy consegue acessá-lo."
@@ -399,6 +429,7 @@
           mpegtsPlayer.on(window.mpegts.Events.MEDIA_INFO, () => {
             ocultarStatus();
             mostrarBotaoAoVivo(true);
+            tentouReconectar = false;
           });
           mpegtsPlayer.attachMediaElement(video);
           mpegtsPlayer.load();
