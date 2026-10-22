@@ -1378,10 +1378,21 @@ def banner_inicial(host: str, porta: int) -> None:
         print(f"  Na rede Wi-Fi:   {url}", flush=True)
     if len(urls) > 1:
         print(
-            "  No celular ou na smart TV, abra o navegador e digite o",
+            "  Smart TV: digite no navegador o endereço \"Na rede Wi-Fi\"",
             flush=True,
         )
-        print("  endereço \"Na rede Wi-Fi\" (mesma rede Wi-Fi).", flush=True)
+        print(
+            "  (as duas máquinas precisam estar na mesma rede Wi-Fi).",
+            flush=True,
+        )
+        print(
+            f"  Celular/notebook: use \"{urls[0]}\"",
+            flush=True,
+        )
+        print(
+            "  — ele vale no Wi-Fi e também nos dados móveis.",
+            flush=True,
+        )
     else:
         print(
             "  Para usar no celular ou na smart TV, inicie com --lan.",

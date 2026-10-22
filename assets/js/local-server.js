@@ -51,10 +51,13 @@
   }
 
   /* ------------------------------------------------- endereços de rede */
+  let ultimaRedeHtml = null;
+
   function mostrarRede(urls) {
     if (!redeEl) return;
     const externos = (urls || []).filter((u) => !/127\.0\.0\.1|localhost/.test(u));
     if (!externos.length) {
+      ultimaRedeHtml = null;
       redeEl.hidden = true;
       redeEl.textContent = "";
       return;
@@ -63,13 +66,22 @@
     const lista = externos
       .map((u) => `<code>${window.canaisEscape ? window.canaisEscape(u) : u}</code>`)
       .join(" · ");
-    redeEl.innerHTML =
-      "No celular ou na smart TV, abra: " +
+    const html =
+      "Na smart TV (na mesma rede Wi-Fi): " +
       lista +
       ' <button class="link-btn" type="button" data-copiar-rede>Copiar</button>' +
-      '<small>Abra esse endereço no navegador da smart TV e salve como favorito: ' +
-      "da próxima vez é só um clique. O endereço pode mudar se o notebook " +
-      "reconectar no Wi-Fi.</small>";
+      "<small>Abra esse endereço no navegador da smart TV e salve como favorito: " +
+      "da próxima vez é só um clique. Ele só vale enquanto as duas máquinas " +
+      "estiverem na mesma rede.</small>" +
+      `<small><strong>No aparelho que roda o servidor</strong> (celular ou notebook), ` +
+      `use sempre <code>http://127.0.0.1:${porta}/</code>: esse endereço é o ` +
+      "próprio aparelho e funciona no Wi-Fi e também nos dados móveis.</small>";
+
+    // Só reescreve quando o conteúdo muda: a checagem periódica recriaria o
+    // botão de copiar debaixo do dedo de quem estiver clicando.
+    if (html === ultimaRedeHtml) return;
+    ultimaRedeHtml = html;
+    redeEl.innerHTML = html;
     const botao = redeEl.querySelector("[data-copiar-rede]");
     if (botao) {
       botao.addEventListener("click", () => {
@@ -119,6 +131,31 @@
     }
   }
 
+  /* O servidor pode estar no MESMO aparelho que exibe a página (celular no
+     Termux ou notebook). Quando o endereço da rede fica para trás — o aparelho
+     saiu do Wi-Fi — o 127.0.0.1 continua de pé, inclusive nos dados móveis,
+     porque o servidor escuta em 0.0.0.0 (que inclui o loopback). */
+  async function sondarLoopback() {
+    if (ehHostLocal || window.CANAIS_MODO !== "local") return null;
+    const portas = [...new Set([Number(location.port) || 0, porta])].filter(
+      (p) => p > 0
+    );
+    for (const p of portas) {
+      try {
+        const resp = await fetch(`http://127.0.0.1:${p}/api/status`, {
+          cache: "no-store",
+          mode: "cors",
+        });
+        if (!resp.ok) continue;
+        const dados = await resp.json();
+        if (dados && dados.ok) return { dados, porta: p };
+      } catch (_) {
+        // Tenta a próxima porta possível.
+      }
+    }
+    return null;
+  }
+
   function enderecoLocal() {
     return window.CANAIS_MODO === "local" ? location.origin : base;
   }
@@ -152,8 +189,38 @@
 
   async function verificar() {
     const dados = await sondar();
-    aplicarEstado(dados);
-    return dados;
+    if (dados) {
+      aplicarEstado(dados);
+      return dados;
+    }
+
+    // O endereço da rede parou de responder. Se o servidor está neste mesmo
+    // aparelho, o loopback segue no ar e é só voltar a usá-lo: ele vale no
+    // Wi-Fi e também nos dados móveis.
+    const local = await sondarLoopback();
+    if (local) {
+      const alvo = `http://127.0.0.1:${local.porta}/`;
+      status(
+        `Este endereço da rede não responde mais. Abrindo ${alvo} — ele funciona no Wi-Fi e nos dados móveis.`,
+        "ok"
+      );
+      window.location.replace(alvo);
+      return null;
+    }
+
+    aplicarEstado(null);
+    if (window.CANAIS_MODO === "local") {
+      status(
+        ehHostLocal
+          ? "O servidor local parou. Abra o Termux e rode \"eftv\" para voltar."
+          : "Este endereço da rede não responde. No aparelho que roda o " +
+              "servidor use http://127.0.0.1:" +
+              porta +
+              "/; na smart TV, confira se o servidor está ligado e na mesma rede Wi-Fi.",
+        "erro"
+      );
+    }
+    return null;
   }
 
   /* -------------------------------------------------------------- início */
@@ -360,18 +427,24 @@
       if (cardAndroid) cardAndroid.hidden = false;
     }
 
+    // Mantém o estado em dia enquanto a página estiver aberta. É esta checagem
+    // que devolve o aparelho para o 127.0.0.1 quando o endereço do Wi-Fi some
+    // (troca para dados móveis) — vale nos dois modos.
+    setInterval(() => {
+      if (!iniciando) verificar();
+    }, 15000);
+
     // Modo local: a própria página já é servida pelo server.py.
     if (window.CANAIS_MODO === "local") {
       secao.hidden = false;
       mostrar(btnIniciar, false);
       mostrar(btnAbrir, true);
       mostrar(btnParar, true);
-      const onde = ehHostLocal ? "" : " · você está em outro aparelho";
-      status(`Servidor local ativo em ${location.origin}${onde}`, "ok");
+      status("Verificando o servidor local...", "neutro");
       // O servidor responde com os números oficiais e os endereços de rede.
-      sondar().then((dados) => {
-        if (dados) aplicarEstado(dados);
-      });
+      // verificar() também recoloca o aparelho no 127.0.0.1 se o endereço da
+      // rede tiver ficado para trás (celular que saiu do Wi-Fi).
+      verificar();
       return;
     }
 
@@ -387,11 +460,6 @@
         );
       }
     });
-
-    // Mantém o estado em dia enquanto a página estiver aberta.
-    setInterval(() => {
-      if (!iniciando) verificar();
-    }, 15000);
   }
 
   if (document.readyState === "loading") {

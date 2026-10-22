@@ -98,8 +98,10 @@ Com `--lan` (ou `HOST=0.0.0.0`) o servidor escuta também na interface de rede, 
   EFTV no ar!
   Neste aparelho:  http://127.0.0.1:8124/
   Na rede Wi-Fi:   http://192.168.0.14:8124/
-  Na smart TV (ou tablet, notebook), abra o navegador e digite
-  o endereço "Na rede Wi-Fi".
+  Smart TV: digite no navegador o endereço "Na rede Wi-Fi"
+  (as duas máquinas precisam estar na mesma rede Wi-Fi).
+  Celular/notebook: use "http://127.0.0.1:8124/"
+  — ele vale no Wi-Fi e também nos dados móveis.
 ```
 
 A partir daí, qualquer aparelho da mesma rede abre `http://192.168.0.14:8124/` no navegador e usa a EFTV completa — o proxy de streams continua funcionando, porque quem busca o conteúdo é o servidor (o celular ou o notebook), não a TV.
@@ -136,6 +138,19 @@ Detalhes que importam nesse cenário:
 - **Fora de `localhost` não há contexto seguro**: a TV não instala o EFTV como app e o service worker não é registrado (a interface continua funcionando normalmente).
 - O endereço do celular pode mudar quando o Wi-Fi reconecta. Parafixar, reserve um IP no roteador ou use um nome DNS local.
 - Na interface, o cartão **Servidor local** mostra os endereços de rede e avisa quando a página está sendo aberta de outro aparelho.
+
+### Só funciona no Wi-Fi? É o endereço errado
+
+O endereço `http://192.168.x.x:8124/` pertence à **interface de rede local**. Quando o aparelho sai do Wi-Fi e passa para os dados móveis, esse IP deixa de existir — e aí a página não carrega (ou, se o service worker entregar a versão guardada, nenhum canal toca). Já o `http://127.0.0.1:8124/` é o próprio aparelho e vale em **qualquer** rede: o servidor escuta em `0.0.0.0`, que inclui o loopback.
+
+| Aparelho | Endereço |
+| --- | --- |
+| O que roda o servidor (celular no Termux, notebook) | `http://127.0.0.1:8124/` — sempre |
+| Smart TV, tablet ou outro notebook | `http://IP-DA-REDE:8124/` — só enquanto estiver na mesma rede |
+
+A página acompanha isso sozinha: a cada 15 s ela pergunta ao servidor se o endereço da rede ainda responde. Se o servidor estiver de pé no próprio aparelho — o celular trocou de Wi-Fi para os dados, por exemplo — ela **se recoloca em `http://127.0.0.1:8124/` sozinha**. Se ninguém responder, ela mostra a explicação em vez de uma tela de erro do navegador.
+
+Na smart TV nada disso se aplica: o endereço dela é o da rede e precisa do servidor ligado e na mesma Wi-Fi.
 
 ## No Android (Termux)
 
