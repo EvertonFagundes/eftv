@@ -149,7 +149,13 @@
 
       // Marca que o HLS realmente começou a tocar; antes disso, um erro fatal
       // pode ser resolvido tentando a fonte alternativa (MPEG-TS).
-      video.addEventListener("playing", () => { hlsTocou = true; ocultarStatus(); });
+      function marcarSucesso() {
+        hlsTocou = true;
+        ocultarStatus();
+        // Tocou: libera a repetição automática para uma eventual falha futura.
+        try { sessionStorage.removeItem("eftv-player-repetiu"); } catch (_) {}
+      }
+      video.addEventListener("playing", marcarSucesso);
       // Assim que há dados decodificáveis, a espera termina.
       video.addEventListener("canplay", () => { ocultarStatus(); });
 
@@ -161,18 +167,85 @@
 
       function ocultarStatus() { status.hidden = true; }
 
+      // Pergunta ao servidor local por que o stream não abriu. Ele faz o
+      // pedido de verdade para a origem e sabe o motivo exato (HTTP 403 da
+      // operadora, porta bloqueada, DNS...). Sem isso só aparecia um
+      // "HttpStatusCodeInvalid" sem jeito de descobrir o que houve.
+      async function motivoDoServidor() {
+        if (!srcAtual) return "";
+        const controlador = new AbortController();
+        const relogio = setTimeout(() => controlador.abort(), 12000);
+        try {
+          const resposta = await fetch(srcAtual, {
+            headers: { Range: "bytes=0-1" },
+            signal: controlador.signal,
+          });
+          if (resposta.ok) return "";
+          const corpo = await resposta.text();
+          try {
+            const dados = JSON.parse(corpo);
+            if (dados && dados.error) return String(dados.error);
+          } catch (_) {
+            // Não era JSON: aproveita o texto se houver.
+          }
+          return corpo.trim().slice(0, 160) || `O servidor respondeu HTTP ${resposta.status}.`;
+        } catch (_) {
+          return "O próprio servidor não conseguiu alcançar o endereço do stream.";
+        } finally {
+          clearTimeout(relogio);
+        }
+      }
+
+      let reiniciouAposFalha = false;
+      let reloadAgendado = false;
+      try {
+        // A recarga apaga as variáveis da página: sem guardar na sessão, o
+        // player entraria em loop de "tentar de novo" para sempre. Se esta
+        // carga já é a repetição, mostramos o erro direto.
+        reiniciouAposFalha = sessionStorage.getItem("eftv-player-repetiu") === "1";
+        sessionStorage.removeItem("eftv-player-repetiu");
+      } catch (_) {
+        reiniciouAposFalha = false;
+      }
+
       function falhar(mensagem) {
         destruirPlayers();
         mostrarBotaoAoVivo(false);
+
+        // Primeira falha: na troca de Wi-Fi para dados móveis (ou com um DNS
+        // ainda frio) o primeiro pedido costuma falhar e o segundo vai.
+        // Reinicia uma vez antes de mostrar a mensagem de erro.
+        if (!reiniciouAposFalha && !demo && srcAtual) {
+          reiniciouAposFalha = true;
+          try { sessionStorage.setItem("eftv-player-repetiu", "1"); } catch (_) {}
+          status.hidden = false;
+          status.innerHTML =
+            '<div class="spinner"></div>' +
+            '<div class="s-title">Tentando de novo...</div>' +
+            '<div class="s-sub">A primeira tentativa falhou — comum na troca de rede. Reiniciando o player.</div>';
+          if (!reloadAgendado) {
+            reloadAgendado = true;
+            setTimeout(() => location.reload(), 2500);
+          }
+          return;
+        }
+
         status.innerHTML =
           '<div class="s-title">Não foi possível iniciar</div>' +
           '<div class="s-sub"></div>' +
           '<button class="s-button" type="button">Tentar novamente</button>';
-        status.querySelector(".s-sub").textContent = mensagem;
+        const sub = status.querySelector(".s-sub");
+        sub.textContent = mensagem + dicaServidor;
         status.hidden = false;
         status.querySelector(".s-button").addEventListener("click", (e) => {
           e.stopPropagation();
           location.reload();
+        });
+
+        motivoDoServidor().then((motivo) => {
+          if (!motivo || status.hidden) return;
+          const alvo = status.querySelector(".s-sub");
+          if (alvo) alvo.textContent = `${mensagem} Motivo: ${motivo}${dicaServidor}`;
         });
       }
 
@@ -284,8 +357,7 @@
             if (!hlsTocou && tentarFallback()) return;
             falhar(
               "Erro no HLS (" + data.type + " / " + data.details + "). " +
-              "Pode ser bloqueio de CORS, mistura HTTP/HTTPS ou stream fora do ar." +
-              dicaServidor
+              "Pode ser bloqueio de CORS, mistura HTTP/HTTPS ou stream fora do ar."
             );
           });
           return;
@@ -321,8 +393,7 @@
           mpegtsPlayer.on(window.mpegts.Events.ERROR, (_tipo, detalhe) => {
             falhar(
               "Erro no MPEG-TS (" + detalhe + "). " +
-              "Verifique se o link está no ar e se o proxy consegue acessá-lo." +
-              dicaServidor
+              "Verifique se o link está no ar e se o proxy consegue acessá-lo."
             );
           });
           mpegtsPlayer.on(window.mpegts.Events.MEDIA_INFO, () => {
