@@ -1,4 +1,6 @@
 # services/streaming.py - Geração de URLs de stream assinadas
+from datetime import UTC
+
 from app.config import settings
 
 
@@ -30,21 +32,23 @@ def _cloudflare_stream_url(original_url: str, token: str) -> str:
 
     Para player web (hls.js), query param é mais simples.
     """
-    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+    from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
     parsed = urlparse(original_url)
     query_params = parse_qs(parsed.query)
     query_params["token"] = [token]
     new_query = urlencode(query_params, doseq=True)
 
-    return urlunparse((
-        parsed.scheme,
-        parsed.netloc,
-        parsed.path,
-        parsed.params,
-        new_query,
-        parsed.fragment,
-    ))
+    return urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment,
+        )
+    )
 
 
 def _mux_stream_url(original_url: str, token: str) -> str:
@@ -53,21 +57,23 @@ def _mux_stream_url(original_url: str, token: str) -> str:
     gerada pelo Mux. Aqui assumimos que original_url já é signed
     ou adicionamos o token como query param.
     """
-    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+    from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
     parsed = urlparse(original_url)
     query_params = parse_qs(parsed.query)
     query_params["token"] = [token]
     new_query = urlencode(query_params, doseq=True)
 
-    return urlunparse((
-        parsed.scheme,
-        parsed.netloc,
-        parsed.path,
-        parsed.params,
-        new_query,
-        parsed.fragment,
-    ))
+    return urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment,
+        )
+    )
 
 
 def create_cloudflare_signed_token(
@@ -80,10 +86,11 @@ def create_cloudflare_signed_token(
     Cria token assinado para Cloudflare Stream usando Workers/Token Auth.
     Requer configuração no dashboard Cloudflare Stream > Token Auth.
     """
-    import jwt
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    now = datetime.now(timezone.utc)
+    import jwt
+
+    now = datetime.now(UTC)
     exp = now + timedelta(seconds=expiration_seconds)
 
     claims = {

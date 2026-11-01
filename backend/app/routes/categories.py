@@ -1,12 +1,13 @@
 # routes/categories.py - Rotas de categorias
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
 from app.models.category import Category
 from app.models.user import User
-from app.schemas.channel import ChannelListResponse, ChannelResponse
 from app.security.dependencies import require_admin
 
 router = APIRouter(prefix="/categories", tags=["Categorias"])
@@ -21,9 +22,9 @@ async def list_categories(
     """Lista categorias (público)."""
     query = select(Category)
     if active_only:
-        query = query.where(Category.is_active == True)
+        query = query.where(Category.is_active)
     if not include_adult:
-        query = query.where(Category.is_adult == False)
+        query = query.where(not Category.is_adult)
     query = query.order_by(Category.sort_order, Category.name)
 
     result = await db.execute(query)
@@ -50,7 +51,9 @@ async def get_category(category_id: UUID, db: AsyncSession = Depends(get_db)):
     category = result.scalar_one_or_none()
 
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Categoria não encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Categoria não encontrada"
+        )
 
     return {
         "id": category.id,
@@ -78,7 +81,6 @@ async def create_category(
 ):
     """Cria categoria (admin)."""
     from app.models.category import Category
-from app.models.user import User
 
     result = await db.execute(select(Category).where(Category.slug == slug))
     if result.scalar_one_or_none():
@@ -117,7 +119,9 @@ async def update_category(
     category = result.scalar_one_or_none()
 
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Categoria não encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Categoria não encontrada"
+        )
 
     if name is not None:
         category.name = name
@@ -150,7 +154,9 @@ async def delete_category(
     category = result.scalar_one_or_none()
 
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Categoria não encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Categoria não encontrada"
+        )
 
     category.is_active = False
     await db.commit()

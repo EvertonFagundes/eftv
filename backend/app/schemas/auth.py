@@ -1,8 +1,8 @@
 # schemas/auth.py - Schemas de autenticação
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class Token(BaseModel):
@@ -23,9 +23,9 @@ class TokenPayload(BaseModel):
 class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-    full_name: Optional[str] = Field(None, max_length=255)
-    phone: Optional[str] = Field(None, max_length=20)
-    plan_id: Optional[UUID] = None  # Para registrar já vinculando a um plano
+    full_name: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=20)
+    plan_id: UUID | None = None  # Para registrar já vinculando a um plano
 
 
 class UserLogin(BaseModel):
@@ -38,8 +38,8 @@ class UserResponse(BaseModel):
 
     id: UUID
     email: EmailStr
-    full_name: Optional[str]
-    phone: Optional[str]
+    full_name: str | None
+    phone: str | None
     is_active: bool
     is_admin: bool
     email_verified: bool
@@ -48,9 +48,9 @@ class UserResponse(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: Optional[str] = Field(None, max_length=255)
-    phone: Optional[str] = Field(None, max_length=20)
-    password: Optional[str] = Field(None, min_length=8, max_length=128)
+    full_name: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=20)
+    password: str | None = Field(None, min_length=8, max_length=128)
 
 
 class RefreshTokenRequest(BaseModel):

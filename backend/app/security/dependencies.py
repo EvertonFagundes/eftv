@@ -1,22 +1,22 @@
 # security/dependencies.py - Dependencies de autenticação e autorização
-from typing import Optional
 from uuid import UUID
+
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import settings
 from app.database import get_db
-from app.models.user import User
 from app.models.subscription import Subscription
+from app.models.user import User
 from app.services.auth_service import decode_token, get_token_type, is_token_expired
-
 
 security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
@@ -80,9 +80,9 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """
     Dependency opcional - retorna usuário se token válido, None caso contrário.
     Útil para endpoints públicos que personalizam resposta se logado.
@@ -153,6 +153,7 @@ async def get_device_fingerprint(request: Request) -> str:
     ip = request.client.host if request.client else "unknown"
     ua = request.headers.get("user-agent", "unknown")
     import hashlib
+
     raw = f"{ip}:{ua}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
@@ -167,6 +168,7 @@ class RateLimiter:
 
     def is_allowed(self, key: str) -> bool:
         import time
+
         now = time.time()
         if key not in self.requests:
             self.requests[key] = []

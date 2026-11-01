@@ -1,6 +1,8 @@
 # tasks/subscription_checker.py - Verifica vencimentos e renovações
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import select
+
 from app.database import get_db_context
 from app.models.subscription import Subscription
 from app.services.mercadopago import get_preapproval
@@ -14,7 +16,7 @@ async def check_expired_subscriptions() -> int:
     """
     updated = 0
     async with get_db_context() as db:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Busca assinaturas ativas que expiraram
         result = await db.execute(
@@ -65,9 +67,7 @@ async def check_past_due_subscriptions() -> int:
     """
     processed = 0
     async with get_db_context() as db:
-        result = await db.execute(
-            select(Subscription).where(Subscription.status == "past_due")
-        )
+        result = await db.execute(select(Subscription).where(Subscription.status == "past_due"))
         past_due = result.scalars().all()
 
         for sub in past_due:
@@ -79,7 +79,7 @@ async def check_past_due_subscriptions() -> int:
                     if mp_status == "authorized":
                         # Pagamento recuperado
                         sub.status = "active"
-                        sub.current_period_start = datetime.now(timezone.utc)
+                        sub.current_period_start = datetime.now(UTC)
                         next_billing = mp_data.get("next_billing_date")
                         if next_billing:
                             sub.current_period_end = datetime.fromisoformat(
@@ -98,12 +98,12 @@ async def cleanup_stale_playback_sessions(max_age_hours: int = 24) -> int:
     Returns: número de sessões encerradas.
     """
     from datetime import timedelta
-    from sqlalchemy import update
+
     from app.models.playback_session import PlaybackSession
 
     cleaned = 0
     async with get_db_context() as db:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
         result = await db.execute(
             select(PlaybackSession).where(
@@ -114,7 +114,7 @@ async def cleanup_stale_playback_sessions(max_age_hours: int = 24) -> int:
         stale = result.scalars().all()
 
         for session in stale:
-            session.ended_at = datetime.now(timezone.utc)
+            session.ended_at = datetime.now(UTC)
             cleaned += 1
 
     return cleaned

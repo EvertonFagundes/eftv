@@ -1,29 +1,30 @@
 # routes/auth.py - Rotas de autenticação
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
+    MessageResponse,
     Token,
     UserLogin,
     UserRegister,
     UserResponse,
     UserUpdate,
-    RefreshTokenRequest,
-    MessageResponse,
 )
-from app.security.dependencies import get_current_user, get_current_user_optional
+from app.security.dependencies import get_current_user
 from app.services.auth_service import (
-    hash_password,
-    verify_password,
     create_token_pair,
     decode_token,
     get_token_type,
+    hash_password,
     is_token_expired,
+    verify_password,
 )
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
@@ -59,8 +60,8 @@ async def register(
 
     # Se plan_id fornecido, cria subscription pendente (integração Mercado Pago vem na Fase 2)
     if data.plan_id:
-        from app.models.subscription import Subscription
         from app.models.plan import Plan
+        from app.models.subscription import Subscription
 
         plan_result = await db.execute(select(Plan).where(Plan.id == data.plan_id))
         plan = plan_result.scalar_one_or_none()
@@ -69,8 +70,8 @@ async def register(
                 user_id=user.id,
                 plan_id=plan.id,
                 status="pending",
-                current_period_start=datetime.now(timezone.utc),
-                current_period_end=datetime.now(timezone.utc),
+                current_period_start=datetime.now(UTC),
+                current_period_end=datetime.now(UTC),
             )
             db.add(subscription)
 
@@ -151,7 +152,6 @@ async def refresh_token(
     """
     Renova access token usando refresh token do cookie HttpOnly.
     """
-    from fastapi import Request
 
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:

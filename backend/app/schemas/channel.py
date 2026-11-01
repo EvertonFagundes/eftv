@@ -1,31 +1,31 @@
 # schemas/channel.py - Schemas de canais
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict, HttpUrl
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 class ChannelBase(BaseModel):
     slug: str = Field(..., min_length=1, max_length=100, pattern="^[a-z0-9-]+$")
     name: str = Field(..., min_length=1, max_length=255)
-    category_id: Optional[UUID] = None
-    group_title: Optional[str] = Field(None, max_length=255)
-    logo_url: Optional[HttpUrl] = None
+    category_id: UUID | None = None
+    group_title: str | None = Field(None, max_length=255)
+    logo_url: HttpUrl | None = None
     is_live: bool = True
     is_adult: bool = False
     is_active: bool = True
     sort_order: int = Field(default=0, ge=0)
-    stream_url: Optional[HttpUrl] = None
-    stream_type: Optional[str] = Field(None, pattern="^(hls|dash|ts|mp4)$")
-    backup_stream_url: Optional[HttpUrl] = None
-    backup_stream_type: Optional[str] = Field(None, pattern="^(hls|dash|ts|mp4)$")
+    stream_url: HttpUrl | None = None
+    stream_type: str | None = Field(None, pattern="^(hls|dash|ts|mp4)$")
+    backup_stream_url: HttpUrl | None = None
+    backup_stream_type: str | None = Field(None, pattern="^(hls|dash|ts|mp4)$")
     drm_protected: bool = False
-    drm_license_url: Optional[HttpUrl] = None
-    current_program_title: Optional[str] = Field(None, max_length=255)
-    current_program_start: Optional[datetime] = None
-    current_program_end: Optional[datetime] = None
-    current_program_description: Optional[str] = None
-    next_program_title: Optional[str] = Field(None, max_length=255)
+    drm_license_url: HttpUrl | None = None
+    current_program_title: str | None = Field(None, max_length=255)
+    current_program_start: datetime | None = None
+    current_program_end: datetime | None = None
+    current_program_description: str | None = None
+    next_program_title: str | None = Field(None, max_length=255)
     metadata: dict = Field(default_factory=dict)
 
 
@@ -34,27 +34,27 @@ class ChannelCreate(ChannelBase):
 
 
 class ChannelUpdate(BaseModel):
-    slug: Optional[str] = Field(None, min_length=1, max_length=100, pattern="^[a-z0-9-]+$")
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    category_id: Optional[UUID] = None
-    group_title: Optional[str] = Field(None, max_length=255)
-    logo_url: Optional[HttpUrl] = None
-    is_live: Optional[bool] = None
-    is_adult: Optional[bool] = None
-    is_active: Optional[bool] = None
-    sort_order: Optional[int] = Field(None, ge=0)
-    stream_url: Optional[HttpUrl] = None
-    stream_type: Optional[str] = Field(None, pattern="^(hls|dash|ts|mp4)$")
-    backup_stream_url: Optional[HttpUrl] = None
-    backup_stream_type: Optional[str] = Field(None, pattern="^(hls|dash|ts|mp4)$")
-    drm_protected: Optional[bool] = None
-    drm_license_url: Optional[HttpUrl] = None
-    current_program_title: Optional[str] = Field(None, max_length=255)
-    current_program_start: Optional[datetime] = None
-    current_program_end: Optional[datetime] = None
-    current_program_description: Optional[str] = None
-    next_program_title: Optional[str] = Field(None, max_length=255)
-    metadata: Optional[dict] = None
+    slug: str | None = Field(None, min_length=1, max_length=100, pattern="^[a-z0-9-]+$")
+    name: str | None = Field(None, min_length=1, max_length=255)
+    category_id: UUID | None = None
+    group_title: str | None = Field(None, max_length=255)
+    logo_url: HttpUrl | None = None
+    is_live: bool | None = None
+    is_adult: bool | None = None
+    is_active: bool | None = None
+    sort_order: int | None = Field(None, ge=0)
+    stream_url: HttpUrl | None = None
+    stream_type: str | None = Field(None, pattern="^(hls|dash|ts|mp4)$")
+    backup_stream_url: HttpUrl | None = None
+    backup_stream_type: str | None = Field(None, pattern="^(hls|dash|ts|mp4)$")
+    drm_protected: bool | None = None
+    drm_license_url: HttpUrl | None = None
+    current_program_title: str | None = Field(None, max_length=255)
+    current_program_start: datetime | None = None
+    current_program_end: datetime | None = None
+    current_program_description: str | None = None
+    next_program_title: str | None = Field(None, max_length=255)
+    metadata: dict | None = None
 
 
 class ChannelResponse(ChannelBase):
@@ -75,10 +75,11 @@ class ChannelListResponse(BaseModel):
 
 class ChannelPlayResponse(BaseModel):
     """Resposta do endpoint /channels/{slug}/play - retorna URL do stream + token."""
+
     stream_url: str
     stream_type: str
     token: str  # JWT assinado para autorização no CDN
     expires_at: datetime
-    drm_license_url: Optional[str] = None
-    backup_stream_url: Optional[str] = None
-    backup_stream_type: Optional[str] = None
+    drm_license_url: str | None = None
+    backup_stream_url: str | None = None
+    backup_stream_type: str | None = None

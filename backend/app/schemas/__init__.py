@@ -1,16 +1,28 @@
 # schemas/__init__.py - Exporta todos os schemas
 from app.schemas.auth import (
+    RefreshTokenRequest,
     Token,
     TokenPayload,
-    UserRegister,
     UserLogin,
+    UserRegister,
     UserResponse,
     UserUpdate,
-    RefreshTokenRequest,
 )
-from app.schemas.plan import PlanCreate, PlanUpdate, PlanResponse, PlanListResponse
-from app.schemas.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelListResponse, ChannelPlayResponse
-from app.schemas.payment import PaymentCreate, PaymentResponse, PaymentWebhook, CheckoutRequest, CheckoutResponse
+from app.schemas.channel import (
+    ChannelCreate,
+    ChannelListResponse,
+    ChannelPlayResponse,
+    ChannelResponse,
+    ChannelUpdate,
+)
+from app.schemas.payment import (
+    CheckoutRequest,
+    CheckoutResponse,
+    PaymentCreate,
+    PaymentResponse,
+    PaymentWebhook,
+)
+from app.schemas.plan import PlanCreate, PlanListResponse, PlanResponse, PlanUpdate
 
 __all__ = [
     # Auth

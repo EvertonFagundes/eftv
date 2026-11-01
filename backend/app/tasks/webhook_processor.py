@@ -1,10 +1,4 @@
 # tasks/webhook_processor.py - Processa webhooks assíncronos
-import json
-from datetime import datetime, timezone
-from sqlalchemy import select
-from app.database import get_db_context
-from app.models.payment import Payment
-from app.services.mercadopago import process_webhook
 
 
 async def process_pending_webhooks(limit: int = 100) -> int:

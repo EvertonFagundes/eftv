@@ -1,9 +1,11 @@
 # services/catalog.py - Lógica de catálogo/canais
 from uuid import UUID
-from sqlalchemy import select, func, or_
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.channel import Channel
+
 from app.models.category import Category
+from app.models.channel import Channel
 
 
 async def get_channels_with_categories(
@@ -16,7 +18,7 @@ async def get_channels_with_categories(
     page_size: int = 20,
 ) -> tuple[list[Channel], int]:
     """Busca canais paginados com filtros."""
-    query = select(Channel).where(Channel.is_active == True)
+    query = select(Channel).where(Channel.is_active)
 
     if category_id:
         query = query.where(Channel.category_id == category_id)
@@ -31,7 +33,7 @@ async def get_channels_with_categories(
     if is_live is not None:
         query = query.where(Channel.is_live == is_live)
     if not include_adult:
-        query = query.where(Channel.is_adult == False)
+        query = query.where(not Channel.is_adult)
 
     query = query.order_by(Channel.sort_order, Channel.name)
 
@@ -55,9 +57,9 @@ async def get_channel_by_slug(db: AsyncSession, slug: str) -> Channel | None:
 
 async def get_active_categories(db: AsyncSession, include_adult: bool = False) -> list[Category]:
     """Lista categorias ativas ordenadas."""
-    query = select(Category).where(Category.is_active == True)
+    query = select(Category).where(Category.is_active)
     if not include_adult:
-        query = query.where(Category.is_adult == False)
+        query = query.where(not Category.is_adult)
     query = query.order_by(Category.sort_order, Category.name)
 
     result = await db.execute(query)
@@ -84,8 +86,8 @@ async def search_channels(db: AsyncSession, query: str, limit: int = 8) -> list[
     search_term = f"%{query.lower()}%"
     result = await db.execute(
         select(Channel)
-        .where(Channel.is_active == True)
-        .where(Channel.is_adult == False)
+        .where(Channel.is_active)
+        .where(not Channel.is_adult)
         .where(
             or_(
                 Channel.name.ilike(search_term),

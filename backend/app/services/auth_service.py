@@ -1,12 +1,15 @@
 # services/auth_service.py - Lógica de autenticação (hash, JWT, tokens)
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
-from jose import jwt, JWTError
+
+from jose import JWTError, jwt
 from passlib.context import CryptContext
+
 from app.config import settings
 
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=settings.BCRYPT_ROUNDS)
+pwd_context = CryptContext(
+    schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=settings.BCRYPT_ROUNDS
+)
 
 
 def hash_password(password: str) -> str:
@@ -24,7 +27,7 @@ def create_access_token(user_id: str, extra_claims: dict | None = None) -> tuple
     Cria access token JWT.
     Returns: (token, jti)
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     jti = str(uuid4())
 
@@ -47,7 +50,7 @@ def create_refresh_token(user_id: str) -> tuple[str, str]:
     Cria refresh token JWT.
     Returns: (token, jti)
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     jti = str(uuid4())
 
@@ -74,7 +77,7 @@ def create_stream_token(
     Cria token JWT de curta duração para autorização de stream no CDN.
     Returns: (token, jti, expires_at)
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(seconds=settings.STREAM_TOKEN_TTL_SECONDS)
     jti = str(uuid4())
 
@@ -115,7 +118,7 @@ def is_token_expired(payload: dict) -> bool:
     exp = payload.get("exp")
     if not exp:
         return True
-    return datetime.now(timezone.utc).timestamp() > exp
+    return datetime.now(UTC).timestamp() > exp
 
 
 def create_token_pair(user_id: str) -> tuple[str, str, str, str]:

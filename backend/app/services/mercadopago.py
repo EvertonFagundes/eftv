@@ -1,21 +1,23 @@
 # services/mercadopago.py - Integração Mercado Pago
+from datetime import UTC, datetime
+
 import httpx
-from datetime import datetime, timezone
-from typing import Optional
-from uuid import UUID
+from sqlalchemy import select
+
 from app.config import settings
-from app.models.user import User
+from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.subscription import Subscription
-from app.models.payment import Payment
-
+from app.models.user import User
 
 MERCADOPAGO_BASE_URL = "https://api.mercadopago.com"
 if settings.MERCADOPAGO_SANDBOX:
-    MERCADOPAGO_BASE_URL = "https://api.mercadopago.com"  # Sandbox usa mesma URL, headers diferentes
+    MERCADOPAGO_BASE_URL = (
+        "https://api.mercadopago.com"  # Sandbox usa mesma URL, headers diferentes
+    )
 
 
-def _get_headers(idempotency_key: Optional[str] = None) -> dict:
+def _get_headers(idempotency_key: str | None = None) -> dict:
     headers = {
         "Authorization": f"Bearer {settings.MERCADOPAGO_ACCESS_TOKEN}",
         "Content-Type": "application/json",
@@ -29,10 +31,10 @@ async def create_checkout_preference(
     user: User,
     plan: Plan,
     payer_email: str,
-    payer_name: Optional[str] = None,
-    payer_phone: Optional[str] = None,
-    payer_cpf: Optional[str] = None,
-    back_urls: Optional[dict] = None,
+    payer_name: str | None = None,
+    payer_phone: str | None = None,
+    payer_cpf: str | None = None,
+    back_urls: dict | None = None,
 ) -> dict:
     """
     Cria preferência de checkout no Mercado Pago para assinatura (preapproval).
@@ -48,7 +50,9 @@ async def create_checkout_preference(
         payer["surname"] = " ".join(payer_name.split()[1:]) if len(payer_name.split()) > 1 else ""
     if payer_phone:
         # Formato: {"area_code": "11", "number": "999999999"}
-        phone_clean = payer_phone.replace("(", "").replace(")", "").replace("-", "").replace(" ", "")
+        phone_clean = (
+            payer_phone.replace("(", "").replace(")", "").replace("-", "").replace(" ", "")
+        )
         if len(phone_clean) >= 10:
             payer["phone"] = {"area_code": phone_clean[:2], "number": phone_clean[2:]}
     if payer_cpf:
@@ -84,7 +88,9 @@ async def create_checkout_preference(
         )
 
     if response.status_code >= 400:
-        raise RuntimeError(f"Erro ao criar preferência MP: {response.status_code} - {response.text}")
+        raise RuntimeError(
+            f"Erro ao criar preferência MP: {response.status_code} - {response.text}"
+        )
 
     return response.json()
 
@@ -113,7 +119,9 @@ async def cancel_preapproval(preapproval_id: str) -> dict:
         )
 
     if response.status_code >= 400:
-        raise RuntimeError(f"Erro ao cancelar preapproval: {response.status_code} - {response.text}")
+        raise RuntimeError(
+            f"Erro ao cancelar preapproval: {response.status_code} - {response.text}"
+        )
 
     return response.json()
 
@@ -162,7 +170,10 @@ async def process_webhook(payload: dict, db) -> None:
         await _handle_payment_approved(resource_id, db)
     elif event_type == "subscription_preapproval_cancelled":
         await _handle_subscription_cancelled(resource_id, db)
-    elif event_type in ["subscription_preapproval_payment_rejected", "subscription_authorized_payment_rejected"]:
+    elif event_type in [
+        "subscription_preapproval_payment_rejected",
+        "subscription_authorized_payment_rejected",
+    ]:
         await _handle_payment_rejected(resource_id, db)
     elif event_type == "chargeback":
         await _handle_chargeback(resource_id, db)
@@ -188,7 +199,7 @@ async def _handle_payment_approved(payment_id: str, db) -> None:
 
     # Atualiza subscription
     subscription.status = "active"
-    subscription.current_period_start = datetime.now(timezone.utc)
+    subscription.current_period_start = datetime.now(UTC)
     # next_period_end vem do Mercado Pago
     next_period = payment_data.get("date_of_expiration")
     if next_period:
@@ -204,7 +215,7 @@ async def _handle_payment_approved(payment_id: str, db) -> None:
         currency=payment_data.get("currency_id", "BRL"),
         status="approved",
         payment_method=payment_data.get("payment_method_id"),
-        paid_at=datetime.now(timezone.utc),
+        paid_at=datetime.now(UTC),
         metadata=payment_data,
     )
     db.add(payment)
@@ -219,7 +230,7 @@ async def _handle_subscription_cancelled(preapproval_id: str, db) -> None:
 
     if subscription:
         subscription.status = "cancelled"
-        subscription.cancelled_at = datetime.now(timezone.utc)
+        subscription.cancelled_at = datetime.now(UTC)
         subscription.auto_renew = False
 
 
@@ -264,7 +275,7 @@ async def _handle_chargeback(payment_id: str, db) -> None:
 
     if subscription:
         subscription.status = "cancelled"
-        subscription.cancelled_at = datetime.now(timezone.utc)
+        subscription.cancelled_at = datetime.now(UTC)
 
     if subscription:
         payment = Payment(
@@ -276,7 +287,7 @@ async def _handle_chargeback(payment_id: str, db) -> None:
             currency=payment_data.get("currency_id", "BRL"),
             status="refunded",
             payment_method=payment_data.get("payment_method_id"),
-            paid_at=datetime.now(timezone.utc),
+            paid_at=datetime.now(UTC),
             metadata=payment_data,
         )
         db.add(payment)

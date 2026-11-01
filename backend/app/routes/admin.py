@@ -1,13 +1,15 @@
 # routes/admin.py - Rotas administrativas
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
-from app.models.user import User
-from app.models.subscription import Subscription
-from app.models.channel import Channel
 from app.models.category import Category
+from app.models.channel import Channel
+from app.models.subscription import Subscription
+from app.models.user import User
 from app.security.dependencies import require_admin
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -17,13 +19,17 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 async def get_stats(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     """Estatísticas gerais para dashboard admin."""
     total_users = (await db.execute(select(func.count(User.id)))).scalar_one()
-    active_users = (await db.execute(select(func.count(User.id)).where(User.is_active == True))).scalar_one()
+    active_users = (
+        await db.execute(select(func.count(User.id)).where(User.is_active))
+    ).scalar_one()
     total_subscriptions = (await db.execute(select(func.count(Subscription.id)))).scalar_one()
     active_subscriptions = (
         await db.execute(select(func.count(Subscription.id)).where(Subscription.status == "active"))
     ).scalar_one()
     total_channels = (await db.execute(select(func.count(Channel.id)))).scalar_one()
-    active_channels = (await db.execute(select(func.count(Channel.id)).where(Channel.is_active == True))).scalar_one()
+    active_channels = (
+        await db.execute(select(func.count(Channel.id)).where(Channel.is_active))
+    ).scalar_one()
     total_categories = (await db.execute(select(func.count(Category.id)))).scalar_one()
 
     return {
@@ -46,9 +52,7 @@ async def list_users(
     query = select(User).order_by(User.created_at.desc())
     if search:
         search_term = f"%{search.lower()}%"
-        query = query.where(
-            (User.email.ilike(search_term)) | (User.full_name.ilike(search_term))
-        )
+        query = query.where((User.email.ilike(search_term)) | (User.full_name.ilike(search_term)))
 
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()
@@ -77,7 +81,9 @@ async def list_users(
 
 
 @router.get("/users/{user_id}")
-async def get_user(user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def get_user(
+    user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
+):
     """Obtém detalhes de usuário + assinaturas (admin)."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -113,7 +119,9 @@ async def get_user(user_id: UUID, db: AsyncSession = Depends(get_db), _: User = 
 
 
 @router.patch("/users/{user_id}/toggle-admin")
-async def toggle_admin(user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def toggle_admin(
+    user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
+):
     """Alterna status admin do usuário."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -127,7 +135,9 @@ async def toggle_admin(user_id: UUID, db: AsyncSession = Depends(get_db), _: Use
 
 
 @router.patch("/users/{user_id}/toggle-active")
-async def toggle_user_active(user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+async def toggle_user_active(
+    user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
+):
     """Ativa/desativa usuário."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()

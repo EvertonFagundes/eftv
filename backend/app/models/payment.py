@@ -1,31 +1,28 @@
 # models/payment.py - Modelo de pagamento
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+
 from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
-    from app.models.plan import Plan
-    from app.models.subscription import Subscription
 
 
 class Payment(Base):
     __tablename__ = "payments"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -44,11 +41,15 @@ class Payment(Base):
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, index=True
     )  # pending, approved, rejected, refunded, cancelled
-    payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)  # pix, credit_card, boleto, saldo_mp
+    payment_method: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # pix, credit_card, boleto, saldo_mp
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)  # Dados brutos do webhook
+    metadata: Mapped[dict] = mapped_column(
+        JSONB, default=dict, nullable=False
+    )  # Dados brutos do webhook
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
     # Relacionamentos

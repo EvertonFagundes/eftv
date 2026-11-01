@@ -1,26 +1,26 @@
 # routes/channels.py - Rotas de catálogo e playback
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.config import settings
+
 from app.database import get_db
 from app.models.channel import Channel
-from app.models.category import Category
 from app.models.playback_session import PlaybackSession
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.channel import (
     ChannelCreate,
-    ChannelUpdate,
-    ChannelResponse,
     ChannelListResponse,
     ChannelPlayResponse,
+    ChannelResponse,
+    ChannelUpdate,
 )
 from app.security.dependencies import (
+    get_current_active_subscription,
     get_current_user,
     get_current_user_optional,
-    get_current_active_subscription,
     get_device_fingerprint,
     require_admin,
 )
@@ -42,7 +42,7 @@ async def list_channels(
     user: User = Depends(get_current_user_optional),
 ):
     """Lista canais do catálogo (público para logados, com filtro 18+)."""
-    query = select(Channel).where(Channel.is_active == True)
+    query = select(Channel).where(Channel.is_active)
 
     if category_id:
         query = query.where(Channel.category_id == category_id)
@@ -58,7 +58,7 @@ async def list_channels(
         query = query.where(Channel.is_live == is_live)
     if not include_adult:
         # Se não logado ou usuário não tem permissão 18+, oculta adulto
-        query = query.where(Channel.is_adult == False)
+        query = query.where(not Channel.is_adult)
 
     query = query.order_by(Channel.sort_order, Channel.name)
 

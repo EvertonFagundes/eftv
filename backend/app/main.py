@@ -1,22 +1,26 @@
 # main.py - FastAPI app, middleware, lifespan, routers
 from contextlib import asynccontextmanager
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from app.config import settings
-from app.database import init_db, close_db
-from app.routes import (
-    auth_router,
-    plans_router,
-    channels_router,
-    categories_router,
-    subscriptions_router,
-    admin_router,
-)
-from app.tasks.subscription_checker import check_expired_subscriptions, cleanup_stale_playback_sessions
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from app.config import settings
+from app.database import close_db, init_db
+from app.routes import (
+    admin_router,
+    auth_router,
+    categories_router,
+    channels_router,
+    plans_router,
+    subscriptions_router,
+)
+from app.tasks.subscription_checker import (
+    check_expired_subscriptions,
+    cleanup_stale_playback_sessions,
+)
 
 scheduler = AsyncIOScheduler()
 
@@ -65,6 +69,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 async def global_exception_handler(request: Request, exc: Exception):
     if settings.DEBUG:
         import traceback
+
         traceback.print_exc()
 
     return JSONResponse(
@@ -90,6 +95,7 @@ app.include_router(admin_router)
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.HOST,

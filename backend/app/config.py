@@ -1,6 +1,6 @@
 # config.py - Configurações da aplicação (pydantic-settings)
 from functools import lru_cache
-from typing import List, Optional
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -29,15 +29,19 @@ class Settings(BaseSettings):
     DATABASE_MAX_OVERFLOW: int = 20
 
     # Security
-    SECRET_KEY: str = Field(..., description "Chave secreta para JWT - DEVE ser definida no .env")
+    SECRET_KEY: str = Field(..., description="Chave secreta para JWT - DEVE ser definida no .env")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     BCRYPT_ROUNDS: int = 12
 
     # CORS
-    CORS_ORIGINS: List[str] = Field(
-        default_factory=lambda: ["http://localhost:3000", "http://localhost:5173", "https://app.eftv.com.br"]
+    CORS_ORIGINS: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://app.eftv.com.br",
+        ]
     )
 
     # Rate limiting
@@ -45,23 +49,23 @@ class Settings(BaseSettings):
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
     # Redis (para rate limiting, cache, sessões)
-    REDIS_URL: Optional[str] = None
+    REDIS_URL: str | None = None
 
     # Mercado Pago
-    MERCADOPAGO_ACCESS_TOKEN: Optional[str] = None
-    MERCADOPAGO_PUBLIC_KEY: Optional[str] = None
-    MERCADOPAGO_WEBHOOK_SECRET: Optional[str] = None
+    MERCADOPAGO_ACCESS_TOKEN: str | None = None
+    MERCADOPAGO_PUBLIC_KEY: str | None = None
+    MERCADOPAGO_WEBHOOK_SECRET: str | None = None
     MERCADOPAGO_SANDBOX: bool = True
 
     # Streaming (Cloudflare Stream)
     STREAM_PROVIDER: str = "cloudflare"  # cloudflare, mux, custom
-    CLOUDFLARE_ACCOUNT_ID: Optional[str] = None
-    CLOUDFLARE_API_TOKEN: Optional[str] = None
+    CLOUDFLARE_ACCOUNT_ID: str | None = None
+    CLOUDFLARE_API_TOKEN: str | None = None
     STREAM_TOKEN_TTL_SECONDS: int = 900  # 15 min
     STREAM_TOKEN_ISSUER: str = "eftv-api"
 
     # Email (Resend)
-    RESEND_API_KEY: Optional[str] = None
+    RESEND_API_KEY: str | None = None
     EMAIL_FROM: str = "EFTV <noreply@eftv.com.br>"
 
     # Frontend URL (para links em emails, redirects)
@@ -69,7 +73,7 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
-    SENTRY_DSN: Optional[str] = None
+    SENTRY_DSN: str | None = None
 
 
 @lru_cache

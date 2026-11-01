@@ -1,16 +1,16 @@
 # routes/subscriptions.py - Rotas de assinaturas e webhooks
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.config import settings
+
 from app.database import get_db
-from app.models.subscription import Subscription
 from app.models.plan import Plan
-from app.models.payment import Payment
+from app.models.subscription import Subscription
 from app.models.user import User
-from app.schemas.payment import SubscriptionResponse, CheckoutRequest, CheckoutResponse, PaymentWebhook
+from app.schemas.payment import CheckoutRequest, CheckoutResponse, SubscriptionResponse
 from app.security.dependencies import get_current_user
 from app.services.mercadopago import create_checkout_preference, process_webhook
 
@@ -68,7 +68,9 @@ async def get_subscription(
     subscription = result.scalar_one_or_none()
 
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura não encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura não encontrada"
+        )
 
     plan_result = await db.execute(select(Plan).where(Plan.id == subscription.plan_id))
     plan = plan_result.scalar_one()
@@ -123,8 +125,8 @@ async def create_checkout(
         plan_id=plan.id,
         status="pending",
         mercadopago_subscription_id=preference["id"],
-        current_period_start=datetime.now(timezone.utc),
-        current_period_end=datetime.now(timezone.utc),
+        current_period_start=datetime.now(UTC),
+        current_period_end=datetime.now(UTC),
     )
     db.add(subscription)
     await db.commit()
@@ -133,7 +135,7 @@ async def create_checkout(
         preference_id=preference["id"],
         init_point=preference["init_point"],
         sandbox_init_point=preference.get("sandbox_init_point"),
-        expires_at=datetime.now(timezone.utc),  # TODO: calcular expiração real
+        expires_at=datetime.now(UTC),  # TODO: calcular expiração real
     )
 
 
@@ -173,10 +175,14 @@ async def cancel_subscription(
     subscription = result.scalar_one_or_none()
 
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura não encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura não encontrada"
+        )
 
     if subscription.status not in ["active", "trial"]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assinatura não pode ser cancelada")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Assinatura não pode ser cancelada"
+        )
 
     subscription.cancel_at_period_end = True
     subscription.auto_renew = False

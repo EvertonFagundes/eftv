@@ -1,12 +1,15 @@
 # routes/plans.py - Rotas de planos (públicas e autenticadas)
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
 from app.models.plan import Plan
-from app.schemas.plan import PlanCreate, PlanUpdate, PlanResponse, PlanListResponse
-from app.security.dependencies import get_current_user, require_admin
+from app.models.user import User
+from app.schemas.plan import PlanCreate, PlanListResponse, PlanResponse, PlanUpdate
+from app.security.dependencies import require_admin
 
 router = APIRouter(prefix="/plans", tags=["Planos"])
 
@@ -21,7 +24,7 @@ async def list_plans(
     """Lista planos públicos (para página de vendas)."""
     query = select(Plan)
     if active_only:
-        query = query.where(Plan.is_active == True)
+        query = query.where(Plan.is_active)
     query = query.order_by(Plan.sort_order, Plan.price_cents)
 
     # Count total

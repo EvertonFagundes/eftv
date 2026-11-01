@@ -1,13 +1,13 @@
 # schemas/plan.py - Schemas de planos
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PlanBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
+    description: str | None = Field(None, max_length=500)
     price_cents: int = Field(..., ge=0)
     currency: str = Field(default="BRL", pattern="^[A-Z]{3}$")
     interval: str = Field(default="month", pattern="^(month|year)$")
@@ -18,28 +18,28 @@ class PlanBase(BaseModel):
 
 
 class PlanCreate(PlanBase):
-    mercadopago_plan_id: Optional[str] = Field(None, max_length=100)
+    mercadopago_plan_id: str | None = Field(None, max_length=100)
 
 
 class PlanUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    price_cents: Optional[int] = Field(None, ge=0)
-    currency: Optional[str] = Field(None, pattern="^[A-Z]{3}$")
-    interval: Optional[str] = Field(None, pattern="^(month|year)$")
-    max_simultaneous_streams: Optional[int] = Field(None, ge=1, le=10)
-    max_devices: Optional[int] = Field(None, ge=1, le=20)
-    features: Optional[dict] = None
-    mercadopago_plan_id: Optional[str] = Field(None, max_length=100)
-    is_active: Optional[bool] = None
-    sort_order: Optional[int] = Field(None, ge=0)
+    name: str | None = Field(None, min_length=1, max_length=100)
+    description: str | None = Field(None, max_length=500)
+    price_cents: int | None = Field(None, ge=0)
+    currency: str | None = Field(None, pattern="^[A-Z]{3}$")
+    interval: str | None = Field(None, pattern="^(month|year)$")
+    max_simultaneous_streams: int | None = Field(None, ge=1, le=10)
+    max_devices: int | None = Field(None, ge=1, le=20)
+    features: dict | None = None
+    mercadopago_plan_id: str | None = Field(None, max_length=100)
+    is_active: bool | None = None
+    sort_order: int | None = Field(None, ge=0)
 
 
 class PlanResponse(PlanBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    mercadopago_plan_id: Optional[str]
+    mercadopago_plan_id: str | None
     is_active: bool
     created_at: datetime
     updated_at: datetime
