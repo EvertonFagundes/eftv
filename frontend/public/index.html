@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EFTV — Streaming por Assinatura</title>
+  <meta name="description" content="EFTV: canais ao vivo, filmes e séries por assinatura. Assista onde quiser, quando quiser.">
+  <meta name="theme-color" content="#071426">
+  <meta name="application-name" content="EFTV">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EFTV">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" aria-label="EFTV — início">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+        </span>
+        <span class="brand-name">EF<b>TV</b></span>
+      </a>
+
+      <nav class="main-nav" aria-label="Navegação principal">
+        <a href="#features">Recursos</a>
+        <a href="#plans">Planos</a>
+        <a href="#channels">Canais</a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="login.html" class="btn btn-ghost">Entrar</a>
+        <a href="register.html" class="btn btn-primary">Assinar agora</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-content">
+          <h1>Seus canais favoritos,<br>em uma só assinatura.</h1>
+          <p class="hero-subtitle">Canais ao vivo, filmes, séries e esportes. Sem fidelidade, cancele quando quiser.</p>
+          <div class="hero-actions">
+            <a href="plans.html" class="btn btn-primary btn-lg">Ver planos</a>
+            <a href="#channels" class="btn btn-outline btn-lg">Ver catálogo</a>
+          </div>
+          <p class="hero-trust">✓ Sem fidelidade · ✓ Cancele a qualquer momento · ✓ Até 3 dispositivos</p>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="device-mockup">
+            <div class="device-screen">
+              <div class="mock-channels">
+                <div class="mock-channel live">🔴 Sportv</div>
+                <div class="mock-channel">🎬 HBO</div>
+                <div class="mock-channel live">🔴 GloboNews</div>
+                <div class="mock-channel">📺 Telecine</div>
+                <div class="mock-channel live">🔴 Premiere</div>
+                <div class="mock-channel">🎮 Cartoon Network</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="features">
+      <div class="wrap">
+        <h2>Por que escolher a EFTV?</h2>
+        <div class="features-grid">
+          <article class="feature-card">
+            <div class="feature-icon">📺</div>
+            <h3>Canais ao vivo</h3>
+            <p>Esportes, notícias, entretenimento 24h. Qualidade HD/Full HD.</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon">🎬</div>
+            <h3>Filmes e Séries</h3>
+            <p>Catálogo sob demanda com lançamentos e clássicos.</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon">📱</div>
+            <h3>Multi-dispositivo</h3>
+            <p>Assista no celular, TV, tablet ou computador. Até 3 simultâneos.</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon">🚫</div>
+            <h3>Sem fidelidade</h3>
+            <p>Cancele quando quiser, sem multa. Controle total da assinatura.</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Playback instantâneo</h3>
+            <p>Tecnologia HLS/DASH com CDN global. Zapping rápido.</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon">🔒</div>
+            <h3>Seguro e legal</h3>
+            <p>Conteúdo licenciado. Pagamentos via Mercado Pago (PIX, cartão, boleto).</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Plans Preview -->
+    <section id="plans" class="plans-preview">
+      <div class="wrap">
+        <h2>Planos para todos os perfis</h2>
+        <p class="section-subtitle">Escolha o ideal para você</p>
+        <div class="plans-grid" id="plans-grid">
+          <!-- Preenchido via JS -->
+        </div>
+        <div class="plans-cta">
+          <a href="plans.html" class="btn btn-primary btn-lg">Ver todos os planos</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Channels Preview -->
+    <section id="channels" class="channels-preview">
+      <div class="wrap">
+        <div class="section-header">
+          <h2>Catálogo de canais</h2>
+          <p class="section-subtitle">Uma seleção premium de canais ao vivo e sob demanda</p>
+        </div>
+        <div class="categories-chips" id="categories-chips">
+          <!-- Preenchido via JS -->
+        </div>
+        <div class="channels-grid" id="channels-grid">
+          <!-- Preenchido via JS -->
+        </div>
+        <div class="channels-cta">
+          <a href="register.html" class="btn btn-primary btn-lg">Assinar para acessar</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Testimonials / Trust -->
+    <section class="trust">
+      <div class="wrap">
+        <h2>Confiado por milhares de assinantes</h2>
+        <div class="trust-stats">
+          <div class="stat">
+            <span class="stat-number">50+</span>
+            <span class="stat-label">Canais</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number">99.9%</span>
+            <span class="stat-label">Uptime</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number">4K</span>
+            <span class="stat-label">Qualidade máx.</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number">24/7</span>
+            <span class="stat-label">Suporte</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="index.html">
+            <span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg></span>
+            <span class="brand-name">EF<b>TV</b></span>
+          </a>
+          <p>Streaming por assinatura feito para você.</p>
+        </div>
+        <nav class="footer-nav">
+          <h4>Produto</h4>
+          <ul>
+            <li><a href="plans.html">Planos</a></li>
+            <li><a href="#channels">Canais</a></li>
+            <li><a href="#">Apps</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-nav">
+          <h4>Empresa</h4>
+          <ul>
+            <li><a href="#">Sobre</a></li>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">Carreiras</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-nav">
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Termos de Uso</a></li>
+            <li><a href="#">Política de Privacidade</a></li>
+            <li><a href="#">Cookies</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2024 EFTV. Todos os direitos reservados.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="assets/js/main.js"></script>
+</body>
+</html>
