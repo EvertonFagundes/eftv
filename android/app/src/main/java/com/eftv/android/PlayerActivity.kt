@@ -19,8 +19,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import com.eftv.android.databinding.ActivityPlayerBinding
 import timber.log.Timber
 
@@ -46,6 +48,7 @@ class PlayerActivity : AppCompatActivity() {
     private var lastReadyAt = 0L
     private var lastErrorDetail: String? = null
     private var stopped = false
+    private var softRecoveryAttempts = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,6 +93,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun startPlayback() {
         reconnectAttempt = 0
+        softRecoveryAttempts = 0
         lastReadyAt = 0L
         lastErrorDetail = null
         hideError()
@@ -110,11 +114,25 @@ class PlayerActivity : AppCompatActivity() {
             httpFactory.setDefaultRequestProperties(mapOf("Referer" to value))
         }
 
+        val loadControl = DefaultLoadControl.Builder()
+            // Buffer folgado: absorve oscilacao de rede sem parar a imagem.
+            .setBufferDurationsMs(
+                MIN_BUFFER_MS,
+                MAX_BUFFER_MS,
+                BUFFER_FOR_PLAYBACK_MS,
+                BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val mediaSourceFactory = DefaultMediaSourceFactory(this)
             .setDataSourceFactory(httpFactory)
+            // Mais tentativas internas antes de reportar erro ao player.
+            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(MAX_LOAD_RETRIES))
 
         val exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .build()
 
         exoPlayer.setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
@@ -132,11 +150,24 @@ class PlayerActivity : AppCompatActivity() {
                     append(error.errorCodeName)
                     error.cause?.message?.let { append(": ").append(it) }
                 }
-                scheduleReconnect()
+                // Falha de rede costuma ser passageira: tenta religar no mesmo
+                // player antes de recriar tudo (evita o "pisca" de recarga).
+                if (shouldRecoverInPlace(error)) {
+                    softRecoveryAttempts++
+                    Timber.i("Recuperacao suave (%d)", softRecoveryAttempts)
+                    resumeFromDefaultPosition()
+                } else {
+                    scheduleReconnect()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
+                    Player.STATE_BUFFERING -> {
+                        // Travadinha momentanea: o proprio ExoPlayer reabastece.
+                        Timber.d("Buffering em %d ms", player?.bufferedPosition)
+                    }
+
                     Player.STATE_READY -> {
                         resetBackoffIfStable()
                         lastReadyAt = SystemClock.elapsedRealtime()
@@ -223,6 +254,24 @@ class PlayerActivity : AppCompatActivity() {
         }, RESUME_TIMEOUT_MS)
     }
 
+    /**
+     * Erros de rede/IO depois de o canal ja estar tocando costumam ser
+     * passageiros: religar no mesmo player e mais rapido e nao pisca a tela.
+     */
+    private fun shouldRecoverInPlace(error: PlaybackException): Boolean {
+        if (softRecoveryAttempts >= MAX_SOFT_RECOVERIES) return false
+        if (lastReadyAt == 0L) return false
+        return when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE,
+            -> true
+
+            else -> false
+        }
+    }
+
     // ------------------------------------------------------------------
     // Reconexao automatica
     // ------------------------------------------------------------------
@@ -258,6 +307,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun resetBackoffIfStable() {
         if (lastReadyAt > 0L && SystemClock.elapsedRealtime() - lastReadyAt >= STABLE_PLAYBACK_MS) {
             reconnectAttempt = 0
+            softRecoveryAttempts = 0
         }
     }
 
@@ -314,7 +364,15 @@ class PlayerActivity : AppCompatActivity() {
         private const val STABLE_PLAYBACK_MS = 30_000L
         private const val SHOW_ERROR_AFTER = 5
         private const val RESUME_TIMEOUT_MS = 7_000L
-        private const val LIVE_TARGET_OFFSET_MS = 6_000L
+        private const val LIVE_TARGET_OFFSET_MS = 8_000L
+
+        // Buffer: segura mais alguns segundos para atravessar oscilacao de rede.
+        private const val MIN_BUFFER_MS = 15_000
+        private const val MAX_BUFFER_MS = 40_000
+        private const val BUFFER_FOR_PLAYBACK_MS = 1_500
+        private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 3_000
+        private const val MAX_LOAD_RETRIES = 6
+        private const val MAX_SOFT_RECOVERIES = 2
 
         const val EXTRA_URL = "extra_url"
         const val EXTRA_NAME = "extra_name"
