@@ -17,6 +17,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -141,27 +142,85 @@ class PlayerActivity : AppCompatActivity() {
                         lastReadyAt = SystemClock.elapsedRealtime()
                         hideError()
                         hideReconnecting()
+                        updateLiveBadge()
                     }
 
                     Player.STATE_ENDED -> {
                         // Muitos servidores IPTV fecham o stream depois de N segundos.
                         lastErrorDetail = getString(R.string.stream_ended_by_server)
-                        scheduleReconnect()
+                        // Retoma sem recriar o player (evita o recarregamento visivel).
+                        resumeFromDefaultPosition()
                     }
                 }
+            }
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                updateLiveBadge()
             }
         })
 
         binding.playerView.player = exoPlayer
+        configurePlayerUi()
         exoPlayer.setMediaItem(
             MediaItem.Builder()
                 .setUri(streamUrl)
                 .setMediaMetadata(metadata)
+                .setLiveConfiguration(
+                    MediaItem.LiveConfiguration.Builder()
+                        .setTargetOffsetMs(LIVE_TARGET_OFFSET_MS)
+                        .build()
+                )
                 .build()
         )
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
         player = exoPlayer
+        updateLiveBadge()
+    }
+
+    /** Canal ao vivo nao tem barra de tempo; esconde posicao/duracao do controle. */
+    private fun configurePlayerUi() {
+        binding.playerView.post {
+            listOf(
+                androidx.media3.ui.R.id.exo_position,
+                androidx.media3.ui.R.id.exo_duration,
+                androidx.media3.ui.R.id.exo_progress,
+            ).forEach { id ->
+                binding.playerView.findViewById<View>(id)?.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun updateLiveBadge() {
+        binding.liveBadge.visibility =
+            if (player?.isCurrentMediaItemLive == true) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Volta ao ponto padrao (ao vivo) usando o mesmo player. Sem release e sem
+     * trocar a surface, o canal continua sem o "pisca" de recarregamento.
+     */
+    private fun resumeFromDefaultPosition() {
+        if (stopped) return
+        val current = player ?: run {
+            scheduleReconnect()
+            return
+        }
+
+        hideError()
+        hideReconnecting()
+        current.seekToDefaultPosition()
+        current.prepare()
+        current.playWhenReady = true
+
+        // Se nao voltar sozinho, cai na reconexao completa.
+        handler.postDelayed({
+            if (!stopped && player === current &&
+                current.playbackState != Player.STATE_READY && !current.isPlaying
+            ) {
+                scheduleReconnect()
+            }
+        }, RESUME_TIMEOUT_MS)
     }
 
     // ------------------------------------------------------------------
@@ -254,6 +313,8 @@ class PlayerActivity : AppCompatActivity() {
     companion object {
         private const val STABLE_PLAYBACK_MS = 30_000L
         private const val SHOW_ERROR_AFTER = 5
+        private const val RESUME_TIMEOUT_MS = 7_000L
+        private const val LIVE_TARGET_OFFSET_MS = 6_000L
 
         const val EXTRA_URL = "extra_url"
         const val EXTRA_NAME = "extra_name"

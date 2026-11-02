@@ -17,4 +17,5 @@
     <string name="player_error_detail">%1$s\n\n%2$s</string>
     <string name="reconnecting_attempt">Reconectando… (tentativa %1$d)</string>
     <string name="stream_ended_by_server">O servidor encerrou a transmissão.</string>
+    <string name="live_badge">● AO VIVO</string>
 </resources>
