@@ -1,0 +1,19 @@
+# Android / Gradle
+.gradle/
+build/
+app/build/
+local.properties
+.kotlin/
+.idea/
+*.iml
+captures/
+
+# Artefatos
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Sistema
+.DS_Store
+Thumbs.db

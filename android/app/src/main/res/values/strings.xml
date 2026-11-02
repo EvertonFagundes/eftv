@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">EFTV</string>
+
+    <string name="search_hint">Buscar canal</string>
+    <string name="loading_channels">Carregando canais...</string>
+    <string name="empty_catalog">A lista não retornou canais.</string>
+    <string name="empty_search">Nenhum canal encontrado para essa busca.</string>
+    <string name="load_error">Não foi possível carregar a lista de canais.</string>
+    <string name="using_cached_list">Sem conexão. Mostrando a última lista salva.</string>
+    <string name="list_truncated">A lista é muito grande e foi limitada para evitar travamentos.</string>
+
+    <string name="retry">Tentar novamente</string>
+    <string name="back">Voltar</string>
+    <string name="refresh">Atualizar lista</string>
+
+    <string name="player_error_title">Não foi possível reproduzir</string>
+    <string name="player_error_detail">%1$s\n\n%2$s</string>
+    <string name="reconnecting_attempt">Reconectando… (tentativa %1$d)</string>
+    <string name="stream_ended_by_server">O servidor encerrou a transmissão.</string>
+</resources>
