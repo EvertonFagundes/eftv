@@ -5,29 +5,35 @@ Não há WebView como interface principal e o usuário **não escolhe** a playli
 
 ## Fonte da playlist (única)
 
-Edite **`app/src/main/java/com/eftv/android/PlaylistConfig.kt`**:
+A URL **não fica no repositório nem no código-fonte**. Ela é lida de
+`local.properties` (arquivo local, ignorado pelo Git) e o build gera
+`PlaylistConfig.kt` automaticamente:
 
-```kotlin
-object PlaylistConfig {
-    const val PLAYLIST_URL: String = "https://sua-fonte-licenciada/..."
-}
+```properties
+# android/local.properties
+EFTV_PLAYLIST_URL=https://sua-fonte-licenciada/...
+EFTV_PLAYLIST_USER_AGENT=VLC/3.0.20 LibVLC/3.0.20
+EFTV_MAX_CHANNELS=100000
 ```
 
+- O arquivo `PlaylistConfig.kt` é **gerado em `app/build/`** a cada build e
+  está no `.gitignore`; não precisa (nem deve) ser editado à mão.
 - O app sempre usa essa constante; não existe tela de configuração.
 - Formato aceito: **M3U / M3U8** (`#EXTM3U` + `#EXTINF`), inclusive o padrão
   Xtream Codes (`get.php?...&type=m3u_plus`).
-- Se `PLAYLIST_URL` ficar vazio, o app carrega
+- Se `EFTV_PLAYLIST_URL` ficar vazio, o app carrega
   `app/src/main/assets/sample_playlist.m3u` (streams públicos de demonstração)
   e mostra `• demo` no subtítulo.
 
 ### Passo a passo para usar a sua lista
 
-1. Abra `app/src/main/java/com/eftv/android/PlaylistConfig.kt`.
-2. Cole a URL licenciada em `PLAYLIST_URL` (entre aspas).
+1. Abra `android/local.properties`.
+2. Preencha `EFTV_PLAYLIST_URL` com a URL licenciada.
 3. Rode o build e instale o APK.
 
 Observação: a URL fica compilada dentro do APK. Qualquer pessoa com o APK
-consegue extraí-la — use credenciais que você possa revogar/trocar.
+consegue extraí-la — use credenciais que você possa revogar/trocar. No modo
+comercial, a URL vem do backend (`GET /player/playlist`), não do APK.
 
 ## O que o app faz
 
@@ -55,12 +61,12 @@ consegue extraí-la — use credenciais que você possa revogar/trocar.
 
 `PlaylistConfig.MAX_CHANNELS` (100.000) evita `OutOfMemory` em listas
 gigantes. Ao chegar no limite o app avisa que a lista foi truncada; aumente o
-valor se o aparelho tiver memória suficiente.
+valor em `local.properties` se o aparelho tiver memória suficiente.
 
 ## Build
 
 ```bash
-cd /home/everton/EFTV-Android
+cd android
 JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleDebug
 ```
 
@@ -84,18 +90,24 @@ adb logcat | grep -Ei "EFTV|ExoPlayer|AndroidRuntime"
 ```
 app/src/main/java/com/eftv/android/
 ├── MainActivity.kt          # lista, busca, categorias
+├── LoginActivity.kt         # login do assinante
 ├── PlayerActivity.kt        # ExoPlayer em tela cheia
-├── PlaylistConfig.kt        # <-- URL da playlist
 ├── data/
 │   ├── Channel.kt
 │   ├── M3uParser.kt
 │   ├── CatalogCache.kt
 │   ├── PlaylistRepository.kt
+│   ├── PlaylistSource.kt
+│   ├── SessionStore.kt
+│   ├── api/EftvApi.kt       # backend central
 │   └── TextUtils.kt
 └── ui/
     ├── ChannelAdapter.kt
     └── CategoryAdapter.kt
 ```
+
+`PlaylistConfig.kt` é gerado em `app/build/generated/source/playlistConfig/`
+com os valores de `local.properties`.
 
 ## Versão antiga (Python/Chaquopy)
 

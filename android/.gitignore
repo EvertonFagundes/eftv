@@ -8,6 +8,9 @@ local.properties
 *.iml
 captures/
 
+# Configuracao local sensivel (playlist). O build gera este arquivo.
+app/src/main/java/com/eftv/android/PlaylistConfig.kt
+
 # Artefatos
 *.apk
 *.aab

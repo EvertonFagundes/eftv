@@ -1,11 +1,65 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
 
+// A playlist licenciada fica em local.properties (ignorado pelo Git).
+// O build gera PlaylistConfig.kt a partir dai; o repositorio nao guarda a URL.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun kotlinString(value: String): String = value
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+    .replace("$", "\\$")
+
+val playlistConfigDir = layout.buildDirectory.dir("generated/source/playlistConfig")
+
+val generatePlaylistConfig by tasks.registering {
+    val url = localProperties.getProperty("EFTV_PLAYLIST_URL", "")
+    val userAgent = localProperties.getProperty("EFTV_PLAYLIST_USER_AGENT", "VLC/3.0.20 LibVLC/3.0.20")
+    val maxChannels = localProperties.getProperty("EFTV_MAX_CHANNELS", "10000")
+    val outputDir = playlistConfigDir
+
+    inputs.property("url", url)
+    inputs.property("userAgent", userAgent)
+    inputs.property("maxChannels", maxChannels)
+    outputs.dir(outputDir)
+
+    doLast {
+        val packageDir = outputDir.get().asFile.resolve("com/eftv/android")
+        packageDir.mkdirs()
+        packageDir.resolve("PlaylistConfig.kt").writeText(
+            """
+            |package com.eftv.android
+            |
+            |/**
+            | * Gerado automaticamente pelo build a partir de local.properties.
+            | * Nao versionar este arquivo.
+            | */
+            |object PlaylistConfig {
+            |    const val PLAYLIST_URL: String = "${kotlinString(url)}"
+            |    const val USER_AGENT: String = "${kotlinString(userAgent)}"
+            |    const val MAX_CHANNELS: Int = ${maxChannels.toIntOrNull() ?: 10000}
+            |}
+            |""".trimMargin()
+        )
+    }
+}
+
 android {
     namespace = "com.eftv.android"
     compileSdk = 34
+
+    sourceSets {
+        getByName("main") {
+            java.srcDir(playlistConfigDir)
+        }
+    }
 
     defaultConfig {
         applicationId = "com.eftv.android"
@@ -17,6 +71,7 @@ android {
         // URL do backend central. Pode ser trocada no build:
         //   ./gradlew assembleDebug -PEFTV_API_URL=https://api.eftv.com.br
         val apiUrl = (project.findProperty("EFTV_API_URL") as String?)
+            ?: localProperties.getProperty("EFTV_API_URL")
             ?: "http://127.0.0.1:8000"
         buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
     }
@@ -81,4 +136,9 @@ dependencies {
     implementation("com.jakewharton.timber:timber:5.0.1")
 
     testImplementation("junit:junit:4.13.2")
+}
+
+// Gera PlaylistConfig.kt sempre antes de compilar.
+tasks.named("preBuild") {
+    dependsOn(generatePlaylistConfig)
 }
