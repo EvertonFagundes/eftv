@@ -8,6 +8,11 @@ __pycache__/
 .venv/
 venv/
 
+# Cobertura de testes
+.coverage
+coverage.xml
+htmlcov/
+
 # Logs e arquivos temporários
 *.log
 *.tmp
