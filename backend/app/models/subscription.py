@@ -44,7 +44,8 @@ class Subscription(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     auto_renew: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    # "metadata" e reservado no SQLAlchemy Declarative; a coluna mantem o nome.
+    extra_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )

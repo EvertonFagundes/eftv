@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, HttpUrl
 
 
 class ChannelBase(BaseModel):
@@ -59,6 +59,12 @@ class ChannelUpdate(BaseModel):
 
 class ChannelResponse(ChannelBase):
     model_config = ConfigDict(from_attributes=True)
+
+    # No ORM o atributo chama-se extra_metadata (metadata e reservado).
+    metadata: dict = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("metadata", "extra_metadata"),
+    )
 
     id: UUID
     created_at: datetime

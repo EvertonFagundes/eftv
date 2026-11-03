@@ -64,6 +64,15 @@ class Settings(BaseSettings):
     STREAM_TOKEN_TTL_SECONDS: int = 900  # 15 min
     STREAM_TOKEN_ISSUER: str = "eftv-api"
 
+    # Playlist IPTV (provedor licenciado) entregue apenas a assinantes ativos
+    IPTV_PLAYLIST_URL: str = ""
+    IPTV_PLAYLIST_USER_AGENT: str = "VLC/3.0.20 LibVLC/3.0.20"
+    IPTV_PLAYLIST_REFERER: str | None = None
+    # De quanto em quanto tempo o app deve revalidar o acesso
+    IPTV_PLAYLIST_REFRESH_SECONDS: int = 300
+    # Tolerancia offline: usa o catalogo salvo mesmo sem falar com o servidor
+    OFFLINE_GRACE_MINUTES: int = 720
+
     # Email (Resend)
     RESEND_API_KEY: str | None = None
     EMAIL_FROM: str = "EFTV <noreply@eftv.com.br>"

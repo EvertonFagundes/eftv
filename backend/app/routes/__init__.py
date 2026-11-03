@@ -4,6 +4,7 @@ from app.routes.auth import router as auth_router
 from app.routes.categories import router as categories_router
 from app.routes.channels import router as channels_router
 from app.routes.plans import router as plans_router
+from app.routes.player import router as player_router
 from app.routes.subscriptions import router as subscriptions_router
 
 __all__ = [
@@ -12,5 +13,6 @@ __all__ = [
     "channels_router",
     "categories_router",
     "subscriptions_router",
+    "player_router",
     "admin_router",
 ]

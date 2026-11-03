@@ -49,7 +49,10 @@ class PlaybackSession(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    # "metadata" e reservado no SQLAlchemy Declarative; a coluna mantem o nome.
+    extra_metadata: Mapped[dict] = mapped_column(
+        "metadata", JSONB, default=dict, nullable=False
+    )
 
     # Relacionamentos
     user: Mapped["User"] = relationship("User", back_populates="playback_sessions", lazy="selectin")

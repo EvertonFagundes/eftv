@@ -2,7 +2,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
     MessageResponse,
+    RefreshTokenRequest,
     Token,
     UserLogin,
     UserRegister,
@@ -147,13 +148,16 @@ async def login(
 async def refresh_token(
     request: Request,
     response: Response,
+    data: RefreshTokenRequest | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Renova access token usando refresh token do cookie HttpOnly.
+    Renova access token usando o refresh token.
+
+    Aceita o token no corpo JSON (app Android) ou no cookie HttpOnly (web).
     """
 
-    refresh_token = request.cookies.get("refresh_token")
+    refresh_token = (data.refresh_token if data else None) or request.cookies.get("refresh_token")
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

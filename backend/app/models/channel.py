@@ -66,8 +66,9 @@ class Channel(Base):
     next_program_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Metadados extras
-    metadata: Mapped[dict] = mapped_column(
-        JSONB, default=dict, nullable=False
+    # "metadata" e reservado no SQLAlchemy Declarative; a coluna mantem o nome.
+    extra_metadata: Mapped[dict] = mapped_column(
+        "metadata", JSONB, default=dict, nullable=False
     )  # Dados extras (origem, qualidade, etc.)
 
     created_at: Mapped[datetime] = mapped_column(

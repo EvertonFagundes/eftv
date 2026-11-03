@@ -15,6 +15,7 @@ from app.routes import (
     categories_router,
     channels_router,
     plans_router,
+    player_router,
     subscriptions_router,
 )
 from app.tasks.subscription_checker import (
@@ -90,6 +91,7 @@ app.include_router(plans_router)
 app.include_router(channels_router)
 app.include_router(categories_router)
 app.include_router(subscriptions_router)
+app.include_router(player_router)
 app.include_router(admin_router)
 
 

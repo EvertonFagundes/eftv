@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
 
 
 class PaymentBase(BaseModel):
@@ -35,7 +35,11 @@ class PaymentResponse(PaymentBase):
     mercadopago_preference_id: str | None
     status: str
     paid_at: datetime | None
-    metadata: dict
+    # No ORM o atributo chama-se extra_metadata (metadata e reservado).
+    metadata: dict = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("metadata", "extra_metadata"),
+    )
     created_at: datetime
 
     @property

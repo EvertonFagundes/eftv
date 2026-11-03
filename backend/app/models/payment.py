@@ -45,8 +45,9 @@ class Payment(Base):
         String(50), nullable=True
     )  # pix, credit_card, boleto, saldo_mp
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    metadata: Mapped[dict] = mapped_column(
-        JSONB, default=dict, nullable=False
+    # "metadata" e reservado no SQLAlchemy Declarative; a coluna mantem o nome.
+    extra_metadata: Mapped[dict] = mapped_column(
+        "metadata", JSONB, default=dict, nullable=False
     )  # Dados brutos do webhook
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
