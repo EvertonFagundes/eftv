@@ -87,7 +87,9 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    # Os campos obrigatorios vem do ambiente/.env; o mypy nao executa o
+    # carregamento dinamico do pydantic-settings.
+    return Settings()  # type: ignore[call-arg]
 
 
 settings = get_settings()

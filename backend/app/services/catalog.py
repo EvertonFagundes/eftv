@@ -33,7 +33,7 @@ async def get_channels_with_categories(
     if is_live is not None:
         query = query.where(Channel.is_live == is_live)
     if not include_adult:
-        query = query.where(not Channel.is_adult)
+        query = query.where(Channel.is_adult.is_(False))
 
     query = query.order_by(Channel.sort_order, Channel.name)
 
@@ -57,9 +57,9 @@ async def get_channel_by_slug(db: AsyncSession, slug: str) -> Channel | None:
 
 async def get_active_categories(db: AsyncSession, include_adult: bool = False) -> list[Category]:
     """Lista categorias ativas ordenadas."""
-    query = select(Category).where(Category.is_active)
+    query = select(Category).where(Category.is_active.is_(True))
     if not include_adult:
-        query = query.where(not Category.is_adult)
+        query = query.where(Category.is_adult.is_(False))
     query = query.order_by(Category.sort_order, Category.name)
 
     result = await db.execute(query)
@@ -86,8 +86,8 @@ async def search_channels(db: AsyncSession, query: str, limit: int = 8) -> list[
     search_term = f"%{query.lower()}%"
     result = await db.execute(
         select(Channel)
-        .where(Channel.is_active)
-        .where(not Channel.is_adult)
+        .where(Channel.is_active.is_(True))
+        .where(Channel.is_adult.is_(False))
         .where(
             or_(
                 Channel.name.ilike(search_term),

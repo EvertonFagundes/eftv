@@ -1,0 +1,100 @@
+# docker-compose.prod.yml - Deploy de producao (API + Postgres + Redis + Caddy/HTTPS)
+#
+# Uso:
+#   cp deploy/.env.example deploy/.env    # preencha DOMAIN e POSTGRES_PASSWORD
+#   cp backend/.env.example backend/.env  # preencha SECRET_KEY e IPTV_PLAYLIST_URL
+#   docker compose --env-file deploy/.env -f docker-compose.prod.yml up -d --build
+#   docker compose --env-file deploy/.env -f docker-compose.prod.yml exec api alembic upgrade head
+#
+# O banco nao expoe porta no host. A API escuta apenas em 127.0.0.1:8000 e o
+# Caddy publica HTTPS na 80/443.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: eftv-prod-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-eftv}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-eftv}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: eftv-prod-redis
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eftv-prod-api
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Sobrescreve o .env local: dentro do compose o banco e o redis sao
+      # acessiveis pelos nomes dos servicos.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-eftv}
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: production
+      DEBUG: "false"
+      HOST: 0.0.0.0
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: eftv-prod-caddy
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?defina DOMAIN em deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  caddydata:
+  caddyconfig:

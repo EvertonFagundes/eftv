@@ -93,7 +93,7 @@ def create_cloudflare_signed_token(
     now = datetime.now(UTC)
     exp = now + timedelta(seconds=expiration_seconds)
 
-    claims = {
+    claims: dict[str, object] = {
         "kid": settings.CLOUDFLARE_ACCOUNT_ID,  # Key ID configurado no Cloudflare
         "video": video_uid,
         "exp": int(exp.timestamp()),
@@ -108,7 +108,7 @@ def create_cloudflare_signed_token(
     # Aqui apenas exemplo - implementação real usa chave Ed25519
     private_key = settings.CLOUDFLARE_API_TOKEN  # Placeholder
 
-    return jwt.encode(claims, private_key, algorithm="EdDSA")
+    return str(jwt.encode(claims, private_key, algorithm="EdDSA"))
 
 
 async def upload_to_cloudflare_stream(
@@ -143,4 +143,4 @@ async def upload_to_cloudflare_stream(
     if response.status_code >= 400:
         raise RuntimeError(f"Erro no upload Cloudflare: {response.status_code} - {response.text}")
 
-    return response.json()["result"]
+    return dict(response.json()["result"])

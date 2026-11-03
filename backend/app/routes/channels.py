@@ -58,7 +58,7 @@ async def list_channels(
         query = query.where(Channel.is_live == is_live)
     if not include_adult:
         # Se não logado ou usuário não tem permissão 18+, oculta adulto
-        query = query.where(not Channel.is_adult)
+        query = query.where(Channel.is_adult.is_(False))
 
     query = query.order_by(Channel.sort_order, Channel.name)
 

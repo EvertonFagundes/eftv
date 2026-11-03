@@ -22,9 +22,9 @@ async def list_categories(
     """Lista categorias (público)."""
     query = select(Category)
     if active_only:
-        query = query.where(Category.is_active)
+        query = query.where(Category.is_active.is_(True))
     if not include_adult:
-        query = query.where(not Category.is_adult)
+        query = query.where(Category.is_adult.is_(False))
     query = query.order_by(Category.sort_order, Category.name)
 
     result = await db.execute(query)

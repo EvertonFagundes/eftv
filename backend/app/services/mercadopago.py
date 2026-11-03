@@ -1,5 +1,6 @@
 # services/mercadopago.py - Integração Mercado Pago
 from datetime import UTC, datetime
+from typing import cast
 
 import httpx
 from sqlalchemy import select
@@ -44,7 +45,7 @@ async def create_checkout_preference(
         raise RuntimeError("MERCADOPAGO_ACCESS_TOKEN não configurado")
 
     # Dados do pagador
-    payer = {"email": payer_email}
+    payer: dict[str, object] = {"email": payer_email}
     if payer_name:
         payer["name"] = payer_name.split()[0]
         payer["surname"] = " ".join(payer_name.split()[1:]) if len(payer_name.split()) > 1 else ""
@@ -59,7 +60,7 @@ async def create_checkout_preference(
         payer["identification"] = {"type": "CPF", "number": payer_cpf}
 
     # URLs de retorno
-    default_back_urls = {
+    default_back_urls: dict[str, str] = {
         "success": f"{settings.FRONTEND_URL}/account?checkout=success",
         "failure": f"{settings.FRONTEND_URL}/account?checkout=failure",
         "pending": f"{settings.FRONTEND_URL}/account?checkout=pending",
@@ -92,7 +93,7 @@ async def create_checkout_preference(
             f"Erro ao criar preferência MP: {response.status_code} - {response.text}"
         )
 
-    return response.json()
+    return cast(dict, response.json())
 
 
 async def get_preapproval(preapproval_id: str) -> dict:
@@ -106,7 +107,7 @@ async def get_preapproval(preapproval_id: str) -> dict:
     if response.status_code >= 400:
         raise RuntimeError(f"Erro ao buscar preapproval: {response.status_code} - {response.text}")
 
-    return response.json()
+    return cast(dict, response.json())
 
 
 async def cancel_preapproval(preapproval_id: str) -> dict:
@@ -123,7 +124,7 @@ async def cancel_preapproval(preapproval_id: str) -> dict:
             f"Erro ao cancelar preapproval: {response.status_code} - {response.text}"
         )
 
-    return response.json()
+    return cast(dict, response.json())
 
 
 async def get_payment(payment_id: str) -> dict:
@@ -137,7 +138,7 @@ async def get_payment(payment_id: str) -> dict:
     if response.status_code >= 400:
         raise RuntimeError(f"Erro ao buscar pagamento: {response.status_code} - {response.text}")
 
-    return response.json()
+    return cast(dict, response.json())
 
 
 async def process_webhook(payload: dict, db) -> None:

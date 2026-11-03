@@ -14,12 +14,12 @@ pwd_context = CryptContext(
 
 def hash_password(password: str) -> str:
     """Gera hash bcrypt da senha."""
-    return pwd_context.hash(password)
+    return str(pwd_context.hash(password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifica senha contra hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bool(pwd_context.verify(plain_password, hashed_password))
 
 
 def create_access_token(user_id: str, extra_claims: dict | None = None) -> tuple[str, str]:
@@ -103,20 +103,21 @@ def decode_token(token: str) -> dict | None:
     """Decodifica e valida token JWT. Retorna payload ou None se inválido."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload
+        return dict(payload)
     except JWTError:
         return None
 
 
 def get_token_type(payload: dict) -> str | None:
     """Extrai tipo do token do payload."""
-    return payload.get("type")
+    token_type = payload.get("type")
+    return token_type if isinstance(token_type, str) else None
 
 
 def is_token_expired(payload: dict) -> bool:
     """Verifica se token expirou baseado no claim exp."""
     exp = payload.get("exp")
-    if not exp:
+    if not isinstance(exp, int | float):
         return True
     return datetime.now(UTC).timestamp() > exp
 
