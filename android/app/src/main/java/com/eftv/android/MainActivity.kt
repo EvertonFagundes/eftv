@@ -10,6 +10,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.eftv.android.data.Channel
 import com.eftv.android.data.PlaylistRepository
+import com.eftv.android.data.PlaylistSource
+import com.eftv.android.data.SessionStore
+import com.eftv.android.data.api.EftvApi
 import com.eftv.android.data.normalizedForSearch
 import com.eftv.android.databinding.ActivityMainBinding
 import com.eftv.android.ui.CategoryAdapter
@@ -27,7 +30,10 @@ import java.util.Date
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val repository by lazy { PlaylistRepository(this) }
+    private val session by lazy { SessionStore(this) }
+    private val api by lazy { EftvApi() }
+    private lateinit var repository: PlaylistRepository
+    private var source: PlaylistSource = PlaylistSource.local()
     private val channelAdapter = ChannelAdapter(::openPlayer)
     private val categoryAdapter = CategoryAdapter(::onCategorySelected)
 
@@ -48,17 +54,24 @@ class MainActivity : AppCompatActivity() {
         setupSearch()
         setupRefresh()
 
-        loadCatalog()
+        startCatalog()
     }
 
     private fun setupToolbar() {
         binding.toolbar.inflateMenu(R.menu.menu_main)
         binding.toolbar.setOnMenuItemClickListener { item ->
-            if (item.itemId == R.id.action_refresh) {
-                refreshCatalog()
-                true
-            } else {
-                false
+            when (item.itemId) {
+                R.id.action_refresh -> {
+                    refreshCatalog()
+                    true
+                }
+
+                R.id.action_logout -> {
+                    logout()
+                    true
+                }
+
+                else -> false
             }
         }
     }
@@ -95,6 +108,98 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
     // Catalogo
     // ------------------------------------------------------------------
+
+    /**
+     * Resolve a origem do catalogo: servidor (assinante autorizado) ou lista
+     * local. Nunca bloqueia o app por causa do backend.
+     */
+    private fun startCatalog() {
+        val skipAuth = intent.getBooleanExtra(EXTRA_SKIP_AUTH, false)
+
+        lifecycleScope.launch {
+            showLoading()
+            source = if (skipAuth) PlaylistSource.local() else resolveSource()
+            repository = PlaylistRepository(this@MainActivity, source)
+            loadCatalog()
+        }
+    }
+
+    private suspend fun resolveSource(): PlaylistSource {
+        val token = session.accessToken()
+        if (token.isNullOrBlank()) return PlaylistSource.local()
+
+        return try {
+            api.playlist(token).toSource()
+        } catch (e: EftvApi.ApiException) {
+            when (e.statusCode) {
+                401 -> {
+                    if (tryRefresh()) {
+                        runCatching { api.playlist(session.accessToken().orEmpty()) }
+                            .getOrNull()?.toSource()
+                            ?: PlaylistSource.local()
+                    } else {
+                        session.clear()
+                        goToLogin()
+                        PlaylistSource.local()
+                    }
+                }
+
+                403 -> {
+                    Toast.makeText(
+                        this@MainActivity,
+                        R.string.subscription_inactive,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    PlaylistSource.local()
+                }
+
+                503 -> {
+                    Timber.w("Servidor sem playlist configurada; usando lista local")
+                    PlaylistSource.local()
+                }
+
+                else -> PlaylistSource.local()
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Backend indisponivel; usando lista local")
+            PlaylistSource.local()
+        }
+    }
+
+    private suspend fun tryRefresh(): Boolean {
+        val refreshToken = session.refreshToken()
+        if (refreshToken.isNullOrBlank()) return false
+
+        return try {
+            val tokens = api.refresh(refreshToken)
+            session.save(tokens, session.email().orEmpty())
+            true
+        } catch (e: Exception) {
+            Timber.w(e, "Nao foi possivel renovar a sessao")
+            false
+        }
+    }
+
+    private fun EftvApi.PlaylistAccess.toSource(): PlaylistSource = PlaylistSource(
+        url = playlistUrl,
+        userAgent = userAgent,
+        referer = referer,
+        fromServer = true,
+    )
+
+    private fun goToLogin() {
+        startActivity(
+            Intent(this, LoginActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+        )
+        finish()
+    }
+
+    private fun logout() {
+        session.clear()
+        goToLogin()
+    }
 
     private fun loadCatalog() {
         lifecycleScope.launch {
@@ -176,7 +281,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             "--:--"
         }
-        val demo = if (PlaylistConfig.PLAYLIST_URL.isBlank()) " • demo" else ""
+        val demo = if (source.url.isBlank()) " • demo" else if (source.fromServer) " • online" else ""
         return "$quantity canais • $time$demo"
     }
 
@@ -232,7 +337,7 @@ class MainActivity : AppCompatActivity() {
                 putExtra(PlayerActivity.EXTRA_LOGO, channel.logo)
                 putExtra(
                     PlayerActivity.EXTRA_USER_AGENT,
-                    channel.userAgent ?: PlaylistConfig.USER_AGENT,
+                    channel.userAgent ?: source.userAgent,
                 )
                 putExtra(PlayerActivity.EXTRA_REFERER, channel.referer)
             }
@@ -262,8 +367,10 @@ class MainActivity : AppCompatActivity() {
         binding.retryButton.visibility = if (showRetry) View.VISIBLE else View.GONE
     }
 
-    private companion object {
+    companion object {
+        const val EXTRA_SKIP_AUTH = "extra_skip_auth"
+
         /** Depois disso, o app tenta atualizar a lista em segundo plano. */
-        const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
+        private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
     }
 }

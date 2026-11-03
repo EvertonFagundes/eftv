@@ -13,6 +13,12 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
+
+        // URL do backend central. Pode ser trocada no build:
+        //   ./gradlew assembleDebug -PEFTV_API_URL=https://api.eftv.com.br
+        val apiUrl = (project.findProperty("EFTV_API_URL") as String?)
+            ?: "http://127.0.0.1:8000"
+        buildConfigField("String", "API_BASE_URL", "\"$apiUrl\"")
     }
 
     buildTypes {
@@ -33,6 +39,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     packaging {

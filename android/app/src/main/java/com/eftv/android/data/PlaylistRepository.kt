@@ -12,13 +12,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.GZIPInputStream
 
-class PlaylistRepository(private val context: Context) {
+class PlaylistRepository(
+    private val context: Context,
+    private val source: PlaylistSource = PlaylistSource.local(),
+) {
 
     private val sourceId: String =
-        if (PlaylistConfig.PLAYLIST_URL.isBlank()) {
+        if (source.url.isBlank()) {
             "assets-v2"
         } else {
-            Integer.toHexString(PlaylistConfig.PLAYLIST_URL.hashCode())
+            Integer.toHexString(source.url.hashCode())
         }
 
     data class Result(
@@ -45,8 +48,8 @@ class PlaylistRepository(private val context: Context) {
                 }
             }
 
-            if (PlaylistConfig.PLAYLIST_URL.isNotBlank()) {
-                openStream(PlaylistConfig.PLAYLIST_URL).use { input ->
+            if (source.url.isNotBlank()) {
+                openStream(source.url).use { input ->
                     input.bufferedReader(Charsets.UTF_8).use { reader ->
                         M3uParser.parse(reader, collect)
                     }
@@ -88,9 +91,12 @@ class PlaylistRepository(private val context: Context) {
             connection.connectTimeout = 20_000
             connection.readTimeout = 120_000
             connection.instanceFollowRedirects = false
-            connection.setRequestProperty("User-Agent", PlaylistConfig.USER_AGENT)
+            connection.setRequestProperty("User-Agent", source.userAgent.ifBlank { PlaylistConfig.USER_AGENT })
             connection.setRequestProperty("Accept", "*/*")
             connection.setRequestProperty("Accept-Encoding", "identity")
+            source.referer?.takeIf { it.isNotBlank() }?.let { referer ->
+                connection.setRequestProperty("Referer", referer)
+            }
             connection.requestMethod = "GET"
 
             val code = connection.responseCode
