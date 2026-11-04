@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- EFTV Brand Colors - Material 3 Tokens -->
+    <color name="primary">#2f9bff</color>
+    <color name="primary_container">#d6e8ff</color>
+    <color name="on_primary">#ffffff</color>
+    <color name="on_primary_container">#001d3e</color>
+    <color name="primary_variant">#0b5bd3</color>
+
+    <color name="secondary">#35a5ff</color>
+    <color name="secondary_container">#d6e8ff</color>
+    <color name="on_secondary">#ffffff</color>
+    <color name="on_secondary_container">#001d3e</color>
+    <color name="secondary_variant">#1e88e5</color>
+
+    <color name="tertiary">#00c853</color>
+    <color name="tertiary_container">#b8f5c4</color>
+    <color name="on_tertiary">#ffffff</color>
+    <color name="on_tertiary_container">#00220b</color>
+
+    <color name="error">#e74c3c</color>
+    <color name="error_container">#fcecec</color>
+    <color name="on_error">#ffffff</color>
+    <color name="on_error_container">#410002</color>
+
+    <color name="surface">#0b1a30</color>
+    <color name="surface_bright">#1e3a5f</color>
+    <color name="surface_dim">#050b16</color>
+    <color name="surface_container_low">#0d1f3a</color>
+    <color name="surface_container_lowest">#050b16</color>
+    <color name="surface_container">#122844</color>
+    <color name="surface_container_high">#1e3a5f</color>
+    <color name="surface_container_highest">#294c7e</color>
+    <color name="on_surface">#cfdcf2</color>
+    <color name="on_surface_variant">#8ba7c7</color>
+
+    <color name="background">#050b16</color>
+    <color name="on_background">#cfdcf2</color>
+
+    <!-- Material 3 required color attributes (exact names theme expects) -->
+    <color name="colorBackground">#050b16</color>
+    <color name="colorSurface">#0b1a30</color>
+    <color name="colorError">#e74c3c</color>
+    <color name="colorPrimary">#2f9bff</color>
+    <color name="colorPrimaryVariant">#0b5bd3</color>
+    <color name="colorSecondary">#35a5ff</color>
+    <color name="colorSecondaryVariant">#1e88e5</color>
+    <color name="colorOnPrimary">#ffffff</color>
+    <color name="colorOnSecondary">#ffffff</color>
+    <color name="colorOnBackground">#cfdcf2</color>
+    <color name="colorOnSurface">#cfdcf2</color>
+    <color name="colorOnError">#ffffff</color>
+
+    <!-- Inverse colors (Material 3) -->
+    <color name="inverse_surface">#dfeff7</color>
+    <color name="inverse_on_surface">#0f1d33</color>
+    <color name="inverse_primary">#0b5bd3</color>
+    <color name="colorInverseSurface">#dfeff7</color>
+    <color name="colorInverseOnSurface">#0f1d33</color>
+    <color name="colorInversePrimary">#0b5bd3</color>
+
+    <!-- Scrim -->
+    <color name="scrim">#000000</color>
+    <color name="colorScrim">#000000</color>
+    <color name="scrim_medium">#80000000</color>
+    <color name="scrim_light">#40000000</color>
+
+    <color name="outline">#2f9bff</color>
+    <color name="outline_variant">#1e3a5f</color>
+
+    <color name="success">#27ae60</color>
+    <color name="success_container">#d5f5e3</color>
+    <color name="on_success_container">#0a3d1e</color>
+
+    <color name="warning">#f39c12</color>
+    <color name="warning_container">#fef9e7</color>
+    <color name="on_warning_container">#4a3000</color>
+
+    <color name="info">#2f9bff</color>
+
+    <!-- Player overlays -->
+    <color name="player_overlay_start">#CC000000</color>
+    <color name="player_overlay_end">#00000000</color>
+
+    <!-- Live badge -->
+    <color name="live_red">#ff3b30</color>
+    <color name="live_red_container">#ff3b30</color>
+
+    <!-- Quality badges -->
+    <color name="quality_4k">#00c853</color>
+    <color name="quality_hd">#2f9bff</color>
+    <color name="quality_sd">#f39c12</color>
+</resources>

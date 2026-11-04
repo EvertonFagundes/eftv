@@ -1,0 +1,11 @@
+#EXTM3U
+# Lista de demonstracao (streams publicos usados para testes de HLS).
+# Substitua a fonte em PlaylistConfig.PLAYLIST_URL pela sua playlist licenciada.
+#EXTINF:-1 tvg-id="demo-bbb" tvg-name="Big Buck Bunny" tvg-logo="" group-title="Demonstração",Big Buck Bunny (HLS)
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="demo-bipbop" tvg-name="Apple BipBop" tvg-logo="" group-title="Demonstração",Apple BipBop (HLS)
+https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
+#EXTINF:-1 tvg-id="demo-tos" tvg-name="Tears of Steel" tvg-logo="" group-title="Demonstração",Tears of Steel (HLS)
+https://test-streams.mux.dev/tos_ismc/main.m3u8
+#EXTINF:-1 tvg-id="demo-tos-us" tvg-name="Tears of Steel DASH" tvg-logo="" group-title="Demonstração",Tears of Steel (Unified Streaming)
+https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8

@@ -1,0 +1,71 @@
+<resources>
+    <string name="app_name">EFTV</string>
+
+    <string name="search_hint">Buscar canal</string>
+    <string name="loading_channels">Carregando canais...</string>
+    <string name="loading_channel">Carregando…</string>
+    <string name="importing_channels">Importando canais… %1$s</string>
+    <string name="empty_catalog">A lista não retornou canais.</string>
+    <string name="empty_search">Nenhum canal encontrado para essa busca.</string>
+    <string name="load_error">Não foi possível carregar a lista de canais.</string>
+    <string name="using_cached_list">Sem conexão. Mostrando a última lista salva.</string>
+
+    <string name="retry">Tentar novamente</string>
+    <string name="back">Voltar</string>
+    <string name="refresh">Atualizar lista</string>
+
+    <!-- Navegacao da lista -->
+    <string name="favorites">Favoritos</string>
+    <string name="recents">Recentes</string>
+    <string name="favorite_add">Adicionar aos favoritos</string>
+    <string name="favorite_remove">Remover dos favoritos</string>
+    <string name="favorite_saved">Canal adicionado aos favoritos</string>
+    <string name="favorite_removed">Canal removido dos favoritos</string>
+    <string name="empty_favorites">Nenhum favorito ainda.\nToque na estrela de um canal para salvar aqui.</string>
+    <string name="empty_recents">Nenhum canal aberto ainda.\nOs últimos canais que você assistir aparecem aqui.</string>
+    <string name="subtitle_total">%1$s canais</string>
+    <string name="subtitle_filtered">%1$s de %2$s canais</string>
+    <string name="status_demo">demo</string>
+    <string name="status_online">online</string>
+    <string name="status_local">local</string>
+
+    <!-- Player controls -->
+    <string name="player_back">Voltar para a lista</string>
+    <string name="player_play">Reproduzir</string>
+    <string name="player_pause">Pausar</string>
+    <string name="player_rewind">Voltar 10s</string>
+    <string name="player_forward">Avançar 30s</string>
+    <string name="player_error_title">Não foi possível reproduzir</string>
+    <string name="player_error_detail">%1$s\n\n%2$s</string>
+    <string name="reconnecting_attempt">Reconectando… (tentativa %1$d)</string>
+    <string name="stream_ended_by_server">O servidor encerrou a transmissão.</string>
+    <string name="live_badge">● AO VIVO</string>
+
+    <!-- Login / assinatura -->
+    <string name="login_subtitle">Entre com sua conta para liberar os canais.</string>
+    <string name="login_email">E-mail</string>
+    <string name="login_password">Senha</string>
+    <string name="login_enter">Entrar</string>
+    <string name="login_offline">Continuar sem assinatura (demonstração)</string>
+    <string name="login_fill_fields">Preencha e-mail e senha.</string>
+    <string name="login_invalid_credentials">E-mail ou senha inválidos.</string>
+    <string name="login_user_disabled">Esta conta está desativada.</string>
+    <string name="login_network_error">Não foi possível falar com o servidor. Verifique a conexão.</string>
+    <string name="login_version">Versão %1$s · %2$s</string>
+    <string name="subscription_inactive">Sua assinatura está inativa. Mostrando a lista local.</string>
+    <string name="logout">Sair da conta</string>
+    <string name="login_remember">Lembrar-me</string>
+    <string name="login_forgot_password">Esqueci a senha</string>
+
+    <!-- Vinculo de aparelho -->
+    <string name="device_title">Aparelho</string>
+    <string name="device_limit_info">Aparelhos vinculados: %1$d de %2$d.\n\nPara trocar de aparelho, desvincule este e entre no outro.</string>
+    <string name="device_current">Este aparelho: %1$s</string>
+    <string name="device_unnamed">Aparelho sem nome</string>
+    <string name="device_revoke">Desvincular este aparelho</string>
+    <string name="device_revoked">Aparelho desvinculado. Ele será vinculado de novo ao usar a assinatura.</string>
+    <string name="device_load_error">Não foi possível consultar os aparelhos agora.</string>
+    <string name="device_blocked_title">Assinatura em uso</string>
+    <string name="device_blocked_default">Esta assinatura já está vinculada ao limite de aparelhos. Desvincule um aparelho para continuar.</string>
+    <string name="close">Fechar</string>
+</resources>

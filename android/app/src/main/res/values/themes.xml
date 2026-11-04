@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme - Sem herança, TODOS os atributos Material3 hardcoded -->
+    <style name="Theme.EFTV" parent="">
+        <!-- Primary -->
+        <item name="colorPrimary">#2f9bff</item>
+        <item name="colorPrimaryContainer">#d6e8ff</item>
+        <item name="colorOnPrimary">#ffffff</item>
+        <item name="colorOnPrimaryContainer">#001d3e</item>
+        <item name="colorPrimaryVariant">#0b5bd3</item>
+
+        <!-- Secondary -->
+        <item name="colorSecondary">#35a5ff</item>
+        <item name="colorSecondaryContainer">#d6e8ff</item>
+        <item name="colorOnSecondary">#ffffff</item>
+        <item name="colorOnSecondaryContainer">#001d3e</item>
+        <item name="colorSecondaryVariant">#1e88e5</item>
+
+        <!-- Tertiary -->
+        <item name="colorTertiary">#00c853</item>
+        <item name="colorTertiaryContainer">#b8f5c4</item>
+        <item name="colorOnTertiary">#ffffff</item>
+        <item name="colorOnTertiaryContainer">#00220b</item>
+
+        <!-- Error -->
+        <item name="colorError">#e74c3c</item>
+        <item name="colorErrorContainer">#fcecec</item>
+        <item name="colorOnError">#ffffff</item>
+        <item name="colorOnErrorContainer">#410002</item>
+
+        <!-- Surface / Background -->
+        <item name="colorSurface">#0b1a30</item>
+        <item name="colorSurfaceBright">#1e3a5f</item>
+        <item name="colorSurfaceDim">#050b16</item>
+        <item name="colorSurfaceContainerLow">#0d1f3a</item>
+        <item name="colorSurfaceContainerLowest">#050b16</item>
+        <item name="colorSurfaceContainer">#122844</item>
+        <item name="colorSurfaceContainerHigh">#1e3a5f</item>
+        <item name="colorSurfaceContainerHighest">#294c7e</item>
+        <item name="colorOnSurface">#cfdcf2</item>
+        <item name="colorOnSurfaceVariant">#8ba7c7</item>
+
+        <item name="colorBackground">#050b16</item>
+        <item name="colorOnBackground">#cfdcf2</item>
+
+        <!-- Material 3 required color attributes (exact names ExoPlayer/M3 expects) -->
+        <item name="colorBackground">#050b16</item>
+        <item name="colorSurface">#0b1a30</item>
+        <item name="colorError">#e74c3c</item>
+        <item name="colorPrimary">#2f9bff</item>
+        <item name="colorPrimaryVariant">#0b5bd3</item>
+        <item name="colorSecondary">#35a5ff</item>
+        <item name="colorSecondaryVariant">#1e88e5</item>
+        <item name="colorOnPrimary">#ffffff</item>
+        <item name="colorOnSecondary">#ffffff</item>
+        <item name="colorOnBackground">#cfdcf2</item>
+        <item name="colorOnSurface">#cfdcf2</item>
+        <item name="colorOnError">#ffffff</item>
+
+        <!-- Inverse colors (Material 3) -->
+        <item name="inverse_surface">#dfeff7</item>
+        <item name="inverse_on_surface">#0f1d33</item>
+        <item name="inverse_primary">#0b5bd3</item>
+        <item name="colorInverseSurface">#dfeff7</item>
+        <item name="colorInverseOnSurface">#0f1d33</item>
+        <item name="colorInversePrimary">#0b5bd3</item>
+
+        <!-- Scrim -->
+        <item name="scrim">#000000</item>
+        <item name="colorScrim">#000000</item>
+        <item name="scrim_medium">#80000000</item>
+        <item name="scrim_light">#40000000</item>
+
+        <item name="outline">#2f9bff</item>
+        <item name="outline_variant">#1e3a5f</item>
+
+        <item name="success">#27ae60</item>
+        <item name="success_container">#d5f5e3</item>
+        <item name="on_success_container">#0a3d1e</item>
+
+        <item name="warning">#f39c12</item>
+        <item name="warning_container">#fef9e7</item>
+        <item name="on_warning_container">#4a3000</item>
+
+        <item name="info">#2f9bff</item>
+
+        <!-- Status/Navigation bars -->
+        <item name="android:statusBarColor">#050b16</item>
+        <item name="android:navigationBarColor">#050b16</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+
+        <!-- Window -->
+        <item name="android:windowBackground">#050b16</item>
+
+        <!-- Text colors -->
+        <item name="android:textColorPrimary">#cfdcf2</item>
+        <item name="android:textColorSecondary">#8ba7c7</item>
+        <item name="android:textColorPrimaryInverse">#050b16</item>
+        <item name="android:textColorSecondaryInverse">#cfdcf2</item>
+    </style>
+
+    <style name="Theme.EFTV.NoActionBar" parent="Theme.EFTV">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
+    <style name="Theme.EFTV.Player" parent="Theme.EFTV">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+    </style>
+
+    <style name="Theme.EFTV.Splash" parent="Theme.EFTV">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+</resources>

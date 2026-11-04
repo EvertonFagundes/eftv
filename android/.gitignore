@@ -1,0 +1,22 @@
+# Android / Gradle
+.gradle/
+build/
+app/build/
+local.properties
+.kotlin/
+.idea/
+*.iml
+captures/
+
+# Configuracao local sensivel (playlist). O build gera este arquivo.
+app/src/main/java/com/eftv/android/PlaylistConfig.kt
+
+# Artefatos
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Sistema
+.DS_Store
+Thumbs.db
