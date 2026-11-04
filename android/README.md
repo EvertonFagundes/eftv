@@ -13,7 +13,6 @@ A URL **não fica no repositório nem no código-fonte**. Ela é lida de
 # android/local.properties
 EFTV_PLAYLIST_URL=https://sua-fonte-licenciada/...
 EFTV_PLAYLIST_USER_AGENT=VLC/3.0.20 LibVLC/3.0.20
-EFTV_MAX_CHANNELS=100000
 ```
 
 - O arquivo `PlaylistConfig.kt` é **gerado em `app/build/`** a cada build e
@@ -38,14 +37,15 @@ comercial, a URL vem do backend (`GET /player/playlist`), não do APK.
 ## O que o app faz
 
 - Baixa e interpreta a playlist (linha a linha, sem carregar o arquivo inteiro).
-- Deduplica por URL, guarda cache local (`catalog.tsv`) e abre instantaneamente
-  nas próximas execuções. O cache é invalidado sozinho quando você troca a
-  `PLAYLIST_URL`.
+- Grava o catálogo em **SQLite** (`catalog.db`) durante a importação: a lista
+  completa não fica na memória. O cache é invalidado sozinho quando você troca
+  a `PLAYLIST_URL`.
+- A lista carrega **100 canais por página**, apenas perto da posição visível.
+  Funciona com centenas de milhares de canais sem `OutOfMemory`.
 - Se o cache tiver mais de 6 horas, tenta atualizar em segundo plano sem
   esconder a lista.
 - Lista canais com logo, nome e categoria; busca por nome (sem acento) e
-  filtro por categoria. A busca é pré-calculada por canal para não travar com
-  listas grandes.
+  filtro por categoria direto no banco, sem varrer a lista inteira no heap.
 - Abre o canal no `PlayerActivity` com ExoPlayer (HLS, MPEG-TS, MP4), com
   áudio foco, pausa ao tirar o fone, tela sempre ligada e botão de tentar de novo.
 - **Reconexão automática ao vivo**: se o servidor encerrar o stream ou houver
@@ -57,11 +57,12 @@ comercial, a URL vem do backend (`GET /player/playlist`), não do APK.
 - Atualização manual pelo ícone no topo ou arrastando a lista para baixo.
 - Itens navegáveis por controle remoto (Android TV / D-pad).
 
-### Limite de segurança
+### Catálogo e memória
 
-`PlaylistConfig.MAX_CHANNELS` (100.000) evita `OutOfMemory` em listas
-gigantes. Ao chegar no limite o app avisa que a lista foi truncada; aumente o
-valor em `local.properties` se o aparelho tiver memória suficiente.
+O catálogo fica em SQLite e a interface mantém só algumas páginas carregadas.
+Não existe mais limite de canais nem aviso de lista truncada: uma lista com
+328 mil canais é importada inteira e navegável. A importação roda em uma
+transação; se o download falhar, o catálogo anterior continua intacto.
 
 ## Build
 
@@ -95,7 +96,7 @@ app/src/main/java/com/eftv/android/
 ├── data/
 │   ├── Channel.kt
 │   ├── M3uParser.kt
-│   ├── CatalogCache.kt
+│   ├── CatalogStore.kt      # SQLite + importacao + paginas
 │   ├── PlaylistRepository.kt
 │   ├── PlaylistSource.kt
 │   ├── SessionStore.kt

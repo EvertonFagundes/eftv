@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.eftv.android.data.Channel
 import com.eftv.android.data.PlaylistRepository
 import com.eftv.android.data.PlaylistSource
@@ -17,9 +18,11 @@ import com.eftv.android.data.normalizedForSearch
 import com.eftv.android.databinding.ActivityMainBinding
 import com.eftv.android.ui.CategoryAdapter
 import com.eftv.android.ui.ChannelAdapter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -34,15 +37,18 @@ class MainActivity : AppCompatActivity() {
     private val api by lazy { EftvApi() }
     private lateinit var repository: PlaylistRepository
     private var source: PlaylistSource = PlaylistSource.local()
-    private val channelAdapter = ChannelAdapter(::openPlayer)
+    private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage)
     private val categoryAdapter = CategoryAdapter(::onCategorySelected)
 
-    private var channels: List<Channel> = emptyList()
     private var selectedGroup: String = CategoryAdapter.ALL
     private var searchQuery: String = ""
+    private var hasCatalog = false
 
     private var refreshJob: Job? = null
     private var filterJob: Job? = null
+    private val pageJobs = HashMap<Int, Job>()
+    private val loadingPages = HashSet<Int>()
+    private var queryGeneration = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +61,11 @@ class MainActivity : AppCompatActivity() {
         setupRefresh()
 
         startCatalog()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::repository.isInitialized) repository.close()
     }
 
     private fun setupToolbar() {
@@ -81,6 +92,20 @@ class MainActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = channelAdapter
             setHasFixedSize(true)
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    if (!::repository.isInitialized) return
+                    val manager = recyclerView.layoutManager as? LinearLayoutManager ?: return
+                    val first = manager.findFirstVisibleItemPosition()
+                    if (first == RecyclerView.NO_POSITION) return
+
+                    val page = first / ChannelAdapter.PAGE_SIZE
+                    channelAdapter.trim(page)
+                    requestPage(page)
+                    requestPage(page + 1)
+                    if (dy < 0) requestPage(page - 1)
+                }
+            })
         }
         binding.categoryList.apply {
             layoutManager = LinearLayoutManager(
@@ -206,7 +231,7 @@ class MainActivity : AppCompatActivity() {
             showLoading()
             val cached = withContext(Dispatchers.IO) { repository.cached() }
             if (cached != null) {
-                applyCatalog(cached.channels, cached.updatedAt)
+                applyCatalog(cached)
                 // Cache antigo: atualiza em segundo plano sem esconder a lista.
                 if (System.currentTimeMillis() - cached.updatedAt > CACHE_TTL_MS) {
                     refreshCatalog()
@@ -218,16 +243,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshCatalog() {
+        if (!::repository.isInitialized) return
         if (refreshJob?.isActive == true) return
 
-        val hasContent = channels.isNotEmpty()
+        val hasContent = hasCatalog
         if (!hasContent) showLoading()
         binding.swipeRefresh.isRefreshing = hasContent
 
         refreshJob = lifecycleScope.launch {
             try {
-                val result = repository.refresh()
-                applyCatalog(result.channels, result.updatedAt)
+                val result = repository.refresh { count ->
+                    runOnUiThread {
+                        if (!hasContent && !isFinishing) {
+                            binding.stateText.text = getString(
+                                R.string.importing_channels,
+                                NumberFormat.getIntegerInstance().format(count),
+                            )
+                        }
+                    }
+                }
+                applyCatalog(result.metadata)
 
                 if (result.error != null) {
                     Toast.makeText(
@@ -236,13 +271,8 @@ class MainActivity : AppCompatActivity() {
                         Toast.LENGTH_LONG,
                     ).show()
                 }
-                if (result.truncated) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        R.string.list_truncated,
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Falha ao carregar o catalogo")
                 if (hasContent) {
@@ -260,18 +290,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun applyCatalog(list: List<Channel>, updatedAt: Long) {
-        channels = list
+    private suspend fun applyCatalog(metadata: com.eftv.android.data.CatalogStore.Metadata) {
+        hasCatalog = metadata.total > 0
 
-        val groups = LinkedHashSet<String>()
-        list.forEach { groups.add(it.group) }
-        categoryAdapter.submit(groups.toList())
+        val groups = withContext(Dispatchers.IO) { repository.catalogStore.groups() }
+        categoryAdapter.submit(groups)
 
         selectedGroup = CategoryAdapter.ALL
-        filterChannels(debounce = 0)
-
-        binding.toolbar.subtitle = buildSubtitle(list.size, updatedAt)
+        binding.toolbar.subtitle = buildSubtitle(metadata.total, metadata.updatedAt)
         binding.swipeRefresh.visibility = View.VISIBLE
+        filterChannels(debounce = 0)
     }
 
     private fun buildSubtitle(count: Int, updatedAt: Long): String {
@@ -291,42 +319,83 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun filterChannels(debounce: Long) {
-        filterJob?.cancel()
+        if (!::repository.isInitialized) return
 
-        val group = selectedGroup
+        filterJob?.cancel()
+        resetPaging()
+
+        val group = selectedGroup.takeUnless { it == CategoryAdapter.ALL }
         val query = searchQuery.normalizedForSearch()
 
         filterJob = lifecycleScope.launch {
             if (debounce > 0) delay(debounce)
 
-            val source = channels
-            val filtered = withContext(Dispatchers.Default) {
-                if (group == CategoryAdapter.ALL && query.isEmpty()) {
-                    source
-                } else {
-                    source.filter { channel ->
-                        (group == CategoryAdapter.ALL || channel.group == group) &&
-                            (query.isEmpty() || channel.searchKey.contains(query))
-                    }
-                }
+            val total = withContext(Dispatchers.IO) {
+                repository.catalogStore.count(group, query)
             }
+            if (!isActive) return@launch
 
-            channelAdapter.submit(filtered)
+            channelAdapter.reset(total)
+            binding.channelList.scrollToPosition(0)
 
-            when {
-                filtered.isNotEmpty() -> binding.stateContainer.visibility = View.GONE
-                source.isEmpty() -> showMessage(
-                    getString(R.string.empty_catalog),
-                    showProgress = false,
-                    showRetry = false,
-                )
-                else -> showMessage(
-                    getString(R.string.empty_search),
+            if (total > 0) {
+                binding.stateContainer.visibility = View.GONE
+                requestPage(0)
+                requestPage(1)
+            } else {
+                showMessage(
+                    getString(if (hasCatalog) R.string.empty_search else R.string.empty_catalog),
                     showProgress = false,
                     showRetry = false,
                 )
             }
         }
+    }
+
+    private fun requestPage(page: Int) {
+        if (page < 0) return
+        if (!::repository.isInitialized) return
+        if (page * ChannelAdapter.PAGE_SIZE >= channelAdapter.itemCount) return
+        if (channelAdapter.isPageLoaded(page)) return
+        if (!loadingPages.add(page)) return
+
+        val generation = queryGeneration
+        val group = selectedGroup.takeUnless { it == CategoryAdapter.ALL }
+        val query = searchQuery.normalizedForSearch()
+
+        val job = lifecycleScope.launch {
+            try {
+                val items = withContext(Dispatchers.IO) {
+                    repository.catalogStore.page(
+                        group = group,
+                        query = query,
+                        limit = ChannelAdapter.PAGE_SIZE,
+                        offset = page * ChannelAdapter.PAGE_SIZE,
+                    )
+                }
+                if (generation == queryGeneration) {
+                    channelAdapter.putPage(page, items)
+                    channelAdapter.trim(page)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Falha ao carregar pagina %d do catalogo", page)
+            } finally {
+                if (generation == queryGeneration) {
+                    loadingPages.remove(page)
+                    pageJobs.remove(page)
+                }
+            }
+        }
+        pageJobs[page] = job
+    }
+
+    private fun resetPaging() {
+        queryGeneration++
+        pageJobs.values.forEach { it.cancel() }
+        pageJobs.clear()
+        loadingPages.clear()
     }
 
     private fun openPlayer(channel: Channel) {

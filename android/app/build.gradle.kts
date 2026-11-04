@@ -22,12 +22,10 @@ val playlistConfigDir = layout.buildDirectory.dir("generated/source/playlistConf
 val generatePlaylistConfig by tasks.registering {
     val url = localProperties.getProperty("EFTV_PLAYLIST_URL", "")
     val userAgent = localProperties.getProperty("EFTV_PLAYLIST_USER_AGENT", "VLC/3.0.20 LibVLC/3.0.20")
-    val maxChannels = localProperties.getProperty("EFTV_MAX_CHANNELS", "10000")
     val outputDir = playlistConfigDir
 
     inputs.property("url", url)
     inputs.property("userAgent", userAgent)
-    inputs.property("maxChannels", maxChannels)
     outputs.dir(outputDir)
 
     doLast {
@@ -44,7 +42,6 @@ val generatePlaylistConfig by tasks.registering {
             |object PlaylistConfig {
             |    const val PLAYLIST_URL: String = "${kotlinString(url)}"
             |    const val USER_AGENT: String = "${kotlinString(userAgent)}"
-            |    const val MAX_CHANNELS: Int = ${maxChannels.toIntOrNull() ?: 10000}
             |}
             |""".trimMargin()
         )

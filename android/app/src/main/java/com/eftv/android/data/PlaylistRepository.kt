@@ -13,9 +13,12 @@ import java.net.URL
 import java.util.zip.GZIPInputStream
 
 class PlaylistRepository(
-    private val context: Context,
+    context: Context,
     private val source: PlaylistSource = PlaylistSource.local(),
 ) {
+
+    private val appContext = context.applicationContext
+    val catalogStore = CatalogStore(appContext)
 
     private val sourceId: String =
         if (source.url.isBlank()) {
@@ -25,61 +28,52 @@ class PlaylistRepository(
         }
 
     data class Result(
-        val channels: List<Channel>,
-        val updatedAt: Long,
+        val metadata: CatalogStore.Metadata,
         val fromCache: Boolean = false,
         val error: Throwable? = null,
-        val truncated: Boolean = false,
     )
 
-    fun cached(): CachedCatalog? = CatalogCache.load(context, sourceId)
+    fun cached(): CatalogStore.Metadata? =
+        catalogStore.metadata()?.takeIf { it.sourceId == sourceId }
 
-    suspend fun refresh(): Result = withContext(Dispatchers.IO) {
+    suspend fun refresh(onProgress: ((Int) -> Unit)? = null): Result = withContext(Dispatchers.IO) {
         try {
-            // Deduplica por URL para nao repetir o mesmo stream.
-            val deduped = LinkedHashMap<String, Channel>()
-            var truncated = false
-
-            val collect: (Channel) -> Unit = { channel ->
-                if (deduped.size < PlaylistConfig.MAX_CHANNELS || deduped.containsKey(channel.url)) {
-                    deduped[channel.url] = channel
-                } else {
-                    truncated = true
-                }
-            }
-
-            if (source.url.isNotBlank()) {
-                openStream(source.url).use { input ->
-                    input.bufferedReader(Charsets.UTF_8).use { reader ->
-                        M3uParser.parse(reader, collect)
+            val metadata = catalogStore.replace(sourceId, onProgress) { onChannel ->
+                if (source.url.isNotBlank()) {
+                    openStream(source.url).use { input ->
+                        input.bufferedReader(Charsets.UTF_8).use { reader ->
+                            M3uParser.parse(reader, onChannel)
+                        }
                     }
-                }
-            } else {
-                context.assets.open("sample_playlist.m3u").bufferedReader(Charsets.UTF_8).use { reader ->
-                    M3uParser.parse(reader, collect)
+                } else {
+                    appContext.assets.open("sample_playlist.m3u").bufferedReader(Charsets.UTF_8)
+                        .use { reader ->
+                            M3uParser.parse(reader, onChannel)
+                        }
                 }
             }
 
-            if (deduped.isEmpty()) {
-                throw IOException("A playlist nao retornou nenhum canal.")
-            }
+            // Cache antigo em TSV nao e mais usado.
+            appContext.deleteFile("catalog.tsv")
+            appContext.deleteFile("catalog.tsv.tmp")
 
-            val channels = deduped.values.toList()
-            val now = System.currentTimeMillis()
-            CatalogCache.save(context, channels, now, sourceId)
-            Timber.i("Playlist carregada: %d canais%s", channels.size, if (truncated) " (truncada)" else "")
-            Result(channels, now, truncated = truncated)
+            Timber.i("Catalogo importado: %d canais", metadata.total)
+            Result(metadata)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.e(e, "Falha ao baixar/processar a playlist")
-            val cache = CatalogCache.load(context, sourceId)
-            if (cache != null) {
-                Result(cache.channels, cache.updatedAt, fromCache = true, error = e)
+            val cached = cached()
+            if (cached != null) {
+                Result(cached, fromCache = true, error = e)
             } else {
                 throw e
             }
         }
+    }
+
+    fun close() {
+        catalogStore.close()
     }
 
     private fun openStream(url: String, maxRedirects: Int = 5): InputStream {
