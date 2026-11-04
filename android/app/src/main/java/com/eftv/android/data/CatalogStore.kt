@@ -3,6 +3,7 @@ package com.eftv.android.data
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.database.sqlite.SQLiteStatement
 import java.io.IOException
 
 /**
@@ -12,7 +13,7 @@ import java.io.IOException
  * e a interface pede apenas a pagina visivel. Assim o app suporta centenas de
  * milhares de canais sem crescer o heap.
  */
-class CatalogStore(context: Context) {
+class CatalogStore private constructor(context: Context) {
 
     private val helper = CatalogDatabase(context.applicationContext)
     private val db: SQLiteDatabase by lazy { helper.writableDatabase }
@@ -172,10 +173,6 @@ class CatalogStore(context: Context) {
         return Metadata(sourceId = sourceId, updatedAt = updatedAt, total = total)
     }
 
-    fun close() {
-        runCatching { helper.close() }
-    }
-
     private fun buildFilter(group: String?, rawQuery: String): Pair<String, List<String>> {
         val clauses = ArrayList<String>(2)
         val args = ArrayList<String>(2)
@@ -198,7 +195,7 @@ class CatalogStore(context: Context) {
     private fun escapeLike(value: String): String =
         value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
-    private fun bindNullable(statement: android.database.sqlite.SQLiteStatement, index: Int, value: String?) {
+    private fun bindNullable(statement: SQLiteStatement, index: Int, value: String?) {
         if (value.isNullOrBlank()) {
             statement.bindNull(index)
         } else {
@@ -206,11 +203,7 @@ class CatalogStore(context: Context) {
         }
     }
 
-    private fun putMeta(
-        statement: android.database.sqlite.SQLiteStatement,
-        key: String,
-        value: String,
-    ) {
+    private fun putMeta(statement: SQLiteStatement, key: String, value: String) {
         statement.clearBindings()
         statement.bindString(1, key)
         statement.bindString(2, value)
@@ -273,6 +266,15 @@ class CatalogStore(context: Context) {
     }
 
     companion object {
+        @Volatile
+        private var instance: CatalogStore? = null
+
+        /** Um unico banco por processo: sobrevive a troca de telas. */
+        fun get(context: Context): CatalogStore =
+            instance ?: synchronized(this) {
+                instance ?: CatalogStore(context.applicationContext).also { instance = it }
+            }
+
         private const val INSERT_CHANNEL = """
             INSERT OR IGNORE INTO channels
                 (tvg_id, name, name_key, group_title, logo, url, user_agent, referer)

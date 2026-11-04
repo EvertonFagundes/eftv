@@ -18,7 +18,7 @@ class PlaylistRepository(
 ) {
 
     private val appContext = context.applicationContext
-    val catalogStore = CatalogStore(appContext)
+    val catalogStore = CatalogStore.get(appContext)
 
     private val sourceId: String =
         if (source.url.isBlank()) {
@@ -70,10 +70,6 @@ class PlaylistRepository(
                 throw e
             }
         }
-    }
-
-    fun close() {
-        catalogStore.close()
     }
 
     private fun openStream(url: String, maxRedirects: Int = 5): InputStream {

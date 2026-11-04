@@ -63,11 +63,6 @@ class MainActivity : AppCompatActivity() {
         startCatalog()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        if (::repository.isInitialized) repository.close()
-    }
-
     private fun setupToolbar() {
         binding.toolbar.inflateMenu(R.menu.menu_main)
         binding.toolbar.setOnMenuItemClickListener { item ->
