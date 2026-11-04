@@ -106,7 +106,9 @@ def create_cloudflare_signed_token(
 
     # A chave privada deve estar configurada no Cloudflare
     # Aqui apenas exemplo - implementação real usa chave Ed25519
-    private_key = settings.CLOUDFLARE_API_TOKEN  # Placeholder
+    private_key = settings.CLOUDFLARE_API_TOKEN or ""
+    if not private_key:
+        raise RuntimeError("CLOUDFLARE_API_TOKEN nao configurado")
 
     return str(jwt.encode(claims, private_key, algorithm="EdDSA"))
 
