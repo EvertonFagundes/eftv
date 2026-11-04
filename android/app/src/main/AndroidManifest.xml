@@ -47,7 +47,7 @@
             android:exported="false"
             android:launchMode="singleTop"
             android:theme="@style/Theme.EFTV.NoActionBar"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
 
         <activity
             android:name=".PlayerActivity"

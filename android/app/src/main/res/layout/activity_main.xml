@@ -30,6 +30,8 @@
         android:hint="@string/search_hint"
         app:boxBackgroundColor="@color/surface"
         app:boxStrokeColor="@color/primary"
+        app:endIconMode="clear_text"
+        app:endIconTint="@color/on_background"
         app:hintTextColor="@color/on_background"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -93,6 +95,16 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@id/swipeRefresh">
+
+        <ImageView
+            android:id="@+id/stateIcon"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_tv"
+            android:tint="#5b7595"
+            android:visibility="gone"
+            tools:visibility="visible" />
 
         <ProgressBar
             android:id="@+id/stateProgress"

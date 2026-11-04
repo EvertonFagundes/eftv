@@ -1,15 +1,26 @@
 package com.eftv.android
 
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 import android.view.View
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.Channel
+import com.eftv.android.data.ChannelMode
 import com.eftv.android.data.PlaylistRepository
 import com.eftv.android.data.PlaylistSource
 import com.eftv.android.data.SessionStore
@@ -37,10 +48,13 @@ class MainActivity : AppCompatActivity() {
     private val api by lazy { EftvApi() }
     private lateinit var repository: PlaylistRepository
     private var source: PlaylistSource = PlaylistSource.local()
-    private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage)
+    private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage, ::toggleFavorite)
     private val categoryAdapter = CategoryAdapter(::onCategorySelected)
 
-    private var selectedGroup: String = CategoryAdapter.ALL
+    private var selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
+    private var selectedMode = ChannelMode.ALL
+    private var selectedGroup: String? = null
+    private var catalogMetadata: CatalogStore.Metadata? = null
     private var searchQuery: String = ""
     private var hasCatalog = false
 
@@ -49,6 +63,11 @@ class MainActivity : AppCompatActivity() {
     private val pageJobs = HashMap<Int, Job>()
     private val loadingPages = HashSet<Int>()
     private var queryGeneration = 0
+
+    private val isTelevision: Boolean by lazy {
+        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,12 +102,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupLists() {
+        val columns = resources.getInteger(R.integer.channel_columns).coerceAtLeast(1)
         binding.channelList.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
+            layoutManager = if (columns > 1) {
+                GridLayoutManager(this@MainActivity, columns)
+            } else {
+                LinearLayoutManager(this@MainActivity)
+            }
             adapter = channelAdapter
             setHasFixedSize(true)
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    if (dy != 0) hideKeyboard()
                     if (!::repository.isInitialized) return
                     val manager = recyclerView.layoutManager as? LinearLayoutManager ?: return
                     val first = manager.findFirstVisibleItemPosition()
@@ -117,6 +142,19 @@ class MainActivity : AppCompatActivity() {
         binding.searchInput.doAfterTextChanged { text ->
             searchQuery = text?.toString().orEmpty()
             filterChannels(debounce = 250)
+        }
+        binding.searchInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE) {
+                hideKeyboard()
+                true
+            } else {
+                false
+            }
+        }
+        // Na TV o teclado deve abrir apenas quando o usuario escolher a busca.
+        if (isTelevision) {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+            binding.searchInput.clearFocus()
         }
     }
 
@@ -285,31 +323,61 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun applyCatalog(metadata: com.eftv.android.data.CatalogStore.Metadata) {
+    private suspend fun applyCatalog(metadata: CatalogStore.Metadata) {
         hasCatalog = metadata.total > 0
+        catalogMetadata = metadata
 
         val groups = withContext(Dispatchers.IO) { repository.catalogStore.groups() }
-        categoryAdapter.submit(groups)
+        categoryAdapter.submit(
+            groups = groups,
+            favoritesLabel = getString(R.string.favorites),
+            recentsLabel = getString(R.string.recents),
+        )
 
-        selectedGroup = CategoryAdapter.ALL
-        binding.toolbar.subtitle = buildSubtitle(metadata.total, metadata.updatedAt)
+        selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
+        selectedMode = ChannelMode.ALL
+        selectedGroup = null
+
+        channelAdapter.setFavorites(withContext(Dispatchers.IO) { repository.catalogStore.favoriteUrls() })
+        binding.toolbar.subtitle = buildSubtitle()
         binding.swipeRefresh.visibility = View.VISIBLE
         filterChannels(debounce = 0)
     }
 
-    private fun buildSubtitle(count: Int, updatedAt: Long): String {
-        val quantity = NumberFormat.getIntegerInstance().format(count)
-        val time = if (updatedAt > 0) {
-            DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(updatedAt))
+    private fun buildSubtitle(shown: Int? = null): CharSequence {
+        val meta = catalogMetadata ?: return ""
+        val number = NumberFormat.getIntegerInstance()
+        val counts = if (shown != null && shown != meta.total) {
+            getString(R.string.subtitle_filtered, number.format(shown), number.format(meta.total))
+        } else {
+            getString(R.string.subtitle_total, number.format(meta.total))
+        }
+
+        val time = if (meta.updatedAt > 0) {
+            DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(meta.updatedAt))
         } else {
             "--:--"
         }
-        val demo = if (source.url.isBlank()) " • demo" else if (source.fromServer) " • online" else ""
-        return "$quantity canais • $time$demo"
+
+        val (status, colorRes) = when {
+            source.url.isBlank() -> getString(R.string.status_demo) to R.color.warning
+            source.fromServer -> getString(R.string.status_online) to R.color.success
+            else -> getString(R.string.status_local) to R.color.on_background
+        }
+
+        val text = "$counts • $time • $status"
+        val dot = ContextCompat.getColor(this, colorRes)
+        return SpannableString("●  $text").apply {
+            setSpan(ForegroundColorSpan(dot), 0, 1, 0)
+        }
     }
 
-    private fun onCategorySelected(group: String) {
-        selectedGroup = group
+    private fun onCategorySelected(category: CategoryAdapter.Category) {
+        selectedCategory = category
+        selectedMode = category.mode
+        selectedGroup = category.group
+        binding.searchInput.clearFocus()
+        hideKeyboard()
         filterChannels(debounce = 0)
     }
 
@@ -319,31 +387,58 @@ class MainActivity : AppCompatActivity() {
         filterJob?.cancel()
         resetPaging()
 
-        val group = selectedGroup.takeUnless { it == CategoryAdapter.ALL }
+        val group = selectedGroup
         val query = searchQuery.normalizedForSearch()
+        val mode = selectedMode
 
         filterJob = lifecycleScope.launch {
             if (debounce > 0) delay(debounce)
 
             val total = withContext(Dispatchers.IO) {
-                repository.catalogStore.count(group, query)
+                repository.catalogStore.count(group, query, mode)
             }
             if (!isActive) return@launch
 
             channelAdapter.reset(total)
             binding.channelList.scrollToPosition(0)
+            binding.toolbar.subtitle = buildSubtitle(total)
+            if (selectedCategory.mode != ChannelMode.ALL) {
+                // Contagem de favoritos/historico sempre atualizada.
+                channelAdapter.setFavorites(
+                    withContext(Dispatchers.IO) { repository.catalogStore.favoriteUrls() }
+                )
+            }
 
             if (total > 0) {
                 binding.stateContainer.visibility = View.GONE
                 requestPage(0)
                 requestPage(1)
+                focusListIfTelevision()
             } else {
                 showMessage(
-                    getString(if (hasCatalog) R.string.empty_search else R.string.empty_catalog),
+                    message = emptyMessage(),
                     showProgress = false,
                     showRetry = false,
+                    iconRes = emptyIcon(),
                 )
             }
+        }
+    }
+
+    private fun emptyMessage(): String = when {
+        selectedMode == ChannelMode.FAVORITES -> getString(R.string.empty_favorites)
+        selectedMode == ChannelMode.RECENTS -> getString(R.string.empty_recents)
+        hasCatalog -> getString(R.string.empty_search)
+        else -> getString(R.string.empty_catalog)
+    }
+
+    private fun emptyIcon(): Int = when (selectedMode) {
+        ChannelMode.FAVORITES -> R.drawable.ic_star_outline
+        ChannelMode.RECENTS -> R.drawable.ic_history
+        else -> if (searchQuery.isNotBlank() || selectedGroup != null) {
+            R.drawable.ic_search
+        } else {
+            R.drawable.ic_tv
         }
     }
 
@@ -355,8 +450,9 @@ class MainActivity : AppCompatActivity() {
         if (!loadingPages.add(page)) return
 
         val generation = queryGeneration
-        val group = selectedGroup.takeUnless { it == CategoryAdapter.ALL }
+        val group = selectedGroup
         val query = searchQuery.normalizedForSearch()
+        val mode = selectedMode
 
         val job = lifecycleScope.launch {
             try {
@@ -366,6 +462,7 @@ class MainActivity : AppCompatActivity() {
                         query = query,
                         limit = ChannelAdapter.PAGE_SIZE,
                         offset = page * ChannelAdapter.PAGE_SIZE,
+                        mode = mode,
                     )
                 }
                 if (generation == queryGeneration) {
@@ -393,7 +490,38 @@ class MainActivity : AppCompatActivity() {
         loadingPages.clear()
     }
 
+    /** Salva/remove o canal dos favoritos e reflete na lista na hora. */
+    private fun toggleFavorite(channel: Channel) {
+        if (!::repository.isInitialized) return
+
+        lifecycleScope.launch {
+            val favorite = withContext(Dispatchers.IO) {
+                val isFavorite = repository.catalogStore.isFavorite(channel.url)
+                repository.catalogStore.setFavorite(channel.url, !isFavorite)
+                !isFavorite
+            }
+            channelAdapter.setFavorites(
+                withContext(Dispatchers.IO) { repository.catalogStore.favoriteUrls() }
+            )
+            Toast.makeText(
+                this@MainActivity,
+                if (favorite) R.string.favorite_saved else R.string.favorite_removed,
+                Toast.LENGTH_SHORT,
+            ).show()
+            if (selectedMode == ChannelMode.FAVORITES) filterChannels(debounce = 0)
+        }
+    }
+
     private fun openPlayer(channel: Channel) {
+        if (::repository.isInitialized) {
+            // Historico em segundo plano; nao atrasa a abertura do canal.
+            lifecycleScope.launch(Dispatchers.IO) {
+                repository.catalogStore.markRecent(channel.url)
+            }
+        }
+
+        binding.searchInput.clearFocus()
+        hideKeyboard()
         startActivity(
             Intent(this, PlayerActivity::class.java).apply {
                 putExtra(PlayerActivity.EXTRA_URL, channel.url)
@@ -409,7 +537,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Estados da tela
+    // Estados e atalhos de navegacao
     // ------------------------------------------------------------------
 
     private fun showLoading() {
@@ -421,14 +549,41 @@ class MainActivity : AppCompatActivity() {
             message ?: getString(R.string.load_error),
             showProgress = false,
             showRetry = true,
+            iconRes = R.drawable.ic_tv,
         )
     }
 
-    private fun showMessage(message: String, showProgress: Boolean, showRetry: Boolean) {
+    private fun showMessage(
+        message: String,
+        showProgress: Boolean,
+        showRetry: Boolean,
+        iconRes: Int = 0,
+    ) {
         binding.stateContainer.visibility = View.VISIBLE
         binding.stateProgress.visibility = if (showProgress) View.VISIBLE else View.GONE
+        binding.stateIcon.visibility = if (iconRes != 0) View.VISIBLE else View.GONE
+        if (iconRes != 0) binding.stateIcon.setImageResource(iconRes)
         binding.stateText.text = message
         binding.retryButton.visibility = if (showRetry) View.VISIBLE else View.GONE
+    }
+
+    private fun hideKeyboard() {
+        val manager = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            ?: return
+        if (manager.isActive) {
+            manager.hideSoftInputFromWindow(binding.searchInput.windowToken, 0)
+        }
+    }
+
+    /** Em TV/controle remoto a lista precisa receber o foco para o D-pad funcionar. */
+    private fun focusListIfTelevision() {
+        if (!isTelevision) return
+        binding.channelList.post {
+            val manager = binding.channelList.layoutManager as? LinearLayoutManager ?: return@post
+            val first = manager.findFirstVisibleItemPosition().coerceAtLeast(0)
+            val view = binding.channelList.findViewHolderForAdapterPosition(first)?.itemView
+            view?.requestFocus() ?: binding.channelList.requestFocus()
+        }
     }
 
     companion object {

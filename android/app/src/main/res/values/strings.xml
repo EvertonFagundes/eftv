@@ -14,6 +14,22 @@
     <string name="back">Voltar</string>
     <string name="refresh">Atualizar lista</string>
 
+    <!-- Navegacao da lista -->
+    <string name="favorites">Favoritos</string>
+    <string name="recents">Recentes</string>
+    <string name="favorite_add">Adicionar aos favoritos</string>
+    <string name="favorite_remove">Remover dos favoritos</string>
+    <string name="favorite_saved">Canal adicionado aos favoritos</string>
+    <string name="favorite_removed">Canal removido dos favoritos</string>
+    <string name="empty_favorites">Nenhum favorito ainda.\nToque na estrela de um canal para salvar aqui.</string>
+    <string name="empty_recents">Nenhum canal aberto ainda.\nOs últimos canais que você assistir aparecem aqui.</string>
+    <string name="subtitle_total">%1$s canais</string>
+    <string name="subtitle_filtered">%1$s de %2$s canais</string>
+    <string name="status_demo">demo</string>
+    <string name="status_online">online</string>
+    <string name="status_local">local</string>
+
+    <string name="player_back">Voltar para a lista</string>
     <string name="player_error_title">Não foi possível reproduzir</string>
     <string name="player_error_detail">%1$s\n\n%2$s</string>
     <string name="reconnecting_attempt">Reconectando… (tentativa %1$d)</string>

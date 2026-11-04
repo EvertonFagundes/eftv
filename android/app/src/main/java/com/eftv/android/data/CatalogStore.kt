@@ -6,6 +6,9 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.database.sqlite.SQLiteStatement
 import java.io.IOException
 
+/** Modo de navegacao da lista principal. */
+enum class ChannelMode { ALL, FAVORITES, RECENTS }
+
 /**
  * Catalogo persistido em SQLite.
  *
@@ -52,21 +55,30 @@ class CatalogStore private constructor(context: Context) {
         return result
     }
 
-    fun count(group: String?, query: String): Int {
+    fun count(group: String?, query: String, mode: ChannelMode = ChannelMode.ALL): Int {
         val (where, args) = buildFilter(group, query)
-        db.rawQuery("SELECT COUNT(*) FROM channels $where", args.toTypedArray()).use { cursor ->
+        db.rawQuery(
+            "SELECT COUNT(*) FROM ${fromClause(mode)} $where",
+            args.toTypedArray(),
+        ).use { cursor ->
             return if (cursor.moveToFirst()) cursor.getInt(0) else 0
         }
     }
 
-    fun page(group: String?, query: String, limit: Int, offset: Int): List<Channel> {
+    fun page(
+        group: String?,
+        query: String,
+        limit: Int,
+        offset: Int,
+        mode: ChannelMode = ChannelMode.ALL,
+    ): List<Channel> {
         val (where, filterArgs) = buildFilter(group, query)
         val args = (filterArgs + limit.toString() + offset.toString()).toTypedArray()
         val sql = """
-            SELECT tvg_id, name, group_title, logo, url, user_agent, referer
-            FROM channels
+            SELECT c.tvg_id, c.name, c.group_title, c.logo, c.url, c.user_agent, c.referer
+            FROM ${fromClause(mode)}
             $where
-            ORDER BY name_key ASC, id ASC
+            ORDER BY ${orderClause(mode)}
             LIMIT ? OFFSET ?
         """.trimIndent()
 
@@ -87,6 +99,52 @@ class CatalogStore private constructor(context: Context) {
             }
         }
         return result
+    }
+
+    // ------------------------------------------------------------------
+    // Favoritos e historico (navegacao rapida)
+    // ------------------------------------------------------------------
+
+    fun favoriteUrls(): Set<String> {
+        val result = HashSet<String>()
+        db.rawQuery("SELECT url FROM favorites", null).use { cursor ->
+            while (cursor.moveToNext()) result.add(cursor.getString(0))
+        }
+        return result
+    }
+
+    fun isFavorite(url: String): Boolean {
+        db.rawQuery("SELECT 1 FROM favorites WHERE url = ? LIMIT 1", arrayOf(url)).use {
+            return it.moveToFirst()
+        }
+    }
+
+    /** Adiciona/remove um favorito e devolve o estado final. */
+    fun setFavorite(url: String, favorite: Boolean): Boolean {
+        if (favorite) {
+            db.execSQL(
+                "INSERT OR REPLACE INTO favorites(url, added_at) VALUES(?, ?)",
+                arrayOf(url, System.currentTimeMillis()),
+            )
+        } else {
+            db.execSQL("DELETE FROM favorites WHERE url = ?", arrayOf(url))
+        }
+        return favorite
+    }
+
+    /** Marca o canal como aberto agora e mantem o historico curto. */
+    fun markRecent(url: String) {
+        db.execSQL(
+            "INSERT OR REPLACE INTO recent(url, opened_at) VALUES(?, ?)",
+            arrayOf(url, System.currentTimeMillis()),
+        )
+        db.execSQL(
+            """
+            DELETE FROM recent WHERE url NOT IN (
+                SELECT url FROM recent ORDER BY opened_at DESC LIMIT $MAX_RECENTS
+            )
+            """.trimIndent()
+        )
     }
 
     /**
@@ -178,18 +236,30 @@ class CatalogStore private constructor(context: Context) {
         val args = ArrayList<String>(2)
 
         if (!group.isNullOrBlank()) {
-            clauses.add("group_title = ?")
+            clauses.add("c.group_title = ?")
             args.add(group)
         }
 
         val query = rawQuery.normalizedForSearch()
         if (query.isNotEmpty()) {
-            clauses.add("name_key LIKE ? ESCAPE '\\'")
+            clauses.add("c.name_key LIKE ? ESCAPE '\\'")
             args.add("%${escapeLike(query)}%")
         }
 
         val where = if (clauses.isEmpty()) "" else "WHERE ${clauses.joinToString(" AND ")}"
         return where to args
+    }
+
+    private fun fromClause(mode: ChannelMode): String = when (mode) {
+        ChannelMode.ALL -> "channels c"
+        ChannelMode.FAVORITES -> "channels c INNER JOIN favorites f ON f.url = c.url"
+        ChannelMode.RECENTS -> "channels c INNER JOIN recent r ON r.url = c.url"
+    }
+
+    private fun orderClause(mode: ChannelMode): String = when (mode) {
+        ChannelMode.ALL -> "c.name_key ASC, c.id ASC"
+        ChannelMode.FAVORITES -> "f.added_at DESC, c.name_key ASC, c.id ASC"
+        ChannelMode.RECENTS -> "r.opened_at DESC, c.name_key ASC, c.id ASC"
     }
 
     private fun escapeLike(value: String): String =
@@ -222,14 +292,17 @@ class CatalogStore private constructor(context: Context) {
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-            db.execSQL("DROP TABLE IF EXISTS channels")
-            db.execSQL("DROP TABLE IF EXISTS channel_groups")
-            db.execSQL("DROP TABLE IF EXISTS meta")
-            createSchema(db)
+            // v2: favoritos e historico. O catalogo importado e preservado.
+            if (oldVersion < 2) createPersonalTables(db)
         }
 
         override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-            onUpgrade(db, oldVersion, newVersion)
+            db.execSQL("DROP TABLE IF EXISTS channels")
+            db.execSQL("DROP TABLE IF EXISTS channel_groups")
+            db.execSQL("DROP TABLE IF EXISTS meta")
+            db.execSQL("DROP TABLE IF EXISTS favorites")
+            db.execSQL("DROP TABLE IF EXISTS recent")
+            createSchema(db)
         }
 
         private fun createSchema(db: SQLiteDatabase) {
@@ -257,11 +330,32 @@ class CatalogStore private constructor(context: Context) {
                 "CREATE TABLE channel_groups (title TEXT PRIMARY KEY, total INTEGER NOT NULL)"
             )
             db.execSQL("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            createPersonalTables(db)
+        }
+
+        private fun createPersonalTables(db: SQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS favorites (
+                    url TEXT PRIMARY KEY,
+                    added_at INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS recent (
+                    url TEXT PRIMARY KEY,
+                    opened_at INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_recent_opened ON recent(opened_at DESC)")
         }
 
         companion object {
             private const val DB_NAME = "catalog.db"
-            private const val DB_VERSION = 1
+            private const val DB_VERSION = 2
         }
     }
 
@@ -281,5 +375,6 @@ class CatalogStore private constructor(context: Context) {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
         private const val PROGRESS_STEP = 5_000
+        private const val MAX_RECENTS = 100
     }
 }

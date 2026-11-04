@@ -69,6 +69,9 @@ class PlayerActivity : AppCompatActivity() {
         volumeControlStream = AudioManager.STREAM_MUSIC
         hideSystemBars()
 
+        binding.playerChannelName.text = channelName
+        if (channelName.isBlank()) binding.playerChannelName.visibility = View.GONE
+        binding.closeButton.setOnClickListener { finish() }
         binding.retryButton.setOnClickListener { startPlayback() }
         binding.backButton.setOnClickListener { finish() }
     }

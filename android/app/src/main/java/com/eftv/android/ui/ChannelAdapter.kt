@@ -1,6 +1,7 @@
 package com.eftv.android.ui
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
@@ -16,14 +17,22 @@ import kotlin.math.abs
 class ChannelAdapter(
     private val onClick: (Channel) -> Unit,
     private val onPageNeeded: (Int) -> Unit,
+    private val onToggleFavorite: (Channel) -> Unit,
 ) : RecyclerView.Adapter<ChannelAdapter.ChannelViewHolder>() {
 
     private val pages = LinkedHashMap<Int, List<Channel>>()
+    private val favoriteUrls = HashSet<String>()
     private var total = 0
 
     fun reset(totalCount: Int) {
         pages.clear()
         total = totalCount
+        notifyDataSetChanged()
+    }
+
+    fun setFavorites(urls: Set<String>) {
+        favoriteUrls.clear()
+        favoriteUrls.addAll(urls)
         notifyDataSetChanged()
     }
 
@@ -87,7 +96,23 @@ class ChannelAdapter(
                 crossfade(true)
             }
 
+            val favorite = favoriteUrls.contains(channel.url)
+            binding.favoriteButton.visibility = View.VISIBLE
+            binding.favoriteButton.isSelected = favorite
+            binding.favoriteButton.setImageResource(
+                if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline
+            )
+            binding.favoriteButton.contentDescription = binding.root.context.getString(
+                if (favorite) R.string.favorite_remove else R.string.favorite_add,
+            )
+            binding.favoriteButton.setOnClickListener { onToggleFavorite(channel) }
+
             binding.root.setOnClickListener { onClick(channel) }
+            // Em TV/controle remoto: OK abre, OK pressionado salva nos favoritos.
+            binding.root.setOnLongClickListener {
+                onToggleFavorite(channel)
+                true
+            }
         }
 
         fun bindPlaceholder() {
@@ -95,7 +120,9 @@ class ChannelAdapter(
             binding.channelName.text = binding.root.context.getString(R.string.loading_channel)
             binding.channelGroup.text = ""
             binding.channelLogo.setImageResource(R.drawable.ic_tv)
+            binding.favoriteButton.visibility = View.INVISIBLE
             binding.root.setOnClickListener(null)
+            binding.root.setOnLongClickListener(null)
         }
     }
 
