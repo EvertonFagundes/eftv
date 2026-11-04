@@ -49,4 +49,16 @@
     <string name="login_version">Versão %1$s · %2$s</string>
     <string name="subscription_inactive">Sua assinatura está inativa. Mostrando a lista local.</string>
     <string name="logout">Sair da conta</string>
+
+    <!-- Vinculo de aparelho -->
+    <string name="device_title">Aparelho</string>
+    <string name="device_limit_info">Aparelhos vinculados: %1$d de %2$d.\n\nPara trocar de aparelho, desvincule este e entre no outro.</string>
+    <string name="device_current">Este aparelho: %1$s</string>
+    <string name="device_unnamed">Aparelho sem nome</string>
+    <string name="device_revoke">Desvincular este aparelho</string>
+    <string name="device_revoked">Aparelho desvinculado. Ele será vinculado de novo ao usar a assinatura.</string>
+    <string name="device_load_error">Não foi possível consultar os aparelhos agora.</string>
+    <string name="device_blocked_title">Assinatura em uso</string>
+    <string name="device_blocked_default">Esta assinatura já está vinculada ao limite de aparelhos. Desvincule um aparelho para continuar.</string>
+    <string name="close">Fechar</string>
 </resources>

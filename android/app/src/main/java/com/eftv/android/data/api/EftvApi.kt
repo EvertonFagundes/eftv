@@ -10,10 +10,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Cliente HTTP do backend central EFTV (login, renovacao de sessao e
- * entrega da playlist autorizada). Sem dependencias externas.
+ * Cliente HTTP do backend central EFTV (login, renovacao de sessao, entrega da
+ * playlist autorizada e vinculo de aparelhos). Sem dependencias externas.
  */
-class EftvApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
+class EftvApi(
+    private val baseUrl: String = BuildConfig.API_BASE_URL,
+    private val deviceId: String? = null,
+    private val deviceName: String? = null,
+) {
 
     data class TokenPair(
         val accessToken: String,
@@ -31,7 +35,23 @@ class EftvApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
         val daysRemaining: Int,
     )
 
-    class ApiException(val statusCode: Int, val detail: String) : IOException(detail)
+    data class DeviceBinding(
+        val deviceId: String,
+        val deviceName: String?,
+        val current: Boolean,
+    )
+
+    data class DeviceAccess(
+        val limit: Int,
+        val bound: Int,
+        val devices: List<DeviceBinding>,
+    )
+
+    class ApiException(
+        val statusCode: Int,
+        val detail: String,
+        val errorCode: String? = null,
+    ) : IOException(detail)
 
     suspend fun login(email: String, password: String): TokenPair {
         val body = JSONObject()
@@ -59,6 +79,33 @@ class EftvApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
         )
     }
 
+    suspend fun deviceAccess(accessToken: String): DeviceAccess {
+        val json = request("GET", "/player/device", accessToken = accessToken)
+        val array = json.optJSONArray("devices")
+        val devices = buildList {
+            for (index in 0 until (array?.length() ?: 0)) {
+                val item = array?.optJSONObject(index) ?: continue
+                add(
+                    DeviceBinding(
+                        deviceId = item.optString("device_id"),
+                        deviceName = item.optString("device_name").takeIf { it.isNotBlank() },
+                        current = item.optBoolean("current", false),
+                    )
+                )
+            }
+        }
+        return DeviceAccess(
+            limit = json.optInt("limit", 1),
+            bound = json.optInt("bound", devices.size),
+            devices = devices,
+        )
+    }
+
+    suspend fun revokeDevice(accessToken: String): String {
+        val json = request("POST", "/player/device/revoke", accessToken = accessToken)
+        return json.optString("message", "")
+    }
+
     private fun tokenPair(json: JSONObject) = TokenPair(
         accessToken = json.getString("access_token"),
         refreshToken = json.optString("refresh_token", ""),
@@ -81,6 +128,8 @@ class EftvApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("User-Agent", "EFTV-Android/${BuildConfig.VERSION_NAME}")
             accessToken?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+            deviceId?.let { connection.setRequestProperty("X-Device-Id", it) }
+            deviceName?.let { connection.setRequestProperty("X-Device-Name", it) }
 
             if (body != null) {
                 connection.doOutput = true
@@ -93,14 +142,29 @@ class EftvApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
 
             if (code !in 200..299) {
-                val detail = runCatching { JSONObject(text).optString("detail") }.getOrDefault("")
+                val (detail, errorCode) = parseError(text)
                 Timber.w("API %s %s -> HTTP %d %s", method, path, code, detail)
-                throw ApiException(code, detail.ifBlank { "HTTP $code" })
+                throw ApiException(code, detail.ifBlank { "HTTP $code" }, errorCode)
             }
 
             if (text.isBlank()) JSONObject() else JSONObject(text)
         } finally {
             connection.disconnect()
+        }
+    }
+
+    /**
+     * O backend responde `detail` como texto ou como objeto
+     * `{code, message}` nos erros de vinculo de aparelho.
+     */
+    private fun parseError(text: String): Pair<String, String?> {
+        val root = runCatching { JSONObject(text) }.getOrNull() ?: return "" to null
+        return when (val detail = root.opt("detail")) {
+            is JSONObject -> detail.optString("message") to
+                detail.optString("code").takeIf { it.isNotBlank() }
+
+            is String -> detail to null
+            else -> "" to null
         }
     }
 }

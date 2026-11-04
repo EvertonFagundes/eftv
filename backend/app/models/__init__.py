@@ -1,6 +1,7 @@
 # models/__init__.py - Exporta todos os models
 from app.models.category import Category
 from app.models.channel import Channel
+from app.models.device import SubscriptionDevice
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.playback_session import PlaybackSession
@@ -15,4 +16,5 @@ __all__ = [
     "Category",
     "Channel",
     "PlaybackSession",
+    "SubscriptionDevice",
 ]

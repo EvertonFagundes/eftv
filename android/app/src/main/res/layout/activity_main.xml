@@ -102,8 +102,8 @@
             android:layout_height="56dp"
             android:importantForAccessibility="no"
             android:src="@drawable/ic_tv"
-            android:tint="#5b7595"
             android:visibility="gone"
+            app:tint="#5b7595"
             tools:visibility="visible" />
 
         <ProgressBar

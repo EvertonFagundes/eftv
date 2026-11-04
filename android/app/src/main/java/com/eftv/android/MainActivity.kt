@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.Channel
 import com.eftv.android.data.ChannelMode
+import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.PlaylistRepository
 import com.eftv.android.data.PlaylistSource
 import com.eftv.android.data.SessionStore
@@ -29,6 +30,7 @@ import com.eftv.android.data.normalizedForSearch
 import com.eftv.android.databinding.ActivityMainBinding
 import com.eftv.android.ui.CategoryAdapter
 import com.eftv.android.ui.ChannelAdapter
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,7 +47,10 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val session by lazy { SessionStore(this) }
-    private val api by lazy { EftvApi() }
+    private val device by lazy { DeviceIdentity(this) }
+    private val api by lazy {
+        EftvApi(deviceId = device.id, deviceName = device.name)
+    }
     private lateinit var repository: PlaylistRepository
     private var source: PlaylistSource = PlaylistSource.local()
     private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage, ::toggleFavorite)
@@ -87,7 +92,12 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_refresh -> {
-                    refreshCatalog()
+                    refreshCatalog(revalidateSource = true)
+                    true
+                }
+
+                R.id.action_device -> {
+                    showDeviceDialog()
                     true
                 }
 
@@ -159,8 +169,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRefresh() {
-        binding.swipeRefresh.setOnRefreshListener { refreshCatalog() }
-        binding.retryButton.setOnClickListener { refreshCatalog() }
+        binding.swipeRefresh.setOnRefreshListener { refreshCatalog(revalidateSource = true) }
+        binding.retryButton.setOnClickListener { refreshCatalog(revalidateSource = true) }
     }
 
     // ------------------------------------------------------------------
@@ -176,7 +186,16 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             showLoading()
-            source = if (skipAuth) PlaylistSource.local() else resolveSource()
+            source = if (skipAuth) {
+                PlaylistSource.local()
+            } else {
+                try {
+                    resolveSource()
+                } catch (e: DeviceBlockedException) {
+                    showDeviceBlocked(e.message.orEmpty())
+                    return@launch
+                }
+            }
             repository = PlaylistRepository(this@MainActivity, source)
             loadCatalog()
         }
@@ -192,9 +211,18 @@ class MainActivity : AppCompatActivity() {
             when (e.statusCode) {
                 401 -> {
                     if (tryRefresh()) {
-                        runCatching { api.playlist(session.accessToken().orEmpty()) }
-                            .getOrNull()?.toSource()
-                            ?: PlaylistSource.local()
+                        try {
+                            api.playlist(session.accessToken().orEmpty()).toSource()
+                        } catch (retry: EftvApi.ApiException) {
+                            // Renovou a sessao, mas o aparelho continua barrado.
+                            if (retry.isDeviceBlock()) throw DeviceBlockedException(retry.detail)
+                            Toast.makeText(
+                                this@MainActivity,
+                                R.string.subscription_inactive,
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            PlaylistSource.local()
+                        }
                     } else {
                         session.clear()
                         goToLogin()
@@ -203,6 +231,10 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 403 -> {
+                    if (e.isDeviceBlock()) {
+                        // Nao cai para a lista local: o aparelho nao esta autorizado.
+                        throw DeviceBlockedException(e.detail)
+                    }
                     Toast.makeText(
                         this@MainActivity,
                         R.string.subscription_inactive,
@@ -237,6 +269,52 @@ class MainActivity : AppCompatActivity() {
             false
         }
     }
+
+    /**
+     * Revalida o acesso ao servidor ao atualizar manualmente.
+     *
+     * Diferente da abertura do app, uma falha de rede aqui mantem a origem
+     * atual (nao troca a playlist por uma lista local). Bloqueio de aparelho e
+     * assinatura inativa sao aplicados na hora.
+     */
+    private suspend fun revalidateServerAccess() {
+        val token = session.accessToken() ?: return
+
+        try {
+            source = api.playlist(token).toSource()
+        } catch (e: EftvApi.ApiException) {
+            when {
+                e.statusCode == 401 && tryRefresh() -> {
+                    val renewed = session.accessToken().orEmpty()
+                    try {
+                        source = api.playlist(renewed).toSource()
+                    } catch (retry: EftvApi.ApiException) {
+                        if (retry.isDeviceBlock()) throw DeviceBlockedException(retry.detail)
+                    }
+                }
+
+                e.statusCode == 403 && e.isDeviceBlock() -> throw DeviceBlockedException(e.detail)
+
+                e.statusCode == 403 -> Toast.makeText(
+                    this@MainActivity,
+                    R.string.subscription_inactive,
+                    Toast.LENGTH_LONG,
+                ).show()
+
+                else -> Timber.w(
+                    "Revalidacao indisponivel (HTTP %d); mantendo origem atual",
+                    e.statusCode,
+                )
+            }
+        } catch (e: DeviceBlockedException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "Revalidacao falhou; mantendo a origem atual")
+        }
+    }
+
+    private fun EftvApi.ApiException.isDeviceBlock(): Boolean =
+        errorCode == "device_limit" || errorCode == "device_id_missing"
 
     private fun EftvApi.PlaylistAccess.toSource(): PlaylistSource = PlaylistSource(
         url = playlistUrl,
@@ -275,7 +353,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun refreshCatalog() {
+    private fun refreshCatalog(revalidateSource: Boolean = false) {
         if (!::repository.isInitialized) return
         if (refreshJob?.isActive == true) return
 
@@ -285,6 +363,20 @@ class MainActivity : AppCompatActivity() {
 
         refreshJob = lifecycleScope.launch {
             try {
+                if (revalidateSource) {
+                    val skipAuth = intent.getBooleanExtra(EXTRA_SKIP_AUTH, false)
+                    if (!skipAuth) {
+                        try {
+                            revalidateServerAccess()
+                        } catch (e: DeviceBlockedException) {
+                            showDeviceBlocked(e.message.orEmpty())
+                            return@launch
+                        }
+                        // O vinculo pode ter mudado a origem (servidor x local).
+                        repository = PlaylistRepository(this@MainActivity, source)
+                    }
+                }
+
                 val result = repository.refresh { count ->
                     runOnUiThread {
                         if (!hasContent && !isFinishing) {
@@ -369,8 +461,7 @@ class MainActivity : AppCompatActivity() {
         val dot = ContextCompat.getColor(this, colorRes)
         return SpannableString("●  $text").apply {
             setSpan(ForegroundColorSpan(dot), 0, 1, 0)
-        }
-    }
+        }    }
 
     private fun onCategorySelected(category: CategoryAdapter.Category) {
         selectedCategory = category
@@ -575,6 +666,91 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Vinculo de aparelho
+    // ------------------------------------------------------------------
+
+    private fun showDeviceBlocked(message: String) {
+        val detail = message.ifBlank { getString(R.string.device_blocked_default) }
+        showMessage(
+            message = detail,
+            showProgress = false,
+            showRetry = false,
+            iconRes = R.drawable.ic_devices,
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.device_blocked_title)
+            .setMessage(detail)
+            .setPositiveButton(R.string.retry) { _, _ -> recreate() }
+            .setNegativeButton(R.string.logout) { _, _ -> logout() }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun showDeviceDialog() {
+        val token = session.accessToken()
+        if (token.isNullOrBlank()) {
+            goToLogin()
+            return
+        }
+
+        lifecycleScope.launch {
+            val access = try {
+                withContext(Dispatchers.IO) { api.deviceAccess(token) }
+            } catch (e: Exception) {
+                Timber.w(e, "Falha ao consultar aparelhos")
+                Toast.makeText(
+                    this@MainActivity,
+                    R.string.device_load_error,
+                    Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+            if (isFinishing) return@launch
+
+            val current = access.devices.firstOrNull { it.current }
+            val message = buildString {
+                append(getString(R.string.device_limit_info, access.bound, access.limit))
+                if (current != null) {
+                    append("\n\n")
+                    append(
+                        getString(
+                            R.string.device_current,
+                            current.deviceName ?: getString(R.string.device_unnamed),
+                        )
+                    )
+                }
+            }
+
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(R.string.device_title)
+                .setMessage(message)
+                .setPositiveButton(R.string.device_revoke) { _, _ -> revokeCurrentDevice(token) }
+                .setNegativeButton(R.string.close, null)
+                .show()
+        }
+    }
+
+    private fun revokeCurrentDevice(token: String) {
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) { api.revokeDevice(token) }
+                Toast.makeText(
+                    this@MainActivity,
+                    R.string.device_revoked,
+                    Toast.LENGTH_LONG,
+                ).show()
+            } catch (e: Exception) {
+                Timber.w(e, "Falha ao desvincular o aparelho")
+                Toast.makeText(
+                    this@MainActivity,
+                    e.message ?: getString(R.string.device_load_error),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
     /** Em TV/controle remoto a lista precisa receber o foco para o D-pad funcionar. */
     private fun focusListIfTelevision() {
         if (!isTelevision) return
@@ -592,4 +768,6 @@ class MainActivity : AppCompatActivity() {
         /** Depois disso, o app tenta atualizar a lista em segundo plano. */
         private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
     }
+
+    private class DeviceBlockedException(message: String) : Exception(message)
 }

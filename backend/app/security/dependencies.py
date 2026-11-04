@@ -1,7 +1,7 @@
 # security/dependencies.py - Dependencies de autenticação e autorização
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.auth_service import decode_token, get_token_type, is_token_expired
+from app.services.devices import InvalidDeviceError, normalize_device_id
 
 security = HTTPBearer(auto_error=False)
 
@@ -146,6 +147,22 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
             detail="Acesso restrito a administradores",
         )
     return user
+
+
+async def get_device_id(
+    x_device_id: str | None = Header(default=None, alias="X-Device-Id"),
+) -> str:
+    """
+    Identificador estavel do aparelho, gerado pelo app na primeira execucao.
+    Nao e dado de hardware: e um UUID aleatorio por instalacao.
+    """
+    try:
+        return normalize_device_id(x_device_id)
+    except InvalidDeviceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "device_id_missing", "message": str(exc)},
+        ) from exc
 
 
 async def get_device_fingerprint(request: Request) -> str:

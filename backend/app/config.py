@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     IPTV_PLAYLIST_REFRESH_SECONDS: int = 300
     # Tolerancia offline: usa o catalogo salvo mesmo sem falar com o servidor
     OFFLINE_GRACE_MINUTES: int = 720
+    # Limite de aparelhos quando o plano nao define um valor proprio
+    MAX_DEVICES_PER_SUBSCRIPTION: int = 1
 
     # Email (Resend)
     RESEND_API_KEY: str | None = None

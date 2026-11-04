@@ -63,6 +63,7 @@ Preencha no minimo:
 SECRET_KEY=<saida de: openssl rand -hex 32>
 IPTV_PLAYLIST_URL=<url licenciada do provedor>
 IPTV_PLAYLIST_USER_AGENT=VLC/3.0.20 LibVLC/3.0.20
+MAX_DEVICES_PER_SUBSCRIPTION=1
 CORS_ORIGINS=["https://app.eftv.com.br"]
 FRONTEND_URL=https://app.eftv.com.br
 ```

@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.category import Category
 from app.models.channel import Channel
+from app.models.device import SubscriptionDevice
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.security.dependencies import require_admin
+from app.services.devices import revoke_all_devices
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -94,6 +96,14 @@ async def get_user(
     sub_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
     subscriptions = sub_result.scalars().all()
 
+    devices_result = await db.execute(
+        select(SubscriptionDevice)
+        .where(SubscriptionDevice.subscription_id.in_([s.id for s in subscriptions]))
+        .where(SubscriptionDevice.revoked_at.is_(None))
+        .order_by(SubscriptionDevice.last_seen_at.desc())
+    )
+    devices = devices_result.scalars().all() if subscriptions else []
+
     return {
         "user": {
             "id": user.id,
@@ -115,7 +125,31 @@ async def get_user(
             }
             for s in subscriptions
         ],
+        "devices": [
+            {
+                "device_id": d.device_id,
+                "device_name": d.device_name,
+                "bound_at": d.created_at,
+                "last_seen_at": d.last_seen_at,
+            }
+            for d in devices
+        ],
     }
+
+
+@router.post("/users/{user_id}/devices/revoke")
+async def revoke_user_devices(
+    user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
+):
+    """Desvincula todos os aparelhos do usuario (suporte ao cliente)."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+
+    ids_result = await db.execute(select(Subscription.id).where(Subscription.user_id == user_id))
+    subscription_ids = list(ids_result.scalars().all())
+    revoked = await revoke_all_devices(db, subscription_ids)
+    return {"revoked": revoked}
 
 
 @router.patch("/users/{user_id}/toggle-admin")

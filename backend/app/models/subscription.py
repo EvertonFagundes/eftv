@@ -16,6 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.device import SubscriptionDevice
     from app.models.plan import Plan
     from app.models.user import User
 
@@ -59,6 +60,9 @@ class Subscription(Base):
     # Relacionamentos
     user: Mapped["User"] = relationship("User", back_populates="subscriptions", lazy="selectin")
     plan: Mapped["Plan"] = relationship("Plan", back_populates="subscriptions", lazy="selectin")
+    devices: Mapped[list["SubscriptionDevice"]] = relationship(
+        "SubscriptionDevice", back_populates="subscription", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_subscriptions_user_status", "user_id", "status"),

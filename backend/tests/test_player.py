@@ -7,6 +7,12 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.routes.player import router
 from app.security.dependencies import get_current_active_subscription
+from app.services.devices import DeviceLimitError
+
+DEVICE_HEADERS = {
+    "X-Device-Id": "test-device-0001",
+    "X-Device-Name": "Aparelho de teste",
+}
 
 
 class FakeSubscription:
@@ -23,7 +29,11 @@ def build_client(days: int = 20) -> TestClient:
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(monkeypatch) -> TestClient:
+    async def noop_bind(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.player.bind_device", noop_bind)
     return build_client()
 
 
@@ -32,7 +42,7 @@ def test_playlist_access_returns_configured_source(client, monkeypatch):
     monkeypatch.setattr(settings, "IPTV_PLAYLIST_USER_AGENT", "VLC/3.0.20 LibVLC/3.0.20")
     monkeypatch.setattr(settings, "IPTV_PLAYLIST_REFERER", None)
 
-    response = client.get("/player/playlist")
+    response = client.get("/player/playlist", headers=DEVICE_HEADERS)
 
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
@@ -44,10 +54,32 @@ def test_playlist_access_returns_configured_source(client, monkeypatch):
     assert body["subscription"]["days_remaining"] >= 19
 
 
+def test_playlist_requires_device_id(client, monkeypatch):
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/list.m3u")
+
+    response = client.get("/player/playlist")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json()["detail"]["code"] == "device_id_missing"
+
+
+def test_playlist_rejects_when_device_limit_reached(monkeypatch):
+    async def deny_bind(*args, **kwargs):
+        raise DeviceLimitError()
+
+    monkeypatch.setattr("app.routes.player.bind_device", deny_bind)
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/list.m3u")
+
+    response = build_client().get("/player/playlist", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["detail"]["code"] == "device_limit"
+
+
 def test_playlist_not_configured_returns_503(client, monkeypatch):
     monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "")
 
-    response = client.get("/player/playlist")
+    response = client.get("/player/playlist", headers=DEVICE_HEADERS)
 
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 
@@ -64,6 +96,6 @@ def test_playlist_requires_active_subscription():
 
     app.dependency_overrides[get_current_active_subscription] = deny
 
-    response = TestClient(app).get("/player/playlist")
+    response = TestClient(app).get("/player/playlist", headers=DEVICE_HEADERS)
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
