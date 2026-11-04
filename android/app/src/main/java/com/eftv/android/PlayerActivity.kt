@@ -18,6 +18,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -101,6 +102,7 @@ class PlayerActivity : AppCompatActivity() {
         preparePlayer()
     }
 
+    @androidx.annotation.OptIn(UnstableApi::class)
     private fun preparePlayer() {
         releasePlayer()
 
@@ -163,6 +165,10 @@ class PlayerActivity : AppCompatActivity() {
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
+                    Player.STATE_IDLE -> {
+                        // Aguardando prepare/reconexao; nada a fazer aqui.
+                    }
+
                     Player.STATE_BUFFERING -> {
                         // Travadinha momentanea: o proprio ExoPlayer reabastece.
                         Timber.d("Buffering em %d ms", player?.bufferedPosition)

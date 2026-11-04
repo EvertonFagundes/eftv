@@ -13,6 +13,7 @@
     <application
         android:name=".EftvApplication"
         android:allowBackup="true"
+        android:banner="@drawable/tv_banner"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -26,7 +27,6 @@
         <activity
             android:name=".LoginActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.EFTV.NoActionBar"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -45,7 +45,6 @@
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|uiMode"
             android:exported="false"
-            android:label="@string/app_name"
             android:launchMode="singleTop"
             android:theme="@style/Theme.EFTV.NoActionBar"
             android:windowSoftInputMode="adjustResize" />

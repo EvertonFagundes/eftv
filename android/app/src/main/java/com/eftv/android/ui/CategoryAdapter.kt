@@ -32,16 +32,20 @@ class CategoryAdapter(
     }
 
     override fun onBindViewHolder(holder: CategoryViewHolder, position: Int) {
-        val label = items[position]
-        holder.binding.root.text = label
-        holder.binding.root.isChecked = position == selectedPosition
-        holder.binding.root.setOnClickListener {
-            if (position == selectedPosition) return@setOnClickListener
+        val binding = holder.binding
+        binding.root.text = items[position]
+        binding.root.isChecked = position == selectedPosition
+        binding.root.setOnClickListener {
+            // A posicao do bind pode ficar velha se a lista mudar; consulta a atual.
+            val current = holder.bindingAdapterPosition
+            if (current == RecyclerView.NO_POSITION || current == selectedPosition) {
+                return@setOnClickListener
+            }
             val previous = selectedPosition
-            selectedPosition = position
+            selectedPosition = current
             notifyItemChanged(previous)
-            notifyItemChanged(position)
-            onSelected(label)
+            notifyItemChanged(current)
+            onSelected(items[current])
         }
     }
 
