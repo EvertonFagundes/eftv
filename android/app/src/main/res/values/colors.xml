@@ -2,6 +2,7 @@
 <resources>
     <!-- EFTV Brand Colors - Material 3 Tokens -->
     <color name="primary">#2f9bff</color>
+    <color name="primary_dark">#050b16</color>
     <color name="primary_container">#d6e8ff</color>
     <color name="on_primary">#ffffff</color>
     <color name="on_primary_container">#001d3e</color>

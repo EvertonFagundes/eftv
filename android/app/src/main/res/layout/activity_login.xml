@@ -43,7 +43,7 @@
             android:layout_marginTop="20dp"
             android:letterSpacing="0.06"
             android:text="@string/app_name"
-            android:textAppearance="@style/TextAppearance.EFTV.HeadlineMedium"
+            android:textAppearance="@style/TextAppearance.Material3.HeadlineMedium"
             android:textColor="@color/primary" />
 
         <TextView
@@ -53,7 +53,7 @@
             android:gravity="center"
             android:lineSpacingExtra="4dp"
             android:text="@string/login_subtitle"
-            android:textAppearance="@style/TextAppearance.EFTV.BodyMedium"
+            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
             android:textColor="@color/on_surface_variant" />
 
         <com.google.android.material.textfield.TextInputLayout
@@ -79,7 +79,7 @@
                 android:imeOptions="actionNext"
                 android:inputType="textEmailAddress"
                 android:singleLine="true"
-                android:textAppearance="@style/TextAppearance.EFTV.BodyLarge"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 android:textColor="@color/on_background" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -108,7 +108,7 @@
                 android:imeOptions="actionDone"
                 android:inputType="textPassword"
                 android:singleLine="true"
-                android:textAppearance="@style/TextAppearance.EFTV.BodyLarge"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 android:textColor="@color/on_background" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -125,7 +125,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/login_remember"
-                android:textAppearance="@style/TextAppearance.EFTV.BodySmall"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 android:textColor="@color/on_surface_variant"
                 app:buttonTint="@color/primary" />
 
@@ -139,18 +139,18 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/login_forgot_password"
-                android:textAppearance="@style/TextAppearance.EFTV.LabelSmall"
+                android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
                 android:textColor="@color/primary" />
         </LinearLayout>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/loginButton"
-            style="@style/Widget.Material3.Button.Filled"
+            style="@style/Widget.Material3.Button"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="24dp"
             android:text="@string/login_enter"
-            android:textAppearance="@style/TextAppearance.EFTV.LabelLarge"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
             app:cornerRadius="16dp" />
 
         <ProgressBar
@@ -171,7 +171,7 @@
             android:layout_marginTop="16dp"
             android:gravity="center"
             android:lineSpacingExtra="3dp"
-            android:textAppearance="@style/TextAppearance.EFTV.BodySmall"
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
             android:textColor="@color/error"
             android:visibility="gone"
             tools:text="Credenciais inválidas"
@@ -185,7 +185,7 @@
             android:layout_marginTop="20dp"
             android:layout_gravity="center_horizontal"
             android:text="@string/login_offline"
-            android:textAppearance="@style/TextAppearance.EFTV.LabelMedium"
+            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
             android:textColor="@color/on_surface_variant" />
 
         <TextView
@@ -194,7 +194,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:gravity="center"
-            android:textAppearance="@style/TextAppearance.EFTV.LabelSmall"
+            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
             android:textColor="@color/on_surface_variant" />
     </LinearLayout>
 </ScrollView>

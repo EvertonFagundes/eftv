@@ -47,7 +47,7 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textAppearance="@style/TextAppearance.EFTV.TitleMedium"
+            android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
             android:textColor="@android:color/white"
             tools:text="ESPN 2 HD" />
 
@@ -145,7 +145,7 @@
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:text="00:00"
-            android:textAppearance="@style/TextAppearance.EFTV.LabelSmall"
+            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
             android:textColor="@android:color/white" />
 
         <com.google.android.material.slider.Slider
@@ -154,19 +154,19 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
-            android:theme="@style/Widget.Material3.Slider"
+            android:theme="@style/Theme.EFTV"
             app:trackColor="@color/surface_container_high"
             app:trackColorInactive="@color/outline_variant"
             app:thumbColor="@color/primary"
-            app:valueFrom="0.0"
-            app:valueTo="100.0" />
+            android:valueFrom="0.0"
+            android:valueTo="100.0" />
 
         <TextView
             android:id="@+id/durationText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="00:00"
-            android:textAppearance="@style/TextAppearance.EFTV.LabelSmall"
+            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
             android:textColor="@android:color/white" />
 
     </LinearLayout>
@@ -211,7 +211,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:text="@string/player_error_title"
-            android:textAppearance="@style/TextAppearance.EFTV.HeadlineSmall"
+            android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
             android:textColor="@color/error" />
 
         <TextView
@@ -221,7 +221,7 @@
             android:layout_marginTop="8dp"
             android:gravity="center"
             android:lineSpacingExtra="3dp"
-            android:textAppearance="@style/TextAppearance.EFTV.BodyMedium"
+            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
             android:textColor="@color/on_surface_variant" />
 
         <LinearLayout
@@ -235,7 +235,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/retry"
-                style="@style/Widget.Material3.Button.Filled"
+                style="@style/Widget.Material3.Button"
                 app:backgroundTint="@color/primary" />
 
             <com.google.android.material.button.MaterialButton

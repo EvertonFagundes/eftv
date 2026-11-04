@@ -54,12 +54,12 @@ class CategoryAdapter(
         binding.root.isChecked = position == selectedPosition
 
         // Define ícone baseado no tipo
-        binding.root.icon = getIconForCategory(binding.root.context, item)
-        binding.root.setIconTintList(if (item.mode == ChannelMode.FAVORITES) {
+        binding.root.chipIcon = ContextCompat.getDrawable(binding.root.context, getIconForCategory(binding.root.context, item))
+        binding.root.chipIconTint = if (item.mode == ChannelMode.FAVORITES) {
             ContextCompat.getColorStateList(binding.root.context, R.color.chip_text)
         } else {
             ContextCompat.getColorStateList(binding.root.context, R.color.chip_text)
-        })
+        }
 
         binding.root.setOnClickListener {
             val current = holder.bindingAdapterPosition

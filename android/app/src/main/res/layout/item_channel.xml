@@ -117,7 +117,7 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textAppearance="@style/TextAppearance.EFTV.BodyMedium"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                 android:textColor="@color/on_background"
                 tools:text="ESPN 2 HD" />
 
@@ -147,7 +147,7 @@
             android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textAppearance="@style/TextAppearance.EFTV.BodySmall"
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
             android:textColor="@color/on_surface_variant"
             tools:text="Esportes" />
 
