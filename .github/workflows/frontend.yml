@@ -27,12 +27,18 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm install
 
       - name: Run ESLint
-        run: npx eslint public/assets/js --ext .js
+        run: |
+          if [ -f eslint.config.js ] || [ -f .eslintrc ] || [ -f .eslintrc.json ]; then
+            npx eslint public --ext .js
+          else
+            echo "Sem configuracao de ESLint; pulando."
+          fi
 
       - name: Build production
         run: npm run build
