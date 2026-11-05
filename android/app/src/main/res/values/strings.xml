@@ -28,6 +28,7 @@
     <string name="status_demo">demo</string>
     <string name="status_online">online</string>
     <string name="status_local">local</string>
+    <string name="status_blocked">bloqueado</string>
 
     <!-- Player controls -->
     <string name="player_back">Voltar para a lista</string>
@@ -51,6 +52,7 @@
     <string name="login_invalid_credentials">E-mail ou senha inválidos.</string>
     <string name="login_user_disabled">Esta conta está desativada.</string>
     <string name="login_network_error">Não foi possível falar com o servidor. Verifique a conexão.</string>
+    <string name="login_network_error_debug">Não foi possível falar com o servidor (%1$s). Verifique a conexão e se a API está no ar.</string>
     <string name="login_version">Versão %1$s · %2$s</string>
     <string name="subscription_inactive">Sua assinatura está inativa. Mostrando a lista local.</string>
     <string name="logout">Sair da conta</string>
@@ -67,5 +69,6 @@
     <string name="device_load_error">Não foi possível consultar os aparelhos agora.</string>
     <string name="device_blocked_title">Assinatura em uso</string>
     <string name="device_blocked_default">Esta assinatura já está vinculada ao limite de aparelhos. Desvincule um aparelho para continuar.</string>
+    <string name="device_blocked_hint">Desvincule um aparelho para liberar o acesso.</string>
     <string name="close">Fechar</string>
 </resources>

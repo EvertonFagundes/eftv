@@ -1,0 +1,22 @@
+# Caddyfile - HTTPS automatico (Let's Encrypt) para a API EFTV
+#
+# DOMAIN vem de deploy/.env (ex.: api.eftv.com.br).
+# O DNS do dominio precisa apontar para o IP da VPS antes de subir.
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Healthcheck publico
+	respond /health 200
+
+	reverse_proxy api:8000 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

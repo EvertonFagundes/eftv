@@ -74,10 +74,10 @@ CATALOGO_CACHE: dict = {"chave": None, "json": b"", "gzip": b""}
 # Algumas operadoras não resolvem certos nomes: o Chromium nem percebe, porque
 # ele usa DNS criptografado, mas o servidor depende do resolvedor do sistema e
 # recebe "No address associated with hostname" — nenhum stream abre. Aconteceu
-# de verdade no celular com dados móveis (rtv30t.com não resolvia na operadora,
-# mas resolvia no Wi-Fi). Se o resolvedor local falhar, o nome é perguntado no
-# DoH da Cloudflare/Google e o IP de lá é usado: o nome continua o mesmo no
-# cabeçalho Host e no SNI do TLS, muda só quem responde a consulta.
+# de verdade no celular com dados móveis (o domínio do provedor não resolvia na
+# operadora, mas resolvia no Wi-Fi). Se o resolvedor local falhar, o nome é
+# perguntado no DoH da Cloudflare/Google e o IP de lá é usado: o nome continua
+# o mesmo no cabeçalho Host e no SNI do TLS, muda só quem responde a consulta.
 _DNS_CACHE: dict = {}
 _DNS_CACHE_TTL = 600  # segundos
 _DNS_LOCAL = threading.local()

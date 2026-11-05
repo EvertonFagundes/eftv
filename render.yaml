@@ -1,0 +1,62 @@
+# render.yaml - Deploy da API no Render (Blueprint)
+#
+# Passos:
+#   1. Conecte o repositorio no Render (New > Blueprint).
+#   2. O Render cria o Postgres e pede os valores marcados com sync: false.
+#   3. Preencha IPTV_PLAYLIST_URL (e o referer, se o provedor exigir).
+#
+# O app Android deve apontar para https://eftv-api.onrender.com
+# (ou para o dominio proprio configurado no dashboard).
+
+services:
+  - type: web
+    name: eftv-api
+    runtime: docker
+    region: ohio
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    preDeployCommand: alembic upgrade head
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eftv-db
+          property: connectionString
+      # O Postgres basico tem poucas conexoes; nao abra um pool grande.
+      - key: DATABASE_POOL_SIZE
+        value: "5"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "5"
+      # Playlist licenciada: preencher no dashboard, nunca no repositorio.
+      - key: IPTV_PLAYLIST_URL
+        sync: false
+      - key: IPTV_PLAYLIST_USER_AGENT
+        value: VLC/3.0.20 LibVLC/3.0.20
+      - key: IPTV_PLAYLIST_REFERER
+        sync: false
+      - key: IPTV_PLAYLIST_REFRESH_SECONDS
+        value: "300"
+      - key: OFFLINE_GRACE_MINUTES
+        value: "720"
+      - key: MAX_DEVICES_PER_SUBSCRIPTION
+        value: "1"
+      - key: CORS_ORIGINS
+        value: '["https://app.eftv.com.br"]'
+      - key: FRONTEND_URL
+        value: https://app.eftv.com.br
+
+databases:
+  - name: eftv-db
+    databaseName: eftv
+    user: eftv
+    region: ohio
+    plan: 0.1c-256mb
+    postgresMajorVersion: "16"

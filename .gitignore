@@ -8,8 +8,17 @@ __pycache__/
 .venv/
 venv/
 
+# Cobertura de testes
+.coverage
+coverage.xml
+htmlcov/
+
 # Logs e arquivos temporários
 *.log
 *.tmp
 .DS_Store
 .env
+
+# Frontend (Node)
+frontend/node_modules/
+frontend/dist/

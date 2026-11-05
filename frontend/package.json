@@ -1,0 +1,17 @@
+{
+  "name": "eftv-frontend",
+  "version": "1.0.0",
+  "description": "EFTV Frontend - Área do Assinante",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "eslint": "^9.9.0"
+  }
+}

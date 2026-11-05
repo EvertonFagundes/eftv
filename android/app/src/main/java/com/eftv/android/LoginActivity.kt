@@ -72,8 +72,14 @@ class LoginActivity : AppCompatActivity() {
                 showError(messageFor(e))
             } catch (e: Exception) {
                 setLoading(false)
-                showError(getString(R.string.login_network_error))
-                Timber.e(e, "Falha ao entrar")
+                showError(
+                    if (BuildConfig.DEBUG) {
+                        getString(R.string.login_network_error_debug, BuildConfig.API_BASE_URL)
+                    } else {
+                        getString(R.string.login_network_error)
+                    }
+                )
+                Timber.e(e, "Falha ao entrar em %s", BuildConfig.API_BASE_URL)
             }
         }
     }

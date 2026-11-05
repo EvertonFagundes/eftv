@@ -1,0 +1,70 @@
+# render.free.yaml - Blueprint de TESTE no plano free (custo zero)
+#
+# Use este arquivo para validar o app de ponta a ponta (login, catalogo,
+# vinculo de aparelho, player no 4G) antes de pagar. NAO use para clientes:
+#
+#   - a API hiberna apos 15 min sem trafego e leva ~1 min para acordar;
+#   - o Postgres free expira 30 dias depois da criacao (14 dias de carencia);
+#   - nao existe Shell nem pre-deploy command no plano free.
+#
+# Para subir: New > Blueprint > repositorio > em "Blueprint Path" informe
+# `render.free.yaml`. Depois preencha IPTV_PLAYLIST_URL.
+#
+# Migracao: como o free nao tem preDeployCommand, o `alembic upgrade head`
+# roda junto com o start do container (dockerCommand abaixo). Isso e aceitavel
+# aqui porque o servico free tem uma unica instancia.
+#
+# Para virar producao, aplique o render.yaml (mesmos nomes de servico): o
+# Render atualiza os planos e preserva o banco.
+
+services:
+  - type: web
+    name: eftv-api
+    runtime: docker
+    region: ohio
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    dockerCommand: /bin/sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: ENVIRONMENT
+        value: staging
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eftv-db
+          property: connectionString
+      - key: DATABASE_POOL_SIZE
+        value: "3"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "2"
+      # Playlist licenciada: preencher no dashboard, nunca no repositorio.
+      - key: IPTV_PLAYLIST_URL
+        sync: false
+      - key: IPTV_PLAYLIST_USER_AGENT
+        value: VLC/3.0.20 LibVLC/3.0.20
+      - key: IPTV_PLAYLIST_REFERER
+        sync: false
+      - key: IPTV_PLAYLIST_REFRESH_SECONDS
+        value: "300"
+      - key: OFFLINE_GRACE_MINUTES
+        value: "720"
+      - key: MAX_DEVICES_PER_SUBSCRIPTION
+        value: "1"
+      - key: CORS_ORIGINS
+        value: '["https://app.eftv.com.br"]'
+      - key: FRONTEND_URL
+        value: https://app.eftv.com.br
+
+databases:
+  - name: eftv-db
+    databaseName: eftv
+    user: eftv
+    region: ohio
+    plan: free
+    postgresMajorVersion: "16"

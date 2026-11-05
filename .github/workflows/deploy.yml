@@ -1,0 +1,37 @@
+# .github/workflows/deploy.yml - Deploy completo (manual)
+name: Deploy Produção
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente de deploy'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    uses: ./.github/workflows/backend.yml
+    secrets: inherit
+
+  frontend:
+    uses: ./.github/workflows/frontend.yml
+    secrets: inherit
+
+  notify:
+    needs: [backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify result
+        run: |
+          STATUS="${{ needs.backend.result }} / ${{ needs.frontend.result }}"
+          echo "Deploy $STATUS"
+          # TODO: Integração Slack/Discord/Email
