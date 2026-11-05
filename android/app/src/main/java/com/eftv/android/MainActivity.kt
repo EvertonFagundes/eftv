@@ -54,7 +54,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: PlaylistRepository
     private var source: PlaylistSource = PlaylistSource.local()
     private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage, ::toggleFavorite)
-    private val categoryAdapter = CategoryAdapter(::onCategorySelected)
+    private val categoryAdapter = CategoryAdapter(::onCategorySelected, this)
 
     private var selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
     private var selectedMode = ChannelMode.ALL
@@ -111,6 +111,12 @@ class MainActivity : AppCompatActivity() {
 
                 else -> false
             }
+        }
+
+        // Toque longo no titulo abre as configuracoes escondidas
+        binding.toolbar.setOnLongClickListener {
+            startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+            true
         }
     }
 
@@ -491,6 +497,13 @@ class MainActivity : AppCompatActivity() {
         filterChannels(debounce = 0)
     }
 
+    /** Se verdadeiro, exclui conteudo adulto de listagens e buscas. */
+    private fun shouldExcludeAdults(): Boolean {
+        return selectedMode == ChannelMode.ALL &&
+            selectedGroup == null &&
+            !SettingsActivity.isAdultContentEnabled(this)
+    }
+
     private fun filterChannels(debounce: Long) {
         if (!::repository.isInitialized) return
 
@@ -500,12 +513,17 @@ class MainActivity : AppCompatActivity() {
         val group = selectedGroup
         val query = searchQuery.normalizedForSearch()
         val mode = selectedMode
+        val excludeAdults = shouldExcludeAdults()
 
         filterJob = lifecycleScope.launch {
             if (debounce > 0) delay(debounce)
 
             val total = withContext(Dispatchers.IO) {
-                repository.catalogStore.count(group, query, mode)
+                if (excludeAdults) {
+                    repository.catalogStore.countExcludingAdults(group, query, mode)
+                } else {
+                    repository.catalogStore.count(group, query, mode)
+                }
             }
             if (!isActive) return@launch
 
@@ -563,17 +581,28 @@ class MainActivity : AppCompatActivity() {
         val group = selectedGroup
         val query = searchQuery.normalizedForSearch()
         val mode = selectedMode
+        val excludeAdults = shouldExcludeAdults()
 
         val job = lifecycleScope.launch {
             try {
                 val items = withContext(Dispatchers.IO) {
-                    repository.catalogStore.page(
-                        group = group,
-                        query = query,
-                        limit = ChannelAdapter.PAGE_SIZE,
-                        offset = page * ChannelAdapter.PAGE_SIZE,
-                        mode = mode,
-                    )
+                    if (excludeAdults) {
+                        repository.catalogStore.pageExcludingAdults(
+                            group = group,
+                            query = query,
+                            limit = ChannelAdapter.PAGE_SIZE,
+                            offset = page * ChannelAdapter.PAGE_SIZE,
+                            mode = mode,
+                        )
+                    } else {
+                        repository.catalogStore.page(
+                            group = group,
+                            query = query,
+                            limit = ChannelAdapter.PAGE_SIZE,
+                            offset = page * ChannelAdapter.PAGE_SIZE,
+                            mode = mode,
+                        )
+                    }
                 }
                 if (generation == queryGeneration) {
                     channelAdapter.putPage(page, items)

@@ -75,4 +75,12 @@
     <string name="server_channel_name">Servidor local</string>
     <string name="server_notification_title">EFTV</string>
     <string name="server_notification_text">Servidor local na porta %1$d</string>
+
+    <!-- Configuracoes -->
+    <string name="settings_title">Configuracoes</string>
+    <string name="settings_category_privacy">Privacidade e conteudo</string>
+    <string name="settings_adult_title">Mostrar conteudo adulto</string>
+    <string name="settings_adult_summary">Exibe a categoria Adultos na lista de canais. Desligado por padrao.</string>
+    <string name="settings_category_about">Sobre</string>
+    <string name="settings_about_version">Versao do app</string>
 </resources>

@@ -91,4 +91,43 @@
     <color name="quality_4k">#00c853</color>
     <color name="quality_hd">#2f9bff</color>
     <color name="quality_sd">#f39c12</color>
+
+    <!-- Category colors (Material 3 style, distinct hues per category) -->
+    <color name="cat_all">#2f9bff</color>
+    <color name="cat_all_container">#d6e8ff</color>
+    <color name="cat_movie">#e74c3c</color>
+    <color name="cat_movie_container">#fcecec</color>
+    <color name="cat_series">#8e44ad</color>
+    <color name="cat_series_container">#f4ecf7</color>
+    <color name="cat_child">#f39c12</color>
+    <color name="cat_child_container">#fef9e7</color>
+    <color name="cat_sports">#27ae60</color>
+    <color name="cat_sports_container">#d5f5e3</color>
+    <color name="cat_news">#3498db</color>
+    <color name="cat_news_container">#d6eaf8</color>
+    <color name="cat_abertos">#1abc9c</color>
+    <color name="cat_abertos_container">#d5f5e3</color>
+    <color name="cat_documentary">#95a5a6</color>
+    <color name="cat_documentary_container">#ecf0f1</color>
+    <color name="cat_anime">#9b59b6</color>
+    <color name="cat_anime_container">#f4ecf7</color>
+    <color name="cat_novela">#e91e63</color>
+    <color name="cat_novela_container">#fce4ec</color>
+    <color name="cat_religious">#f1c40f</color>
+    <color name="cat_religious_container">#fff9c4</color>
+    <color name="cat_music">#00c853</color>
+    <color name="cat_music_container">#b8f5c4</color>
+    <color name="cat_variety">#7f8c8d</color>
+    <color name="cat_variety_container">#ecf0f1</color>
+    <color name="cat_24h">#e67e22</color>
+    <color name="cat_24h_container">#fdebd0</color>
+    <color name="cat_streaming">#009688</color>
+    <color name="cat_streaming_container">#b2dfdb</color>
+    <color name="cat_adults">#2c3e50</color>
+    <color name="cat_adults_container">#ecf0f1</color>
+    <color name="cat_other">#bdc3c7</color>
+    <color name="cat_other_container">#f5f5f5</color>
+
+    <!-- Category text colors (dark text on light container) -->
+    <color name="cat_text">#1a1a2e</color>
 </resources>

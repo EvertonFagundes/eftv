@@ -58,6 +58,12 @@
             android:exported="false"
             android:theme="@style/Theme.EFTV.Player" />
 
+        <!-- Configuracoes escondidas (acessivel por toque longo no titulo da tela principal) -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.EFTV.NoActionBar" />
+
         <service
             android:name=".EftvServerService"
             android:exported="false"

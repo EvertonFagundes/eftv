@@ -1,19 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.chip.Chip xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    style="@style/Widget.Material3.Chip.Filter"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/categoryCard"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:layout_marginEnd="8dp"
+    android:layout_marginEnd="10dp"
     android:focusable="true"
-    android:nextFocusDown="@id/channelList"
-    android:checkable="true"
-    android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-    android:textColor="@color/chip_text"
-    app:chipBackgroundColor="@color/chip_bg"
-    app:chipStrokeColor="@color/chip_stroke"
-    app:chipStrokeWidth="1dp"
-    app:chipMinHeight="36dp"
-    app:iconStartPadding="8dp"
-    app:iconEndPadding="0dp"
-    app:checkedIconVisible="false" />
+    android:clickable="true"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="@color/cat_all_container"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp"
+    app:contentPadding="12dp">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/categoryIcon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:contentDescription="@null"
+            android:tint="@color/cat_text"
+            app:srcCompat="@drawable/ic_category" />
+
+        <TextView
+            android:id="@+id/categoryLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+            android:textColor="@color/cat_text"
+            android:textStyle="bold"
+            android:textAlignment="center"
+            tools:text="Esportes" />
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

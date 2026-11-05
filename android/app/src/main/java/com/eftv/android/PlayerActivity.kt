@@ -26,11 +26,18 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import com.eftv.android.databinding.ActivityPlayerBinding
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 
 /**
  * Player de um canal. Como transmissao ao vivo de IPTV costuma ser encerrada
  * pelo servidor depois de alguns segundos (ou sofrer queda de rede), o player
  * se reconecta sozinho e volta para o ponto ao vivo, sem parar no fim do stream.
+ *
+ * Para conteudo sob demanda (VOD) exibe progresso: quantos minutos ja assistiu
+ * e quantos faltam, estilo Netflix/Amazon Prime.
+ *
+ * Ao iniciar a reproducao, o nome do canal e o badge "AO VIVO" somem automaticamente
+ * depois de alguns segundos para nao atrapalhar a visao do conteúdo.
  */
 class PlayerActivity : AppCompatActivity() {
 
@@ -43,6 +50,9 @@ class PlayerActivity : AppCompatActivity() {
     private var userAgent: String = PlaylistConfig.USER_AGENT
     private var referer: String? = null
 
+    /** Se o conteudo atual e ao vivo (true) ou sob demanda (false). */
+    private var isLive = false
+
     private val handler = Handler(Looper.getMainLooper())
     private var reconnectAttempt = 0
     private var reconnectPending = false
@@ -50,6 +60,15 @@ class PlayerActivity : AppCompatActivity() {
     private var lastErrorDetail: String? = null
     private var stopped = false
     private var softRecoveryAttempts = 0
+
+    /** Job/Callback para atualizar o progresso do VOD periodicamente. */
+    private var vodProgressCallback: Runnable? = null
+
+    /** Callback para esconder o overlay (nome, badges, controles) apos o delay. */
+    private var hideOverlayCallback: Runnable? = null
+
+    /** Se o overlay (topBar + bottomControls) esta visível no momento. */
+    private var overlayVisible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,6 +93,12 @@ class PlayerActivity : AppCompatActivity() {
         binding.closeButton.setOnClickListener { finish() }
         binding.retryButton.setOnClickListener { startPlayback() }
         binding.backButton.setOnClickListener { finish() }
+
+        // Inicialmente o progresso VOD fica escondido
+        binding.vodProgressText.visibility = View.GONE
+
+        // Toque na playerView alterna a visibilidade do overlay (topBar + controles)
+        binding.playerView.setOnClickListener { toggleOverlay() }
     }
 
     override fun onStart() {
@@ -102,6 +127,8 @@ class PlayerActivity : AppCompatActivity() {
         lastErrorDetail = null
         hideError()
         hideReconnecting()
+        cancelVodProgress()
+        cancelHideOverlay()
         preparePlayer()
     }
 
@@ -182,7 +209,29 @@ class PlayerActivity : AppCompatActivity() {
                         lastReadyAt = SystemClock.elapsedRealtime()
                         hideError()
                         hideReconnecting()
+
+                        // Detecta se e ao vivo ou sob demanda
+                        isLive = exoPlayer.isCurrentMediaItemLive
                         updateLiveBadge()
+
+                        // Para TODOS os conteudos (ao vivo e VOD): mostra o overlay
+                        // por 3 segundos, depois esconde para ficar so o conteudo
+                        binding.playerChannelName.visibility = View.VISIBLE
+                        binding.liveBadge.visibility = if (isLive) View.VISIBLE else View.GONE
+                        binding.qualityBadgePlayer.visibility = View.VISIBLE
+
+                        if (isLive) {
+                            binding.vodProgressText.visibility = View.GONE
+                            cancelVodProgress()
+                        } else {
+                            binding.vodProgressText.visibility = View.VISIBLE
+                            startVodProgressUpdates()
+                        }
+
+                        // Mostra o overlay (topBar + controles) e agenda o escondimento apos 3s
+                        showOverlay()
+                        scheduleHideOverlay()
+                        updateVodProgress()
                     }
 
                     Player.STATE_ENDED -> {
@@ -234,6 +283,119 @@ class PlayerActivity : AppCompatActivity() {
     private fun updateLiveBadge() {
         binding.liveBadge.visibility =
             if (player?.isCurrentMediaItemLive == true) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Inicia atualizacoes periodicas do progresso do VOD (assistido / restante).
+     * Chamado apenas para conteudo sob demanda.
+     */
+    private fun startVodProgressUpdates() {
+        cancelVodProgress()
+        vodProgressCallback = object : Runnable {
+            override fun run() {
+                updateVodProgress()
+                if (!stopped && !isFinishing && !isDestroyed && !isLive) {
+                    handler.postDelayed(this, 1000)
+                }
+            }
+        }
+        handler.post(vodProgressCallback!!)
+    }
+
+    private fun cancelVodProgress() {
+        vodProgressCallback?.let { handler.removeCallbacks(it) }
+        vodProgressCallback = null
+    }
+
+    /** Atualiza o texto de progresso do VOD (assistido / restante). */
+    private fun updateVodProgress() {
+        val current = player ?: return
+        if (isLive) {
+            binding.vodProgressText.visibility = View.GONE
+            return
+        }
+
+        val durationMs = current.duration
+        val positionMs = current.currentPosition
+
+        if (durationMs == Player.TIME_UNKNOWN || durationMs <= 0) {
+            // Duracao desconhecida: mostra so o tempo decorrido
+            binding.vodProgressText.text = "Assistido: ${formatTime(positionMs)} · Restam: -- min"
+        } else {
+            val assistidoMs = positionMs.coerceAtLeast(0)
+            val restanteMs = (durationMs - positionMs).coerceAtLeast(0)
+            binding.vodProgressText.text =
+                "Assistido: ${formatTime(assistidoMs)} · Restam: ${formatTime(restanteMs)}"
+        }
+        binding.vodProgressText.visibility = View.VISIBLE
+    }
+
+    /** Formata milissegundos em "X min" ou "X:XX" se menor que 1 hora. */
+    private fun formatTime(ms: Long): String {
+        val totalSeconds = TimeUnit.MILLISECONDS.toSeconds(ms.coerceAtLeast(0))
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return if (minutes >= 60) {
+            val hours = minutes / 60
+            val remainingMin = minutes % 60
+            "${hours}h ${remainingMin}min"
+        } else if (minutes > 0) {
+            "${minutes}min ${seconds:02d}s"
+        } else {
+            "${seconds}s"
+        }
+    }
+
+    /**
+     * Mostra o overlay completo: topBar (nome, badge ao vivo, qualidade, fechar)
+     * e bottomControls (play/pause, avançar, retroceder, progresso).
+     */
+    private fun showOverlay() {
+        cancelHideOverlay()
+        overlayVisible = true
+        binding.topBar.visibility = View.VISIBLE
+        binding.bottomControls.visibility = View.VISIBLE
+    }
+
+    /**
+     * Esconde o overlay completo: topBar e bottomControls.
+     * Fica apenas o conteudo passando na tela (estilo Netflix/Prime).
+     */
+    private fun hideOverlay() {
+        cancelHideOverlay()
+        overlayVisible = false
+        binding.topBar.visibility = View.GONE
+        binding.bottomControls.visibility = View.GONE
+    }
+
+    /** Alterna a visibilidade do overlay ao tocar na tela. */
+    private fun toggleOverlay() {
+        if (overlayVisible) {
+            hideOverlay()
+        } else {
+            showOverlay()
+            // Reagenda o escondimento automatico apos 3 segundos
+            scheduleHideOverlay()
+        }
+    }
+
+    /**
+     * Agenda o escondimento do overlay apos um delay,
+     * para nao atrapalhar a visao do conteudo (estilo Netflix/Prime).
+     */
+    private fun scheduleHideOverlay() {
+        cancelHideOverlay()
+        hideOverlayCallback = object : Runnable {
+            override fun run() {
+                hideOverlay()
+            }
+        }
+        handler.postDelayed(hideOverlayCallback!!, HIDE_OVERLAY_DELAY_MS)
+    }
+
+    private fun cancelHideOverlay() {
+        hideOverlayCallback?.let { handler.removeCallbacks(it) }
+        hideOverlayCallback = null
     }
 
     /**
@@ -344,6 +506,8 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun releasePlayer() {
         handler.removeCallbacksAndMessages(null)
+        cancelVodProgress()
+        cancelHideOverlay()
         reconnectPending = false
         binding.playerView.player = null
         player?.release()
@@ -374,6 +538,9 @@ class PlayerActivity : AppCompatActivity() {
         private const val SHOW_ERROR_AFTER = 5
         private const val RESUME_TIMEOUT_MS = 7_000L
         private const val LIVE_TARGET_OFFSET_MS = 8_000L
+
+        /** Delay para esconder nome/badges apos o conteudo comecar a tocar (ms). */
+        private const val HIDE_OVERLAY_DELAY_MS = 3000L
 
         // Buffer: segura mais alguns segundos para atravessar oscilacao de rede.
         private const val MIN_BUFFER_MS = 15_000

@@ -65,6 +65,17 @@ class CatalogStore private constructor(context: Context) {
         }
     }
 
+    /** Conta canais excluindo o grupo Adultos (usado quando conteudo adulto esta desabilitado). */
+    fun countExcludingAdults(group: String?, query: String, mode: ChannelMode = ChannelMode.ALL): Int {
+        val (where, args) = buildFilter(group, query, excludeAdults = true)
+        db.rawQuery(
+            "SELECT COUNT(*) FROM ${fromClause(mode)} $where",
+            args.toTypedArray(),
+        ).use { cursor ->
+            return if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
+    }
+
     fun page(
         group: String?,
         query: String,
@@ -73,6 +84,43 @@ class CatalogStore private constructor(context: Context) {
         mode: ChannelMode = ChannelMode.ALL,
     ): List<Channel> {
         val (where, filterArgs) = buildFilter(group, query)
+        val args = (filterArgs + limit.toString() + offset.toString()).toTypedArray()
+        val sql = """
+            SELECT c.tvg_id, c.name, c.group_title, c.logo, c.url, c.user_agent, c.referer
+            FROM ${fromClause(mode)}
+            $where
+            ORDER BY ${orderClause(mode)}
+            LIMIT ? OFFSET ?
+        """.trimIndent()
+
+        val result = ArrayList<Channel>(limit)
+        db.rawQuery(sql, args).use { cursor ->
+            while (cursor.moveToNext()) {
+                result.add(
+                    Channel(
+                        name = cursor.getString(1),
+                        group = cursor.getString(2),
+                        logo = cursor.getString(3),
+                        url = cursor.getString(4),
+                        tvgId = cursor.getString(0),
+                        userAgent = if (cursor.isNull(5)) null else cursor.getString(5),
+                        referer = if (cursor.isNull(6)) null else cursor.getString(6),
+                    )
+                )
+            }
+        }
+        return result
+    }
+
+    /** Pagina canais excluindo o grupo Adultos (usado quando conteudo adulto esta desabilitado). */
+    fun pageExcludingAdults(
+        group: String?,
+        query: String,
+        limit: Int,
+        offset: Int,
+        mode: ChannelMode = ChannelMode.ALL,
+    ): List<Channel> {
+        val (where, filterArgs) = buildFilter(group, query, excludeAdults = true)
         val args = (filterArgs + limit.toString() + offset.toString()).toTypedArray()
         val sql = """
             SELECT c.tvg_id, c.name, c.group_title, c.logo, c.url, c.user_agent, c.referer
@@ -231,13 +279,21 @@ class CatalogStore private constructor(context: Context) {
         return Metadata(sourceId = sourceId, updatedAt = updatedAt, total = total)
     }
 
-    private fun buildFilter(group: String?, rawQuery: String): Pair<String, List<String>> {
-        val clauses = ArrayList<String>(2)
-        val args = ArrayList<String>(2)
+    private fun buildFilter(
+        group: String?,
+        rawQuery: String,
+        excludeAdults: Boolean = false,
+    ): Pair<String, List<String>> {
+        val clauses = ArrayList<String>(3)
+        val args = ArrayList<String>(3)
 
         if (!group.isNullOrBlank()) {
             clauses.add("c.group_title = ?")
             args.add(group)
+        }
+
+        if (excludeAdults) {
+            clauses.add("c.group_title != 'Adultos'")
         }
 
         val query = rawQuery.normalizedForSearch()

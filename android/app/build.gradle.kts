@@ -187,7 +187,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.cardview:cardview:1.0.0")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation("androidx.preference:preference:1.2.0")
 
     // Player de video (HLS, MPEG-TS, MP4, DASH)
     implementation("androidx.media3:media3-exoplayer:1.3.1")

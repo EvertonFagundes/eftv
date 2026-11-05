@@ -1134,31 +1134,31 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         try:
+            # Rotas de playlist desabilitadas: o usuario nao pode adicionar
+            # ou modificar playlists. Apenas a playlist ja configurada esta
+            # disponivel.
             if route == "/api/playlists":
-                payload = self._read_json()
-                self._add_from_url(payload)
+                # GET continua permitido para listar a playlist ja configurada
+                if self.command == "GET":
+                    store = load_store()
+                    self._send_json(
+                        {"ok": True, "playlists": [summarize(p) for p in store.get("playlists", [])]}
+                    )
+                    return
+                # POST/PUT/DELETE bloqueados
+                self._error("Adicao/modificacao de playlists nao e permitida.", 403)
                 return
 
             if route == "/api/playlists/upload":
-                query = parse_qs(parts.query)
-                name = (query.get("name") or [""])[0].strip()
-                raw = self._read_body()
-                try:
-                    text = raw.decode("utf-8-sig")
-                except UnicodeDecodeError:
-                    text = raw.decode("latin-1")
-                self._add_from_text(text, name or "Playlist enviada")
+                self._error("Upload de playlists nao e permitido.", 403)
                 return
 
             if route == "/api/playlists/refresh":
-                payload = self._read_json()
-                self._refresh_playlist(payload.get("id", ""))
+                self._error("Atualizacao de playlists nao e permitida.", 403)
                 return
 
             if route == "/api/playlists/clear":
-                with STORE_LOCK:
-                    save_store({"playlists": []})
-                self._send_json({"ok": True})
+                self._error("Limpeza de playlists nao e permitida.", 403)
                 return
 
             if route == "/api/servidor":
@@ -1189,23 +1189,12 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._same_origin():
             self._error("Origem não permitida.", 403)
             return
-        if parts.path != "/api/playlists":
-            self._error("Rota não encontrada.", 404)
+        # Remocao de playlists desabilitada: o usuario nao pode remover playlists
+        if parts.path == "/api/playlists":
+            self._error("Remocao de playlists nao e permitida.", 403)
             return
-        query = parse_qs(parts.query)
-        pid = (query.get("id") or [""])[0].strip()
-        if not pid:
-            self._error("Informe o id da playlist.", 400)
-            return
-        with STORE_LOCK:
-            store = load_store()
-            antes = len(store["playlists"])
-            store["playlists"] = [p for p in store["playlists"] if p.get("id") != pid]
-            save_store(store)
-        if len(store["playlists"]) == antes:
-            self._error("Playlist não encontrada.", 404)
-            return
-        self._send_json({"ok": True})
+        self._error("Rota não encontrada.", 404)
+        return
 
     # --------------------------------------------------------- manipuladores
     def _add_from_url(self, payload: dict) -> None:
