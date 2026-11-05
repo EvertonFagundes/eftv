@@ -54,7 +54,12 @@ jobs:
 
   deploy-cloudflare-pages:
     needs: lint-and-build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # So roda se a variavel CLOUDFLARE_PAGES=true existir no repositorio.
+    # Sem ela, o job fica verde (skipped) em vez de falhar por falta de token.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.CLOUDFLARE_PAGES == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
