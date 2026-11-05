@@ -28,6 +28,7 @@
     <string name="status_demo">demo</string>
     <string name="status_online">online</string>
     <string name="status_local">local</string>
+    <string name="status_blocked">bloqueado</string>
 
     <string name="player_back">Voltar para a lista</string>
     <string name="player_error_title">Não foi possível reproduzir</string>
