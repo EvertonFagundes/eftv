@@ -16,6 +16,47 @@ Evite o plano `free` em uso real: o servico hiberna apos 15 minutos sem
 trafego (a primeira requisicao demora ~1 minuto) e o Postgres free expira 30
 dias depois da criacao, com 14 dias de carencia antes da exclusao.
 
+## Quando o plano free serve
+
+O free nao e "servidor de producao de graca", e sim um **ambiente de teste
+publico** com HTTPS. Ele serve para:
+
+- validar o app no celular usando 4G (sem depender do PC ligado na mesma rede);
+- testar login, catalogo, vinculo/revogacao de aparelho e o player;
+- mostrar o produto para um cliente ou socio antes de fechar;
+- desenvolver o frontend/checkout sem gastar nada.
+
+Ele **nao** serve para cliente pagante por tres motivos objetivos:
+
+| Limitacao | Efeito no cliente |
+| --- | --- |
+| Hiberna apos 15 min sem trafego | Primeiro acesso do dia demora ~1 min ou o app parece fora do ar |
+| Postgres expira em 30 dias | Perda de usuarios, assinaturas e vinculos de aparelho |
+| Sem Shell e sem pre-deploy | Nao da para rodar migracao/seed pelo dashboard |
+
+Se o objetivo for so testar agora, use o [`render.free.yaml`](../render.free.yaml):
+ele cria os mesmos servicos no plano free e roda `alembic upgrade head` junto
+com a inicializacao (o free nao tem pre-deploy command).
+
+1. Render: **New > Blueprint** > repositorio.
+2. Em **Blueprint Path**, informe `render.free.yaml`.
+3. Preencha `IPTV_PLAYLIST_URL` e clique em **Apply**.
+4. Use `https://eftv-api.onrender.com` no app, como no passo 4 abaixo.
+
+Criar o assinante de teste sem Shell (na sua maquina):
+
+```bash
+cd backend
+DATABASE_URL='<External Database URL do Render>' \
+  python scripts/seed_subscriber.py --email teste@eftv.com.br --admin --days 30
+```
+
+O `External Database URL` fica em *eftv-db > Connect*. Em *Access Control*,
+libere o IP da sua maquina (ou `0.0.0.0/0` temporariamente).
+
+Quando for atender cliente de verdade, aplique o [`render.yaml`](../render.yaml)
+(mesmos nomes de servico): o Render troca os planos e o banco e preservado.
+
 ## 1. Subir pelo Blueprint
 
 O arquivo [`render.yaml`](../render.yaml) ja descreve a API e o banco.
