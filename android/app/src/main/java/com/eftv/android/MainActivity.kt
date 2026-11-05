@@ -60,6 +60,9 @@ class MainActivity : AppCompatActivity() {
     private var selectedMode = ChannelMode.ALL
     private var selectedGroup: String? = null
     private var catalogMetadata: CatalogStore.Metadata? = null
+
+    /** Aparelho barrado pelo servidor: nao mostra nem usa o catalogo local. */
+    private var deviceBlocked = false
     private var searchQuery: String = ""
     private var hasCatalog = false
 
@@ -448,31 +451,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildSubtitle(shown: Int? = null): CharSequence {
-        val meta = catalogMetadata ?: return ""
-        val number = NumberFormat.getIntegerInstance()
-        val counts = if (shown != null && shown != meta.total) {
-            getString(R.string.subtitle_filtered, number.format(shown), number.format(meta.total))
-        } else {
-            getString(R.string.subtitle_total, number.format(meta.total))
-        }
-
-        val time = if (meta.updatedAt > 0) {
-            DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(meta.updatedAt))
-        } else {
-            "--:--"
-        }
-
         val (status, colorRes) = when {
+            deviceBlocked -> getString(R.string.status_blocked) to R.color.error
             source.url.isBlank() -> getString(R.string.status_demo) to R.color.warning
             source.fromServer -> getString(R.string.status_online) to R.color.success
             else -> getString(R.string.status_local) to R.color.on_background
         }
 
-        val text = "$counts • $time • $status"
+        val meta = catalogMetadata
+        val text = if (meta == null) {
+            status
+        } else {
+            val number = NumberFormat.getIntegerInstance()
+            val counts = if (shown != null && shown != meta.total) {
+                getString(R.string.subtitle_filtered, number.format(shown), number.format(meta.total))
+            } else {
+                getString(R.string.subtitle_total, number.format(meta.total))
+            }
+            val time = if (meta.updatedAt > 0) {
+                DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(meta.updatedAt))
+            } else {
+                "--:--"
+            }
+            "$counts • $time • $status"
+        }
+
         val dot = ContextCompat.getColor(this, colorRes)
         return SpannableString("●  $text").apply {
             setSpan(ForegroundColorSpan(dot), 0, 1, 0)
-        }    }
+        }
+    }
 
     private fun onCategorySelected(category: CategoryAdapter.Category) {
         selectedCategory = category
@@ -683,8 +691,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun showDeviceBlocked(message: String) {
         val detail = message.ifBlank { getString(R.string.device_blocked_default) }
+        deviceBlocked = true
+        channelAdapter.reset(0)
+        binding.channelList.visibility = View.GONE
+        binding.toolbar.subtitle = buildSubtitle()
         showMessage(
-            message = detail,
+            message = getString(R.string.device_blocked_hint),
             showProgress = false,
             showRetry = false,
             iconRes = R.drawable.ic_devices,
