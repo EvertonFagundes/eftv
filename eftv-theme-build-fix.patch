@@ -1,0 +1,661 @@
+diff --git a/android/app/src/main/java/com/eftv/android/ui/CategoryAdapter.kt b/android/app/src/main/java/com/eftv/android/ui/CategoryAdapter.kt
+index 5ab21e7..2435cd9 100644
+--- a/android/app/src/main/java/com/eftv/android/ui/CategoryAdapter.kt
++++ b/android/app/src/main/java/com/eftv/android/ui/CategoryAdapter.kt
+@@ -54,12 +54,12 @@ class CategoryAdapter(
+         binding.root.isChecked = position == selectedPosition
+ 
+         // Define ícone baseado no tipo
+-        binding.root.icon = getIconForCategory(binding.root.context, item)
+-        binding.root.setIconTintList(if (item.mode == ChannelMode.FAVORITES) {
++        binding.root.chipIcon = ContextCompat.getDrawable(binding.root.context, getIconForCategory(binding.root.context, item))
++        binding.root.chipIconTint = if (item.mode == ChannelMode.FAVORITES) {
+             ContextCompat.getColorStateList(binding.root.context, R.color.chip_text)
+         } else {
+             ContextCompat.getColorStateList(binding.root.context, R.color.chip_text)
+-        })
++        }
+ 
+         binding.root.setOnClickListener {
+             val current = holder.bindingAdapterPosition
+diff --git a/android/app/src/main/java/com/eftv/android/ui/ChannelAdapter.kt b/android/app/src/main/java/com/eftv/android/ui/ChannelAdapter.kt
+index 4781ad9..8843fce 100644
+--- a/android/app/src/main/java/com/eftv/android/ui/ChannelAdapter.kt
++++ b/android/app/src/main/java/com/eftv/android/ui/ChannelAdapter.kt
+@@ -244,7 +244,7 @@ class ChannelAdapter(
+                 repeatMode = ValueAnimator.RESTART
+                 interpolator = LinearInterpolator()
+                 addUpdateListener { animation ->
+-                    val alpha = 0.3f + 0.4f * animation.animatedValue
++                    val alpha = 0.3f + 0.4f * (animation.animatedValue as Float)
+                     view.alpha = alpha
+                 }
+             }
+@@ -252,10 +252,12 @@ class ChannelAdapter(
+             animator.start()
+         }
+ 
+-        private fun stopAnimations() {
++        fun stopAnimations() {
+             shimmerAnimators.values.forEach { it.cancel() }
+             shimmerAnimators.clear()
+-            pulseAnimators.values.forEach { view.startAnimation(android.view.animation.AnimationUtils.loadAnimation(view.context, android.R.anim.fade_out)) }
++            pulseAnimators.keys.forEach { view ->
++                view.startAnimation(AnimationUtils.loadAnimation(view.context, R.anim.fade_out))
++            }
+             pulseAnimators.clear()
+             binding.channelName.alpha = 1f
+             binding.channelGroup.alpha = 1f
+@@ -308,203 +310,3 @@ class ChannelAdapter(
+         private const val KEEP_PAGES = 4
+     }
+ }
+-
+-/**
+- * Lista paginada: mantem na memoria apenas as paginas proximas da posicao
+- * visivel. O total pode ter centenas de milhares de itens sem estourar o heap.
+- */
+-class ChannelAdapter(
+-    private val onClick: (Channel) -> Unit,
+-    private val onPageNeeded: (Int) -> Unit,
+-    private val onToggleFavorite: (Channel) -> Unit,
+-) : RecyclerView.Adapter<ChannelAdapter.ChannelViewHolder>() {
+-
+-    private val pages = LinkedHashMap<Int, List<Channel>>()
+-    private val favoriteUrls = HashSet<String>()
+-    private var total = 0
+-    private val shimmerAnimators = mutableMapOf<View, ValueAnimator>()
+-
+-    fun reset(totalCount: Int) {
+-        pages.clear()
+-        total = totalCount
+-        notifyDataSetChanged()
+-    }
+-
+-    fun setFavorites(urls: Set<String>) {
+-        favoriteUrls.clear()
+-        favoriteUrls.addAll(urls)
+-        notifyDataSetChanged()
+-    }
+-
+-    fun putPage(page: Int, items: List<Channel>) {
+-        pages[page] = items
+-        val start = page * PAGE_SIZE
+-        val count = minOf(items.size, total - start).coerceAtLeast(0)
+-        if (count > 0) notifyItemRangeChanged(start, count)
+-    }
+-
+-    fun isPageLoaded(page: Int): Boolean = pages.containsKey(page)
+-
+-    /** Descarrega paginas distantes para manter o uso de memoria constante. */
+-    fun trim(centerPage: Int) {
+-        val iterator = pages.keys.iterator()
+-        while (iterator.hasNext()) {
+-            val page = iterator.next()
+-            if (abs(page - centerPage) <= KEEP_PAGES) continue
+-
+-            iterator.remove()
+-            val start = page * PAGE_SIZE
+-            val count = minOf(PAGE_SIZE, total - start).coerceAtLeast(0)
+-            if (count > 0) notifyItemRangeChanged(start, count)
+-        }
+-    }
+-
+-    override fun getItemCount(): Int = total
+-
+-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ChannelViewHolder {
+-        val binding = ItemChannelBinding.inflate(
+-            LayoutInflater.from(parent.context),
+-            parent,
+-            false,
+-        )
+-        return ChannelViewHolder(binding)
+-    }
+-
+-    override fun onBindViewHolder(holder: ChannelViewHolder, position: Int) {
+-        val channel = pages[position / PAGE_SIZE]?.getOrNull(position % PAGE_SIZE)
+-        if (channel == null) {
+-            holder.bindPlaceholder()
+-            onPageNeeded(position / PAGE_SIZE)
+-        } else {
+-            holder.bind(channel)
+-        }
+-    }
+-
+-    override fun onViewRecycled(holder: ChannelViewHolder) {
+-        super.onViewRecycled(holder)
+-        // Para shimmer no placeholder reciclado
+-        holder.stopShimmer()
+-    }
+-
+-    inner class ChannelViewHolder(
+-        private val binding: ItemChannelBinding,
+-    ) : RecyclerView.ViewHolder(binding.root) {
+-
+-        fun bind(channel: Channel) {
+-            stopShimmer()
+-            binding.root.alpha = 1f
+-            binding.channelName.text = channel.name
+-            binding.channelGroup.text = channel.group
+-
+-            // Logo com Coil
+-            binding.channelLogo.load(channel.logo.ifBlank { null }) {
+-                placeholder(R.drawable.ic_tv)
+-                error(R.drawable.ic_tv)
+-                fallback(R.drawable.ic_tv)
+-                crossfade(true)
+-            }
+-
+-            // Badge AO VIVO
+-            val isLive = isLiveStream(channel.url)
+-            binding.liveBadge.visibility = if (isLive) View.VISIBLE else View.GONE
+-
+-            // Badge qualidade (HD/4K/SD)
+-            val quality = detectQuality(channel.name, channel.url)
+-            binding.qualityBadge.apply {
+-                text = quality
+-                visibility = if (quality.isNotBlank()) View.VISIBLE else View.GONE
+-                setBackgroundResource(getQualityBackground(quality))
+-            }
+-
+-            // Favorito
+-            val favorite = favoriteUrls.contains(channel.url)
+-            binding.favoriteButton.visibility = View.VISIBLE
+-            binding.favoriteButton.isSelected = favorite
+-            binding.favoriteButton.setImageResource(
+-                if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline
+-            )
+-            binding.favoriteButton.contentDescription = binding.root.context.getString(
+-                if (favorite) R.string.favorite_remove else R.string.favorite_add,
+-            )
+-            binding.favoriteButton.setOnClickListener { onToggleFavorite(channel) }
+-
+-            binding.root.setOnClickListener { onClick(channel) }
+-            // Em TV/controle remoto: OK abre, OK pressionado salva nos favoritos.
+-            binding.root.setOnLongClickListener {
+-                onToggleFavorite(channel)
+-                true
+-            }
+-        }
+-
+-        fun bindPlaceholder() {
+-            binding.root.alpha = 0.6f
+-            binding.channelName.text = binding.root.context.getString(R.string.loading_channel)
+-            binding.channelGroup.text = ""
+-            binding.channelLogo.setImageResource(R.drawable.ic_tv)
+-            binding.liveBadge.visibility = View.GONE
+-            binding.qualityBadge.visibility = View.GONE
+-            binding.favoriteButton.visibility = View.INVISIBLE
+-            binding.root.setOnClickListener(null)
+-            binding.root.setOnLongClickListener(null)
+-
+-            // Inicia shimmer no placeholder
+-            startShimmer(binding.channelName)
+-            startShimmer(binding.channelGroup)
+-            startShimmer(binding.logoContainer)
+-        }
+-
+-        private fun startShimmer(view: View) {
+-            val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+-                duration = 1200
+-                repeatCount = ValueAnimator.INFINITE
+-                repeatMode = ValueAnimator.RESTART
+-                interpolator = LinearInterpolator()
+-                addUpdateListener { animation ->
+-                    val alpha = 0.3f + 0.4f * animation.animatedValue
+-                    view.alpha = alpha
+-                }
+-            }
+-            shimmerAnimators[view] = animator
+-            animator.start()
+-        }
+-
+-        private fun stopShimmer() {
+-            shimmerAnimators.values.forEach { it.cancel() }
+-            shimmerAnimators.clear()
+-            binding.channelName.alpha = 1f
+-            binding.channelGroup.alpha = 1f
+-            binding.logoContainer.alpha = 1f
+-        }
+-
+-        /** Detecta se e stream ao vivo baseado na URL */
+-        private fun isLiveStream(url: String): Boolean {
+-            val lower = url.lowercase()
+-            return lower.contains(".m3u8") || lower.contains("live") || lower.contains("hls")
+-        }
+-
+-        /** Detecta qualidade baseada no nome/URL */
+-        private fun detectQuality(name: String, url: String): String {
+-            val combined = (name + " " + url).lowercase()
+-            return when {
+-                combined.contains("4k") || combined.contains("2160p") -> "4K"
+-                combined.contains("1080") || combined.contains("full hd") || combined.contains("fhd") -> "1080p"
+-                combined.contains("720") || combined.contains("hd") -> "HD"
+-                combined.contains("480") || combined.contains("sd") -> "SD"
+-                else -> ""
+-            }
+-        }
+-
+-        private fun getQualityBackground(quality: String): Int = when (quality.uppercase()) {
+-            "4K" -> R.drawable.bg_quality_4k
+-            "1080P" -> R.drawable.bg_quality_hd
+-            "HD" -> R.drawable.bg_quality_hd
+-            "SD" -> R.drawable.bg_quality_sd
+-            else -> R.drawable.bg_quality
+-        }
+-    }
+-
+-    companion object {
+-        const val PAGE_SIZE = 100
+-        private const val KEEP_PAGES = 4
+-    }
+-}
+diff --git a/android/app/src/main/res/anim/fade_out.xml b/android/app/src/main/res/anim/fade_out.xml
+new file mode 100644
+index 0000000..3c85b3e
+--- /dev/null
++++ b/android/app/src/main/res/anim/fade_out.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<alpha xmlns:android="http://schemas.android.com/apk/res/android"
++    android:duration="200"
++    android:fromAlpha="1.0"
++    android:toAlpha="0.0" />
+diff --git a/android/app/src/main/res/layout/activity_login.xml b/android/app/src/main/res/layout/activity_login.xml
+index 638756e..472fc1c 100644
+--- a/android/app/src/main/res/layout/activity_login.xml
++++ b/android/app/src/main/res/layout/activity_login.xml
+@@ -43,7 +43,7 @@
+             android:layout_marginTop="20dp"
+             android:letterSpacing="0.06"
+             android:text="@string/app_name"
+-            android:textAppearance="@style/TextAppearance.EFTV.HeadlineMedium"
++            android:textAppearance="@style/TextAppearance.Material3.HeadlineMedium"
+             android:textColor="@color/primary" />
+ 
+         <TextView
+@@ -53,7 +53,7 @@
+             android:gravity="center"
+             android:lineSpacingExtra="4dp"
+             android:text="@string/login_subtitle"
+-            android:textAppearance="@style/TextAppearance.EFTV.BodyMedium"
++            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+             android:textColor="@color/on_surface_variant" />
+ 
+         <com.google.android.material.textfield.TextInputLayout
+@@ -79,7 +79,7 @@
+                 android:imeOptions="actionNext"
+                 android:inputType="textEmailAddress"
+                 android:singleLine="true"
+-                android:textAppearance="@style/TextAppearance.EFTV.BodyLarge"
++                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                 android:textColor="@color/on_background" />
+         </com.google.android.material.textfield.TextInputLayout>
+ 
+@@ -108,7 +108,7 @@
+                 android:imeOptions="actionDone"
+                 android:inputType="textPassword"
+                 android:singleLine="true"
+-                android:textAppearance="@style/TextAppearance.EFTV.BodyLarge"
++                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                 android:textColor="@color/on_background" />
+         </com.google.android.material.textfield.TextInputLayout>
+ 
+@@ -125,7 +125,7 @@
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+                 android:text="@string/login_remember"
+-                android:textAppearance="@style/TextAppearance.EFTV.BodySmall"
++                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                 android:textColor="@color/on_surface_variant"
+                 app:buttonTint="@color/primary" />
+ 
+@@ -139,18 +139,18 @@
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+                 android:text="@string/login_forgot_password"
+-                android:textAppearance="@style/TextAppearance.EFTV.LabelSmall"
++                android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                 android:textColor="@color/primary" />
+         </LinearLayout>
+ 
+         <com.google.android.material.button.MaterialButton
+             android:id="@+id/loginButton"
+-            style="@style/Widget.Material3.Button.Filled"
++            style="@style/Widget.Material3.Button"
+             android:layout_width="match_parent"
+             android:layout_height="56dp"
+             android:layout_marginTop="24dp"
+             android:text="@string/login_enter"
+-            android:textAppearance="@style/TextAppearance.EFTV.LabelLarge"
++            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+             app:cornerRadius="16dp" />
+ 
+         <ProgressBar
+@@ -171,7 +171,7 @@
+             android:layout_marginTop="16dp"
+             android:gravity="center"
+             android:lineSpacingExtra="3dp"
+-            android:textAppearance="@style/TextAppearance.EFTV.BodySmall"
++            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+             android:textColor="@color/error"
+             android:visibility="gone"
+             tools:text="Credenciais inválidas"
+@@ -185,7 +185,7 @@
+             android:layout_marginTop="20dp"
+             android:layout_gravity="center_horizontal"
+             android:text="@string/login_offline"
+-            android:textAppearance="@style/TextAppearance.EFTV.LabelMedium"
++            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+             android:textColor="@color/on_surface_variant" />
+ 
+         <TextView
+@@ -194,7 +194,7 @@
+             android:layout_height="wrap_content"
+             android:layout_marginTop="28dp"
+             android:gravity="center"
+-            android:textAppearance="@style/TextAppearance.EFTV.LabelSmall"
++            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+             android:textColor="@color/on_surface_variant" />
+     </LinearLayout>
+ </ScrollView>
+diff --git a/android/app/src/main/res/layout/activity_player.xml b/android/app/src/main/res/layout/activity_player.xml
+index 635a4cc..6953e1a 100644
+--- a/android/app/src/main/res/layout/activity_player.xml
++++ b/android/app/src/main/res/layout/activity_player.xml
+@@ -47,7 +47,7 @@
+             android:layout_weight="1"
+             android:ellipsize="end"
+             android:maxLines="1"
+-            android:textAppearance="@style/TextAppearance.EFTV.TitleMedium"
++            android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+             android:textColor="@android:color/white"
+             tools:text="ESPN 2 HD" />
+ 
+@@ -145,7 +145,7 @@
+             android:layout_height="wrap_content"
+             android:layout_marginEnd="8dp"
+             android:text="00:00"
+-            android:textAppearance="@style/TextAppearance.EFTV.LabelSmall"
++            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+             android:textColor="@android:color/white" />
+ 
+         <com.google.android.material.slider.Slider
+@@ -154,19 +154,19 @@
+             android:layout_height="wrap_content"
+             android:layout_weight="1"
+             android:layout_marginEnd="8dp"
+-            android:theme="@style/Widget.Material3.Slider"
++            android:theme="@style/Theme.EFTV"
+             app:trackColor="@color/surface_container_high"
+             app:trackColorInactive="@color/outline_variant"
+             app:thumbColor="@color/primary"
+-            app:valueFrom="0.0"
+-            app:valueTo="100.0" />
++            android:valueFrom="0.0"
++            android:valueTo="100.0" />
+ 
+         <TextView
+             android:id="@+id/durationText"
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:text="00:00"
+-            android:textAppearance="@style/TextAppearance.EFTV.LabelSmall"
++            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+             android:textColor="@android:color/white" />
+ 
+     </LinearLayout>
+@@ -211,7 +211,7 @@
+             android:layout_height="wrap_content"
+             android:layout_marginTop="16dp"
+             android:text="@string/player_error_title"
+-            android:textAppearance="@style/TextAppearance.EFTV.HeadlineSmall"
++            android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
+             android:textColor="@color/error" />
+ 
+         <TextView
+@@ -221,7 +221,7 @@
+             android:layout_marginTop="8dp"
+             android:gravity="center"
+             android:lineSpacingExtra="3dp"
+-            android:textAppearance="@style/TextAppearance.EFTV.BodyMedium"
++            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+             android:textColor="@color/on_surface_variant" />
+ 
+         <LinearLayout
+@@ -235,7 +235,7 @@
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+                 android:text="@string/retry"
+-                style="@style/Widget.Material3.Button.Filled"
++                style="@style/Widget.Material3.Button"
+                 app:backgroundTint="@color/primary" />
+ 
+             <com.google.android.material.button.MaterialButton
+diff --git a/android/app/src/main/res/layout/item_category.xml b/android/app/src/main/res/layout/item_category.xml
+index d49519c..f774c22 100644
+--- a/android/app/src/main/res/layout/item_category.xml
++++ b/android/app/src/main/res/layout/item_category.xml
+@@ -1,14 +1,14 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <com.google.android.material.chip.Chip xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:app="http://schemas.android.com/apk/res-auto"
+-    style="@style/Widget.Material3.Chip.Choice"
++    style="@style/Widget.Material3.Chip.Filter"
+     android:layout_width="wrap_content"
+     android:layout_height="wrap_content"
+     android:layout_marginEnd="8dp"
+     android:focusable="true"
+     android:nextFocusDown="@id/channelList"
+     android:checkable="true"
+-    android:textAppearance="@style/TextAppearance.EFTV.LabelMedium"
++    android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+     android:textColor="@color/chip_text"
+     app:chipBackgroundColor="@color/chip_bg"
+     app:chipStrokeColor="@color/chip_stroke"
+diff --git a/android/app/src/main/res/layout/item_channel.xml b/android/app/src/main/res/layout/item_channel.xml
+index 3f351eb..678c90d 100644
+--- a/android/app/src/main/res/layout/item_channel.xml
++++ b/android/app/src/main/res/layout/item_channel.xml
+@@ -117,7 +117,7 @@
+                 android:layout_weight="1"
+                 android:ellipsize="end"
+                 android:maxLines="1"
+-                android:textAppearance="@style/TextAppearance.EFTV.BodyMedium"
++                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                 android:textColor="@color/on_background"
+                 tools:text="ESPN 2 HD" />
+ 
+@@ -147,7 +147,7 @@
+             android:layout_marginTop="2dp"
+             android:ellipsize="end"
+             android:maxLines="1"
+-            android:textAppearance="@style/TextAppearance.EFTV.BodySmall"
++            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+             android:textColor="@color/on_surface_variant"
+             tools:text="Esportes" />
+ 
+diff --git a/android/app/src/main/res/values/colors.xml b/android/app/src/main/res/values/colors.xml
+index ab5c711..d39fab2 100644
+--- a/android/app/src/main/res/values/colors.xml
++++ b/android/app/src/main/res/values/colors.xml
+@@ -2,6 +2,7 @@
+ <resources>
+     <!-- EFTV Brand Colors - Material 3 Tokens -->
+     <color name="primary">#2f9bff</color>
++    <color name="primary_dark">#050b16</color>
+     <color name="primary_container">#d6e8ff</color>
+     <color name="on_primary">#ffffff</color>
+     <color name="on_primary_container">#001d3e</color>
+diff --git a/android/app/src/main/res/values/themes.xml b/android/app/src/main/res/values/themes.xml
+index 7568353..c902bdb 100644
+--- a/android/app/src/main/res/values/themes.xml
++++ b/android/app/src/main/res/values/themes.xml
+@@ -1,109 +1,69 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <!-- Base application theme - Sem herança, TODOS os atributos Material3 hardcoded -->
+-    <style name="Theme.EFTV" parent="">
++    <!--
++        Tema base: herda de Material3 para que todos os atributos usados pelo
++        Material Components (MaterialButton, Chip, Slider, TextInputLayout) e
++        pelo Media3/ExoPlayer existam. Nao declare atributos com nomes que nao
++        existem no Android (ex.: inverse_surface, scrim_medium, success).
++    -->
++    <style name="Theme.EFTV" parent="Theme.Material3.DayNight.NoActionBar">
+         <!-- Primary -->
+-        <item name="colorPrimary">#2f9bff</item>
+-        <item name="colorPrimaryContainer">#d6e8ff</item>
+-        <item name="colorOnPrimary">#ffffff</item>
+-        <item name="colorOnPrimaryContainer">#001d3e</item>
+-        <item name="colorPrimaryVariant">#0b5bd3</item>
++        <item name="colorPrimary">@color/primary</item>
++        <item name="colorOnPrimary">@color/on_primary</item>
++        <item name="colorPrimaryContainer">@color/primary_container</item>
++        <item name="colorOnPrimaryContainer">@color/on_primary_container</item>
++        <item name="colorPrimaryInverse">@color/primary_variant</item>
+ 
+         <!-- Secondary -->
+-        <item name="colorSecondary">#35a5ff</item>
+-        <item name="colorSecondaryContainer">#d6e8ff</item>
+-        <item name="colorOnSecondary">#ffffff</item>
+-        <item name="colorOnSecondaryContainer">#001d3e</item>
+-        <item name="colorSecondaryVariant">#1e88e5</item>
++        <item name="colorSecondary">@color/secondary</item>
++        <item name="colorOnSecondary">@color/on_secondary</item>
++        <item name="colorSecondaryContainer">@color/secondary_container</item>
++        <item name="colorOnSecondaryContainer">@color/on_secondary_container</item>
+ 
+         <!-- Tertiary -->
+-        <item name="colorTertiary">#00c853</item>
+-        <item name="colorTertiaryContainer">#b8f5c4</item>
+-        <item name="colorOnTertiary">#ffffff</item>
+-        <item name="colorOnTertiaryContainer">#00220b</item>
++        <item name="colorTertiary">@color/tertiary</item>
++        <item name="colorOnTertiary">@color/on_tertiary</item>
++        <item name="colorTertiaryContainer">@color/tertiary_container</item>
++        <item name="colorOnTertiaryContainer">@color/on_tertiary_container</item>
+ 
+         <!-- Error -->
+-        <item name="colorError">#e74c3c</item>
+-        <item name="colorErrorContainer">#fcecec</item>
+-        <item name="colorOnError">#ffffff</item>
+-        <item name="colorOnErrorContainer">#410002</item>
+-
+-        <!-- Surface / Background -->
+-        <item name="colorSurface">#0b1a30</item>
+-        <item name="colorSurfaceBright">#1e3a5f</item>
+-        <item name="colorSurfaceDim">#050b16</item>
+-        <item name="colorSurfaceContainerLow">#0d1f3a</item>
+-        <item name="colorSurfaceContainerLowest">#050b16</item>
+-        <item name="colorSurfaceContainer">#122844</item>
+-        <item name="colorSurfaceContainerHigh">#1e3a5f</item>
+-        <item name="colorSurfaceContainerHighest">#294c7e</item>
+-        <item name="colorOnSurface">#cfdcf2</item>
+-        <item name="colorOnSurfaceVariant">#8ba7c7</item>
+-
+-        <item name="colorBackground">#050b16</item>
+-        <item name="colorOnBackground">#cfdcf2</item>
+-
+-        <!-- Material 3 required color attributes (exact names ExoPlayer/M3 expects) -->
+-        <item name="colorBackground">#050b16</item>
+-        <item name="colorSurface">#0b1a30</item>
+-        <item name="colorError">#e74c3c</item>
+-        <item name="colorPrimary">#2f9bff</item>
+-        <item name="colorPrimaryVariant">#0b5bd3</item>
+-        <item name="colorSecondary">#35a5ff</item>
+-        <item name="colorSecondaryVariant">#1e88e5</item>
+-        <item name="colorOnPrimary">#ffffff</item>
+-        <item name="colorOnSecondary">#ffffff</item>
+-        <item name="colorOnBackground">#cfdcf2</item>
+-        <item name="colorOnSurface">#cfdcf2</item>
+-        <item name="colorOnError">#ffffff</item>
+-
+-        <!-- Inverse colors (Material 3) -->
+-        <item name="inverse_surface">#dfeff7</item>
+-        <item name="inverse_on_surface">#0f1d33</item>
+-        <item name="inverse_primary">#0b5bd3</item>
+-        <item name="colorInverseSurface">#dfeff7</item>
+-        <item name="colorInverseOnSurface">#0f1d33</item>
+-        <item name="colorInversePrimary">#0b5bd3</item>
+-
+-        <!-- Scrim -->
+-        <item name="scrim">#000000</item>
+-        <item name="colorScrim">#000000</item>
+-        <item name="scrim_medium">#80000000</item>
+-        <item name="scrim_light">#40000000</item>
+-
+-        <item name="outline">#2f9bff</item>
+-        <item name="outline_variant">#1e3a5f</item>
+-
+-        <item name="success">#27ae60</item>
+-        <item name="success_container">#d5f5e3</item>
+-        <item name="on_success_container">#0a3d1e</item>
+-
+-        <item name="warning">#f39c12</item>
+-        <item name="warning_container">#fef9e7</item>
+-        <item name="on_warning_container">#4a3000</item>
+-
+-        <item name="info">#2f9bff</item>
++        <item name="colorError">@color/error</item>
++        <item name="colorOnError">@color/on_error</item>
++        <item name="colorErrorContainer">@color/error_container</item>
++        <item name="colorOnErrorContainer">@color/on_error_container</item>
++
++        <!-- Surface -->
++        <item name="colorSurface">@color/surface</item>
++        <item name="colorOnSurface">@color/on_surface</item>
++        <item name="colorSurfaceVariant">@color/surface_container</item>
++        <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
++        <item name="colorSurfaceInverse">@color/inverse_surface</item>
++        <item name="colorOnSurfaceInverse">@color/inverse_on_surface</item>
++        <item name="colorSurfaceBright">@color/surface_bright</item>
++        <item name="colorSurfaceDim">@color/surface_dim</item>
++        <item name="colorSurfaceContainerLowest">@color/surface_container_lowest</item>
++        <item name="colorSurfaceContainerLow">@color/surface_container_low</item>
++        <item name="colorSurfaceContainer">@color/surface_container</item>
++        <item name="colorSurfaceContainerHigh">@color/surface_container_high</item>
++        <item name="colorSurfaceContainerHighest">@color/surface_container_highest</item>
++
++        <!-- Outline -->
++        <item name="colorOutline">@color/outline</item>
++        <item name="colorOutlineVariant">@color/outline_variant</item>
++
++        <!-- Background -->
++        <item name="android:colorBackground">@color/background</item>
++        <item name="colorOnBackground">@color/on_background</item>
+ 
+         <!-- Status/Navigation bars -->
+-        <item name="android:statusBarColor">#050b16</item>
+-        <item name="android:navigationBarColor">#050b16</item>
++        <item name="android:statusBarColor">@color/background</item>
++        <item name="android:navigationBarColor">@color/background</item>
+         <item name="android:windowLightStatusBar">false</item>
+         <item name="android:windowLightNavigationBar">false</item>
+-
+-        <!-- Window -->
+-        <item name="android:windowBackground">#050b16</item>
+-
+-        <!-- Text colors -->
+-        <item name="android:textColorPrimary">#cfdcf2</item>
+-        <item name="android:textColorSecondary">#8ba7c7</item>
+-        <item name="android:textColorPrimaryInverse">#050b16</item>
+-        <item name="android:textColorSecondaryInverse">#cfdcf2</item>
++        <item name="android:windowBackground">@color/background</item>
+     </style>
+ 
+-    <style name="Theme.EFTV.NoActionBar" parent="Theme.EFTV">
+-        <item name="windowActionBar">false</item>
+-        <item name="windowNoTitle">true</item>
+-    </style>
++    <style name="Theme.EFTV.NoActionBar" parent="Theme.EFTV" />
+ 
+     <style name="Theme.EFTV.Player" parent="Theme.EFTV">
+         <item name="android:windowBackground">@android:color/black</item>
+@@ -114,4 +74,4 @@
+     <style name="Theme.EFTV.Splash" parent="Theme.EFTV">
+         <item name="android:windowBackground">@drawable/splash_background</item>
+     </style>
+-</resources>
+\ No newline at end of file
++</resources>
