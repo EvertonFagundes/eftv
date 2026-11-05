@@ -1,7 +1,7 @@
 # config.py - Configurações da aplicação (pydantic-settings)
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -85,6 +85,21 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     SENTRY_DSN: str | None = None
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """
+        Aceita a URL como os provedores entregam (Render/Heroku usam
+        ``postgresql://``) e converte para o driver async do SQLAlchemy.
+        """
+        if value.startswith("postgres://"):
+            value = "postgresql+asyncpg://" + value[len("postgres://") :]
+        elif value.startswith("postgresql://"):
+            value = "postgresql+asyncpg://" + value[len("postgresql://") :]
+
+        # asyncpg espera ssl=require, nao o sslmode= do libpq.
+        return value.replace("sslmode=require", "ssl=require")
 
 
 @lru_cache

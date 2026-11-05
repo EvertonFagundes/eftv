@@ -3,6 +3,9 @@
 Guia para publicar a API com PostgreSQL, Redis e HTTPS na sua VPS.
 Todo o processo usa Docker; nao e preciso instalar Python no servidor.
 
+> Prefere nao administrar VPS? Veja [`RENDER.md`](RENDER.md): sobe API +
+> Postgres com HTTPS em poucos minutos (a partir de ~US$ 13/mes).
+
 ## 1. Pre-requisitos
 
 - VPS Linux (Ubuntu 22.04/24.04, Debian ou similar) com acesso SSH e `sudo`.
