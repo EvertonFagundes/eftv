@@ -1,0 +1,62 @@
+{
+  "name": "EFTV — Seus canais em um só lugar",
+  "short_name": "EFTV",
+  "description": "Player local de playlists IPTV com canais ao vivo e sob demanda.",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#050b16",
+  "theme_color": "#071426",
+  "categories": ["entertainment", "video", "utilities"],
+  "icons": [
+    {
+      "src": "assets/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/img/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/img/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Categorias",
+      "short_name": "Categorias",
+      "description": "Explorar canais por categoria",
+      "url": "./index.html#categorias",
+      "icons": [{ "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Ao vivo",
+      "short_name": "Ao vivo",
+      "description": "Ver canais ao vivo agora",
+      "url": "./index.html#ao-vivo",
+      "icons": [{ "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Adicionar playlist",
+      "short_name": "Adicionar",
+      "description": "Importar uma playlist M3U/M3U8",
+      "url": "./index.html#playlists",
+      "icons": [{ "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

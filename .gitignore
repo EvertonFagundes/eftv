@@ -2,6 +2,9 @@
 data/*.json
 !data/.gitkeep
 
+# Configuracao local (SDK, URLs de API/playlist). Nao versionar.
+local.properties
+
 # Python
 __pycache__/
 *.py[cod]

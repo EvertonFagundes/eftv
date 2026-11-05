@@ -1,6 +1,9 @@
 package com.eftv.android
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -26,6 +29,7 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        requestNotificationPermission()
 
         binding.versionText.text = getString(
             R.string.login_version,
@@ -106,6 +110,14 @@ class LoginActivity : AppCompatActivity() {
         binding.passwordInput.isEnabled = !loading
         binding.loginProgress.visibility = if (loading) View.VISIBLE else View.GONE
         if (loading) binding.loginError.visibility = View.GONE
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 8124)
     }
 
     private fun showError(message: String) {

@@ -4,6 +4,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Android TV -->
     <uses-feature android:name="android.hardware.type.television" android:required="false" />
@@ -54,6 +57,12 @@
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize"
             android:exported="false"
             android:theme="@style/Theme.EFTV.Player" />
+
+        <service
+            android:name=".EftvServerService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
 
     </application>
 

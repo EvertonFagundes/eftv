@@ -114,3 +114,16 @@ com os valores de `local.properties`.
 
 A tentativa anterior com Chaquopy + aiohttp + WebView foi movida para
 `legacy/` e **não faz parte do build**. Veja `legacy/README.md`.
+
+## Servidor local embutido (Chaquopy)
+
+O APK sobe `server.py` em segundo plano na porta **8124**, escutando em `0.0.0.0`
+para a smart TV na mesma Wi-Fi. O catalogo grava em `filesDir/eftv-data`
+(gravavel), nao dentro do APK.
+
+- `GET http://127.0.0.1:8124/api/status`
+- `GET http://127.0.0.1:8124/health`
+- Playlists: `POST /api/playlists/upload`
+
+O codigo Python fica em `app/src/main/python/` (`eftv_runner.py` + copia de
+`server.py`). Os arquivos web vao para `app/src/main/assets/eftv/`.

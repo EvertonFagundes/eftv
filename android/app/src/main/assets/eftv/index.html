@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EFTV — Seus canais, em um só lugar</title>
+  <meta name="description" content="EFTV: importe sua playlist M3U/M3U8 e assista aos seus canais ao vivo ou sob demanda no navegador.">
+  <meta name="theme-color" content="#071426">
+  <meta name="application-name" content="EFTV">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EFTV">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" aria-label="EFTV — início">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+        </span>
+        <span class="brand-name">EF<b>TV</b></span>
+      </a>
+
+      <nav class="main-nav" aria-label="Navegação principal">
+        <a href="index.html" class="is-active">Início</a>
+        <a href="index.html#ao-vivo">Ao vivo</a>
+        <a href="index.html#categorias">Categorias</a>
+        <a href="index.html#canais">Canais</a>
+      </nav>
+
+      <button class="install-trigger" type="button" data-install-app aria-label="Instalar app" title="Instalar app" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v11"></path>
+          <path d="m7 9 5 5 5-5"></path>
+          <path d="M5 19h14"></path>
+        </svg>
+        <span>Instalar app</span>
+      </button>
+
+      <button class="search-trigger" type="button" data-search-open aria-label="Buscar canal">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.8" cy="10.8" r="6.8"></circle>
+          <path d="m16 16 4.2 4.2"></path>
+        </svg>
+        <span>Buscar</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+    </div>
+  </header>
+
+  <div class="static-banner" data-static-banner hidden>
+    <div class="wrap static-banner-inner">
+      <span class="static-badge">GitHub Pages</span>
+      <span>Versão web: importe por arquivo ou por links com CORS. Para o modo completo com proxy, rode a EFTV localmente.</span>
+      <a href="https://github.com/EvertonFagundes/eftv#como-rodar" target="_blank" rel="noopener">Como rodar</a>
+    </div>
+  </div>
+
+  <section class="local-server" id="servidor-local" data-local-server hidden aria-labelledby="servidor-local-titulo">
+    <div class="local-server-copy">
+      <span class="section-kicker"><i class="live-dot"></i> Servidor local</span>
+      <h2 id="servidor-local-titulo">A EFTV completa no seu computador</h2>
+      <p>
+        Com o <code>server.py</code> rodando você ganha proxy de streams (sem bloqueio de CORS),
+        importação de playlist por link e a biblioteca salva no disco.
+      </p>
+      <p class="local-server-status" data-local-status role="status">Verificando o servidor local...</p>
+      <p class="local-server-rede" data-local-rede hidden></p>
+      <label class="local-server-lan">
+        <input type="checkbox" data-local-lan>
+        <span>
+          <strong>Acesso pela rede Wi-Fi</strong>
+          <small>Permite abrir a EFTV no celular ou na smart TV, pelo endereço
+          <code>http://IP-DO-NOTEBOOK:8124/</code>. Se o celular não conectar,
+          libere o firewall com <code>instalar/liberar-firewall.bat</code>.</small>
+        </span>
+      </label>
+    </div>
+    <div class="local-server-actions">
+      <button class="btn btn-primary" type="button" data-local-start>Iniciar servidor local</button>
+      <a class="btn btn-ghost" href="http://127.0.0.1:8124/" target="_blank" rel="noopener" data-local-open hidden>Abrir EFTV local</a>
+      <button class="btn btn-ghost" type="button" data-local-stop hidden>Encerrar servidor</button>
+      <button class="btn btn-ghost" type="button" data-local-install>Instalar lançador</button>
+      <button class="btn btn-ghost" type="button" data-local-android hidden>Rode no Android</button>
+      <button class="btn btn-ghost btn-mini" type="button" data-local-expand hidden>Opções do servidor</button>
+    </div>
+  </section>
+
+  <section class="android-card" id="android" data-android-card hidden aria-labelledby="android-titulo">
+    <div class="android-copy">
+      <span class="section-kicker">Android</span>
+      <h2 id="android-titulo">Rode a EFTV no seu celular</h2>
+      <p>
+        Com o <strong>Termux</strong> (app gratuito) o mesmo <code>server.py</code> roda no Android.
+        Depois, a smart TV, o tablet ou o notebook acessam a EFTV pela rede Wi-Fi.
+      </p>
+      <ol class="android-steps">
+        <li>Instale o <strong>Termux</strong> (F-Droid ou Google Play) e abra o app.</li>
+        <li>Cole o comando abaixo no Termux e toque em Enter. Ele instala o Python, baixa a EFTV e sobe o servidor.</li>
+        <li>Abra <code>http://127.0.0.1:8124/</code> no Chrome do celular. Na smart TV, digite o endereço <strong>Na rede Wi-Fi</strong> mostrado no Termux e salve como favorito.</li>
+        <li>Deixe o celular carregando e com o Termux aberto. Para o servidor continuar com a tela apagada, instale o addon <strong>Termux:API</strong>.</li>
+      </ol>
+      <div class="code-row">
+        <code class="code-block" data-android-comando>pkg install -y python git &amp;&amp; git clone https://github.com/EvertonFagundes/eftv.git ~/eftv &amp;&amp; bash ~/eftv/instalar/instalar-eftv-termux.sh</code>
+        <button class="btn btn-ghost" type="button" data-copiar-comando>Copiar</button>
+        <button class="btn btn-primary" type="button" data-abrir-termux>Abrir o Termux</button>
+      </div>
+      <p class="android-note">
+        Depois de instalar, o Termux cria os comandos <code>eftv</code> (sobe o servidor),
+        <code>eftv-servidor</code> (sobe sem abrir o navegador), <code>eftv-parar</code> (encerra) e
+        <code>eftv-atualizar</code> (atualiza o código).
+      </p>
+      <p class="android-note">
+        Se o <code>git clone</code> falhar porque a rede usa um espelho do GitHub fora do ar,
+        baixe o <a href="eftv-android.zip" download>pacote completo</a> pelo navegador do celular e
+        no Termux rode: <code>pkg install -y unzip</code>,
+        <code>unzip ~/eftv-android.zip -d ~</code> e
+        <code>bash ~/eftv/instalar/instalar-eftv-termux.sh</code>.
+      </p>
+    </div>
+  </section>
+
+  <main class="wrap">
+    <section class="home-hero" aria-label="EFTV">
+      <div class="home-hero-copy">
+        <span class="eyebrow"><i class="spark"></i> Streaming local, sem complicação</span>
+        <h1>Seus canais,<br><span class="gradient-text">em um só lugar.</span></h1>
+        <p>
+          Assista aos seus canais ao vivo ou sob demanda, com busca e categorias.
+          Tudo direto no navegador, e a biblioteca fica salva neste dispositivo.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#ao-vivo">Assistir ao vivo</a>
+          <a class="btn btn-ghost" href="#categorias">Explorar categorias</a>
+        </div>
+        <div class="hero-metrics" aria-label="Resumo da biblioteca">
+          <div class="metric"><strong id="contador-canais">0</strong><span>canais</span></div>
+          <div class="metric"><strong data-hero-live>0</strong><span>ao vivo</span></div>
+          <div class="metric"><strong data-hero-playlists>0</strong><span>playlists</span></div>
+        </div>
+      </div>
+
+      <div class="home-hero-art" aria-hidden="true">
+        <div class="signal-glow"></div>
+        <div class="signal-card">
+          <div class="signal-top">
+            <span class="live-pill"><i class="live-dot"></i> AO VIVO</span>
+            <span class="signal-brand">EFTV</span>
+          </div>
+          <div class="signal-screen">
+            <span class="signal-play">
+              <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+            </span>
+            <span class="signal-scan"></span>
+          </div>
+          <div class="signal-bottom">
+            <span></span><span></span><span></span><span class="wide"></span>
+          </div>
+        </div>
+        <div class="signal-note"><i class="dot-blue"></i> Sua playlist, sua programação</div>
+      </div>
+    </section>
+
+    <section class="live-section" id="ao-vivo" data-live-section hidden aria-labelledby="ao-vivo-titulo">
+      <div class="section-head">
+        <div>
+          <span class="section-kicker"><i class="live-dot"></i> Agora</span>
+          <h2 id="ao-vivo-titulo">Ao vivo</h2>
+        </div>
+        <button class="section-link" type="button" data-filter-live>Ver todos ao vivo →</button>
+      </div>
+      <div class="live-rail" data-live-rail></div>
+    </section>
+
+    <section class="category-section" id="categorias" data-category-section hidden aria-labelledby="categorias-titulo">
+      <div class="section-head">
+        <div>
+          <span class="section-kicker">Explore por assunto</span>
+          <h2 id="categorias-titulo">Categorias</h2>
+        </div>
+        <span class="section-hint" data-category-summary></span>
+      </div>
+      <div class="category-grid" data-category-grid></div>
+    </section>
+
+    <section id="canais" class="library-section" aria-labelledby="canais-titulo">
+      <div class="section-head">
+        <div>
+          <span class="section-kicker">Sua biblioteca completa</span>
+          <h2 id="canais-titulo">Todos os canais</h2>
+        </div>
+        <div class="filter-row">
+          <input class="channel-filter" type="search" placeholder="Filtrar por nome ou grupo..." data-channel-filter>
+          <button class="category-filter" type="button" data-so-ao-vivo aria-pressed="false"
+                  title="Mostrar só os canais que estão transmitindo neste momento">Só ao vivo</button>
+        </div>
+      </div>
+
+      <div class="filter-chips" id="filtros" aria-label="Filtrar canais">
+        <button class="category-filter active" type="button" data-category-filter="">Todas</button>
+        <button class="category-filter" type="button" data-category-filter="__ao_vivo">Ao vivo</button>
+        <button class="category-filter" type="button" data-category-filter="__sob_demanda">Sob demanda</button>
+      </div>
+
+      <div class="channel-grid" data-channel-grid></div>
+      <div class="load-more-row">
+        <button class="category-filter load-more" type="button" data-load-more hidden>Mostrar mais canais</button>
+      </div>
+      <div class="no-results" data-no-results hidden>Nenhum canal por aqui. Mude o filtro ou toque em “Adicionar playlist”, no fim da página.</div>
+    </section>
+
+    <!-- Importar playlist: recolhido por padrão, para não poluir a tela de
+         quem só quer assistir. Abre sozinho quando ainda não há nenhuma. -->
+    <section class="playlist-panel" id="playlists" data-playlist-panel aria-labelledby="playlists-titulo">
+      <button class="playlist-expand" type="button" data-playlist-toggle aria-expanded="false"
+              aria-controls="playlists-corpo">
+        <span aria-hidden="true">＋</span> Adicionar playlist
+      </button>
+
+      <div class="playlist-corpo" id="playlists-corpo" data-playlist-body hidden>
+        <div class="playlist-head">
+          <div>
+            <span class="playlist-kicker">Sua biblioteca</span>
+            <h2 id="playlists-titulo">Adicionar playlist</h2>
+            <p class="playlist-sub">
+              Cole o link de uma lista <code>.m3u</code> / <code>.m3u8</code> ou envie um arquivo.
+              Os canais entram na grade e ficam salvos neste dispositivo.
+            </p>
+          </div>
+          <div class="playlist-head-actions">
+            <button class="playlist-btn ghost" type="button" data-playlist-toggle aria-expanded="true">Ocultar</button>
+            <button class="playlist-btn ghost" type="button" data-playlist-clear hidden>Remover todas</button>
+          </div>
+        </div>
+
+        <form class="playlist-form" data-playlist-form>
+          <div class="playlist-url-row">
+            <input
+              class="channel-filter playlist-url"
+              type="url"
+              inputmode="url"
+              placeholder="https://exemplo.com/lista.m3u8"
+              aria-label="Link da playlist M3U ou M3U8"
+              autocomplete="off"
+              spellcheck="false"
+              data-playlist-url
+            >
+            <button class="playlist-btn primary" type="submit" data-playlist-add>Adicionar link</button>
+          </div>
+
+          <div class="playlist-or"><span>ou envie um arquivo</span></div>
+
+          <div class="playlist-file-row">
+            <label class="playlist-btn" for="playlist-file">Escolher arquivo .m3u/.m3u8</label>
+            <input
+              id="playlist-file"
+              type="file"
+              accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain"
+              data-playlist-file
+              hidden
+            >
+            <span class="playlist-file-name" data-playlist-file-name>Nenhum arquivo selecionado</span>
+          </div>
+
+          <p class="playlist-status" data-playlist-status hidden role="status"></p>
+        </form>
+
+        <div class="playlist-list" data-playlist-list></div>
+        <div class="playlist-empty" data-playlist-empty>
+          Nenhuma playlist adicionada ainda. Cole um link acima ou envie um arquivo para começar.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <span class="footer-brand">
+        <span class="brand-mark small" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+        </span>
+        EFTV
+      </span>
+      <span>Sua biblioteca de canais, direto no navegador.</span>
+      <span class="footer-note">Conteúdo reproduzido a partir das playlists que você importa.</span>
+      <span class="footer-18">
+        <button type="button" data-adultos-toggle title="Mostrar ou ocultar os canais 18+" hidden>18+</button>
+        <small data-adultos-msg hidden></small>
+      </span>
+    </div>
+  </footer>
+
+  <!-- Overlay de busca -->
+  <div class="search-overlay" data-search-overlay aria-hidden="true" role="dialog" aria-label="Buscar canal">
+    <div class="search-box">
+      <div class="row">
+        <input type="search" placeholder="Buscar canal..." data-global-search autocomplete="off">
+        <button class="search-close" type="button" data-search-close aria-label="Fechar busca">✕</button>
+      </div>
+      <div class="search-results" data-search-results></div>
+    </div>
+  </div>
+
+  <!-- Instalação do app -->
+  <dialog class="install-dialog" data-install-dialog aria-labelledby="install-title">
+    <div class="install-dialog-head">
+      <span class="brand-mark small" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+      </span>
+      <div>
+        <strong id="install-title">Instalar a EFTV</strong>
+        <span>Tenha um atalho como um aplicativo.</span>
+      </div>
+      <button class="install-dialog-close" type="button" data-install-close aria-label="Fechar">✕</button>
+    </div>
+    <div class="install-dialog-body">
+      <p>No <strong>Chrome, Edge ou Android</strong>, toque em <strong>Instalar app</strong> e confirme. No <strong>iPhone/iPad</strong>, toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.</p>
+      <p>O atalho abre a EFTV em tela cheia, com seus canais salvos neste dispositivo.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-install-close>Entendi</button>
+  </dialog>
+
+  <!-- Instalação do lançador do servidor local -->
+  <dialog class="install-dialog" data-local-dialog aria-labelledby="local-dialog-title">
+    <div class="install-dialog-head">
+      <span class="brand-mark small" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+      </span>
+      <div>
+        <strong id="local-dialog-title">Instalar o lançador da EFTV</strong>
+        <span>Uma vez só. Depois é só clicar em Iniciar.</span>
+      </div>
+      <button class="install-dialog-close" type="button" data-local-dialog-close aria-label="Fechar">✕</button>
+    </div>
+    <div class="install-dialog-body">
+      <p><strong>1.</strong> Baixe o instalador do seu sistema:</p>
+      <p class="local-dialog-links">
+        <a class="btn btn-ghost" href="instalar/instalar-eftv.bat" download>Windows (.bat)</a>
+        <a class="btn btn-ghost" href="instalar/instalar-eftv.sh" download>macOS e Linux (.sh)</a>
+      </p>
+      <p><strong>2.</strong> Execute o arquivo baixado. Ele instala o Python (se faltar) e registra o protocolo <code>eftv://</code>, que é o que permite iniciar o servidor pela página.</p>
+      <p><strong>3.</strong> Volte para esta página e clique em <strong>Iniciar servidor local</strong>. A aba <strong>http://127.0.0.1:8124/</strong> abre sozinha.</p>
+      <p>Prefere fazer na mão? Clone o repositório, rode <code>python3 server.py</code> e recarregue esta página: o botão <strong>Abrir EFTV local</strong> aparece sozinho.</p>
+      <p class="local-dialog-links">
+        <button class="btn btn-ghost" type="button" data-local-android>No Android? Veja como rodar no Termux</button>
+      </p>
+    </div>
+    <button class="btn btn-primary" type="button" data-local-dialog-close>Entendi</button>
+  </dialog>
+
+  <script src="assets/js/data.js"></script>
+  <script src="api/modo.js"></script>
+  <script src="assets/js/catalogo-base.js"></script>
+  <script src="assets/js/catalogo-loader.js"></script>
+  <script src="assets/js/static-store.js"></script>
+  <script src="assets/js/local-server.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/playlists.js"></script>
+  <script src="assets/js/pwa.js"></script>
+  <script>
+    if (typeof window.CanaisRenderTudo === "function") {
+      window.CanaisRenderTudo();
+    } else if (typeof window.CanaisRenderGrade === "function") {
+      window.CanaisRenderGrade();
+    }
+  </script>
+</body>
+</html>

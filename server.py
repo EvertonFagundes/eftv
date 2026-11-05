@@ -36,8 +36,22 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(ROOT, "data")
+def _diretorio_base() -> str:
+    env = os.environ.get("EFTV_ROOT", "").strip()
+    if env:
+        return os.path.abspath(env)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _diretorio_dados(root: str) -> str:
+    env = os.environ.get("EFTV_DATA_DIR", "").strip()
+    if env:
+        return os.path.abspath(env)
+    return os.path.join(root, "data")
+
+
+ROOT = _diretorio_base()
+DATA_DIR = _diretorio_dados(ROOT)
 STORE_PATH = os.path.join(DATA_DIR, "playlists.json")
 PORT = int(os.environ.get("PORT", "8124"))
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -69,6 +83,21 @@ STORE_LOCK = threading.Lock()
 CATALOGO_LOCK = threading.Lock()
 STORE_CACHE: dict = {"chave": None, "dados": {"playlists": []}}
 CATALOGO_CACHE: dict = {"chave": None, "json": b"", "gzip": b""}
+
+
+def configure_paths(root: str | None = None, data_dir: str | None = None) -> None:
+    """Redefine ROOT/DATA_DIR. No Android/Chaquopy o APK e somente leitura."""
+    global ROOT, DATA_DIR, STORE_PATH
+    if root:
+        ROOT = os.path.abspath(root)
+    escolhido = (data_dir or os.environ.get("EFTV_DATA_DIR", "")).strip()
+    DATA_DIR = os.path.abspath(escolhido) if escolhido else os.path.join(ROOT, "data")
+    STORE_PATH = os.path.join(DATA_DIR, "playlists.json")
+    STORE_CACHE["chave"] = None
+    STORE_CACHE["dados"] = {"playlists": []}
+    CATALOGO_CACHE["chave"] = None
+    CATALOGO_CACHE["json"] = b""
+    CATALOGO_CACHE["gzip"] = b""
 
 # --------------------------------------------------------------- DNS (saída)
 # Algumas operadoras não resolvem certos nomes: o Chromium nem percebe, porque
@@ -1001,6 +1030,10 @@ class Handler(SimpleHTTPRequestHandler):
             self._cors_publico()
             self.end_headers()
             self.wfile.write(data)
+            return
+
+        if route in ("/health", "/api/health"):
+            self._send_json({"ok": True, "versao": VERSAO}, cors="publico")
             return
 
         if route == "/api/status":

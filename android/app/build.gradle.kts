@@ -9,6 +9,7 @@ import org.gradle.api.tasks.TaskAction
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.chaquo.python")
 }
 
 // A playlist licenciada fica em local.properties (ignorado pelo Git).
@@ -109,6 +110,10 @@ android {
             "API_BASE_URL",
             "\"${configuredApiUrl.ifBlank { "http://127.0.0.1:8000" }}\"",
         )
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -150,6 +155,28 @@ android {
             )
         )
     }
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.12"
+    }
+}
+
+val repoRoot = rootProject.projectDir.parentFile
+val syncEftvPython = tasks.register<Copy>("syncEftvPython") {
+    from(repoRoot.resolve("server.py"))
+    into(layout.projectDirectory.dir("src/main/python"))
+}
+val syncEftvAssets = tasks.register<Copy>("syncEftvAssets") {
+    from(repoRoot) {
+        include("index.html", "canal.html", "manifest.webmanifest", "sw.js")
+        include("assets/**", "embed/**", "api/**")
+    }
+    into(layout.projectDirectory.dir("src/main/assets/eftv"))
+}
+tasks.named("preBuild") {
+    dependsOn(syncEftvPython, syncEftvAssets)
 }
 
 dependencies {
