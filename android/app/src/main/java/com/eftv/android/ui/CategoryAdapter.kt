@@ -1,10 +1,14 @@
 package com.eftv.android.ui
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.eftv.android.R
 import com.eftv.android.data.ChannelMode
 import com.eftv.android.databinding.ItemCategoryBinding
+import java.util.ArrayList
 
 /**
  * Navegacao superior: Todos, Favoritos, Recentes e as categorias da playlist.
@@ -45,10 +49,19 @@ class CategoryAdapter(
 
     override fun onBindViewHolder(holder: CategoryViewHolder, position: Int) {
         val binding = holder.binding
-        binding.root.text = items[position].label
+        val item = items[position]
+        binding.root.text = item.label
         binding.root.isChecked = position == selectedPosition
+
+        // Define ícone baseado no tipo
+        binding.root.chipIcon = ContextCompat.getDrawable(binding.root.context, getIconForCategory(binding.root.context, item))
+        binding.root.chipIconTint = if (item.mode == ChannelMode.FAVORITES) {
+            ContextCompat.getColorStateList(binding.root.context, R.color.chip_text)
+        } else {
+            ContextCompat.getColorStateList(binding.root.context, R.color.chip_text)
+        }
+
         binding.root.setOnClickListener {
-            // A posicao do bind pode ficar velha se a lista mudar; consulta a atual.
             val current = holder.bindingAdapterPosition
             if (current == RecyclerView.NO_POSITION || current == selectedPosition) {
                 return@setOnClickListener
@@ -59,6 +72,13 @@ class CategoryAdapter(
             notifyItemChanged(current)
             onSelected(items[current])
         }
+    }
+
+    private fun getIconForCategory(context: Context, item: Category): Int = when (item.mode) {
+        ChannelMode.ALL -> if (item.label == ALL) R.drawable.ic_tv else R.drawable.ic_category
+        ChannelMode.FAVORITES -> R.drawable.ic_star
+        ChannelMode.RECENTS -> R.drawable.ic_history
+        else -> R.drawable.ic_category
     }
 
     class CategoryViewHolder(

@@ -28,9 +28,13 @@
     <string name="status_demo">demo</string>
     <string name="status_online">online</string>
     <string name="status_local">local</string>
-    <string name="status_blocked">bloqueado</string>
 
+    <!-- Player controls -->
     <string name="player_back">Voltar para a lista</string>
+    <string name="player_play">Reproduzir</string>
+    <string name="player_pause">Pausar</string>
+    <string name="player_rewind">Voltar 10s</string>
+    <string name="player_forward">Avançar 30s</string>
     <string name="player_error_title">Não foi possível reproduzir</string>
     <string name="player_error_detail">%1$s\n\n%2$s</string>
     <string name="reconnecting_attempt">Reconectando… (tentativa %1$d)</string>
@@ -50,6 +54,8 @@
     <string name="login_version">Versão %1$s · %2$s</string>
     <string name="subscription_inactive">Sua assinatura está inativa. Mostrando a lista local.</string>
     <string name="logout">Sair da conta</string>
+    <string name="login_remember">Lembrar-me</string>
+    <string name="login_forgot_password">Esqueci a senha</string>
 
     <!-- Vinculo de aparelho -->
     <string name="device_title">Aparelho</string>

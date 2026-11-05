@@ -2,18 +2,24 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_focused="true">
         <shape android:shape="rectangle">
-            <solid android:color="#14324f" />
+            <solid android:color="@color/surface_container_high" />
             <corners android:radius="12dp" />
             <stroke
                 android:width="2dp"
                 android:color="@color/primary" />
         </shape>
     </item>
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/surface_container_highest" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
     <item>
-        <ripple android:color="#332f9bff">
+        <ripple android:color="@color/primary">
             <item>
                 <shape android:shape="rectangle">
-                    <solid android:color="#080f1c" />
+                    <solid android:color="@color/surface_container" />
                     <corners android:radius="12dp" />
                 </shape>
             </item>

@@ -7,6 +7,7 @@ plugins {
 
 // A playlist licenciada fica em local.properties (ignorado pelo Git).
 // O build gera PlaylistConfig.kt a partir dai; o repositorio nao guarda a URL.
+// Em RELEASE: PLAYLIST_URL fica vazio (app usa backend). Em DEBUG: usa local.properties.
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
@@ -20,7 +21,9 @@ fun kotlinString(value: String): String = value
 val playlistConfigDir = layout.buildDirectory.dir("generated/source/playlistConfig")
 
 val generatePlaylistConfig by tasks.registering {
-    val url = localProperties.getProperty("EFTV_PLAYLIST_URL", "")
+    // Só usa EFTV_PLAYLIST_URL em debug; release deixa vazio (backend obrigatório)
+    val isDebug = project.findProperty("com.android.build.api.variant.BuildConfig.BUILD_TYPE")?.toString()?.lowercase() == "debug"
+    val url = if (isDebug) localProperties.getProperty("EFTV_PLAYLIST_URL", "") else ""
     val userAgent = localProperties.getProperty("EFTV_PLAYLIST_USER_AGENT", "VLC/3.0.20 LibVLC/3.0.20")
     val outputDir = playlistConfigDir
 
@@ -38,6 +41,7 @@ val generatePlaylistConfig by tasks.registering {
             |/**
             | * Gerado automaticamente pelo build a partir de local.properties.
             | * Nao versionar este arquivo.
+            | * Em release, PLAYLIST_URL vem vazio — app usa backend.
             | */
             |object PlaylistConfig {
             |    const val PLAYLIST_URL: String = "${kotlinString(url)}"

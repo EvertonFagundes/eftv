@@ -60,9 +60,6 @@ class MainActivity : AppCompatActivity() {
     private var selectedMode = ChannelMode.ALL
     private var selectedGroup: String? = null
     private var catalogMetadata: CatalogStore.Metadata? = null
-
-    /** Aparelho barrado pelo servidor: nao mostra nem usa o catalogo local. */
-    private var deviceBlocked = false
     private var searchQuery: String = ""
     private var hasCatalog = false
 
@@ -185,7 +182,9 @@ class MainActivity : AppCompatActivity() {
      * local. Nunca bloqueia o app por causa do backend.
      */
     private fun startCatalog() {
-        val skipAuth = intent.getBooleanExtra(EXTRA_SKIP_AUTH, false)
+        // Produção: sempre usa backend (skipAuth = false)
+        // skipAuth=true só em builds de debug para testes locais
+        val skipAuth = BuildConfig.DEBUG && intent.getBooleanExtra(EXTRA_SKIP_AUTH, false)
 
         lifecycleScope.launch {
             showLoading()
@@ -206,7 +205,12 @@ class MainActivity : AppCompatActivity() {
 
     private suspend fun resolveSource(): PlaylistSource {
         val token = session.accessToken()
-        if (token.isNullOrBlank()) return PlaylistSource.local()
+        // Produção: sem token = vai para login, não para demo/local
+        if (token.isNullOrBlank()) {
+            goToLogin()
+            // Retorna source dummy; o fluxo será interrompido pelo finish() no goToLogin()
+            return PlaylistSource.local()
+        }
 
         return try {
             api.playlist(token).toSource()
@@ -217,25 +221,24 @@ class MainActivity : AppCompatActivity() {
                         try {
                             api.playlist(session.accessToken().orEmpty()).toSource()
                         } catch (retry: EftvApi.ApiException) {
-                            // Renovou a sessao, mas o aparelho continua barrado.
                             if (retry.isDeviceBlock()) throw DeviceBlockedException(retry.detail)
                             Toast.makeText(
                                 this@MainActivity,
                                 R.string.subscription_inactive,
                                 Toast.LENGTH_LONG,
                             ).show()
-                            PlaylistSource.local()
+                            // Produção: não cai para local — trata como erro de assinatura
+                            throw DeviceBlockedException(retry.detail)
                         }
                     } else {
                         session.clear()
                         goToLogin()
-                        PlaylistSource.local()
+                        return PlaylistSource.local()
                     }
                 }
 
                 403 -> {
                     if (e.isDeviceBlock()) {
-                        // Nao cai para a lista local: o aparelho nao esta autorizado.
                         throw DeviceBlockedException(e.detail)
                     }
                     Toast.makeText(
@@ -243,19 +246,24 @@ class MainActivity : AppCompatActivity() {
                         R.string.subscription_inactive,
                         Toast.LENGTH_LONG,
                     ).show()
-                    PlaylistSource.local()
+                    // Produção: assinatura inativa = erro, não demo
+                    throw DeviceBlockedException(e.detail)
                 }
 
                 503 -> {
-                    Timber.w("Servidor sem playlist configurada; usando lista local")
-                    PlaylistSource.local()
+                    // Produção: 503 = erro de servidor, não fallback demo
+                    Timber.w("Servidor sem playlist configurada (503)")
+                    throw DeviceBlockedException("Servidor indisponível. Tente novamente mais tarde.")
                 }
 
-                else -> PlaylistSource.local()
+                else -> {
+                    Timber.w("Erro HTTP %d ao buscar playlist", e.statusCode)
+                    throw DeviceBlockedException("Erro ao carregar playlist (HTTP ${e.statusCode})")
+                }
             }
         } catch (e: Exception) {
-            Timber.w(e, "Backend indisponivel; usando lista local")
-            PlaylistSource.local()
+            Timber.e(e, "Falha inesperada ao resolver source")
+            throw DeviceBlockedException("Erro de conexão. Verifique sua internet.")
         }
     }
 
@@ -440,36 +448,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildSubtitle(shown: Int? = null): CharSequence {
+        val meta = catalogMetadata ?: return ""
+        val number = NumberFormat.getIntegerInstance()
+        val counts = if (shown != null && shown != meta.total) {
+            getString(R.string.subtitle_filtered, number.format(shown), number.format(meta.total))
+        } else {
+            getString(R.string.subtitle_total, number.format(meta.total))
+        }
+
+        val time = if (meta.updatedAt > 0) {
+            DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(meta.updatedAt))
+        } else {
+            "--:--"
+        }
+
         val (status, colorRes) = when {
-            deviceBlocked -> getString(R.string.status_blocked) to R.color.error
             source.url.isBlank() -> getString(R.string.status_demo) to R.color.warning
             source.fromServer -> getString(R.string.status_online) to R.color.success
             else -> getString(R.string.status_local) to R.color.on_background
         }
 
-        val meta = catalogMetadata
-        val text = if (meta == null) {
-            status
-        } else {
-            val number = NumberFormat.getIntegerInstance()
-            val counts = if (shown != null && shown != meta.total) {
-                getString(R.string.subtitle_filtered, number.format(shown), number.format(meta.total))
-            } else {
-                getString(R.string.subtitle_total, number.format(meta.total))
-            }
-            val time = if (meta.updatedAt > 0) {
-                DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(meta.updatedAt))
-            } else {
-                "--:--"
-            }
-            "$counts • $time • $status"
-        }
-
+        val text = "$counts • $time • $status"
         val dot = ContextCompat.getColor(this, colorRes)
         return SpannableString("●  $text").apply {
             setSpan(ForegroundColorSpan(dot), 0, 1, 0)
-        }
-    }
+        }    }
 
     private fun onCategorySelected(category: CategoryAdapter.Category) {
         selectedCategory = category
@@ -680,12 +683,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun showDeviceBlocked(message: String) {
         val detail = message.ifBlank { getString(R.string.device_blocked_default) }
-        deviceBlocked = true
-        channelAdapter.reset(0)
-        binding.channelList.visibility = View.GONE
-        binding.toolbar.subtitle = buildSubtitle()
         showMessage(
-            message = getString(R.string.device_blocked_hint),
+            message = detail,
             showProgress = false,
             showRetry = false,
             iconRes = R.drawable.ic_devices,
