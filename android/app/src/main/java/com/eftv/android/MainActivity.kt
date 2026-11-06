@@ -6,10 +6,12 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
+import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -54,12 +56,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: PlaylistRepository
     private var source: PlaylistSource = PlaylistSource.local()
     private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage, ::toggleFavorite)
+<<<<<<< HEAD
     private val categoryAdapter = CategoryAdapter(::onCategorySelected, this)
+=======
+>>>>>>> 3739781 (feat: adiciona dropdown de categorias)
 
     private var selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
     private var selectedMode = ChannelMode.ALL
     private var selectedGroup: String? = null
     private var catalogMetadata: CatalogStore.Metadata? = null
+
+    // Categorias para o dropdown
+    private var categoryItems: List<CategoryAdapter.Category> = emptyList()
 
     /** Aparelho barrado pelo servidor: nao mostra nem usa o catalogo local. */
     private var deviceBlocked = false
@@ -146,14 +154,21 @@ class MainActivity : AppCompatActivity() {
                 }
             })
         }
-        binding.categoryList.apply {
-            layoutManager = LinearLayoutManager(
-                this@MainActivity,
-                LinearLayoutManager.HORIZONTAL,
-                false,
-            )
-            adapter = categoryAdapter
-            setHasFixedSize(true)
+        setupCategoryButton()
+    }
+
+    private fun setupCategoryButton() {
+        binding.categoryButton.setOnClickListener { view ->
+            val popup = PopupMenu(this, view)
+            categoryItems.forEachIndexed { index, category ->
+                popup.menu.add(0, index, index, category.label)
+            }
+            popup.setOnMenuItemClickListener { item ->
+                val category = categoryItems[item.itemId]
+                onCategorySelected(category)
+                true
+            }
+            popup.show()
         }
     }
 
@@ -440,15 +455,23 @@ class MainActivity : AppCompatActivity() {
         catalogMetadata = metadata
 
         val groups = withContext(Dispatchers.IO) { repository.catalogStore.groups() }
-        categoryAdapter.submit(
-            groups = groups,
-            favoritesLabel = getString(R.string.favorites),
-            recentsLabel = getString(R.string.recents),
-        )
+        val favoritesLabel = getString(R.string.favorites)
+        val recentsLabel = getString(R.string.recents)
 
-        selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
+        // Build category items for dropdown
+        categoryItems = buildList {
+            add(CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL))
+            add(CategoryAdapter.Category(favoritesLabel, ChannelMode.FAVORITES))
+            add(CategoryAdapter.Category(recentsLabel, ChannelMode.RECENTS))
+            groups.forEach { title -> add(CategoryAdapter.Category(title, ChannelMode.ALL, title)) }
+        }
+
+        selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL)
         selectedMode = ChannelMode.ALL
         selectedGroup = null
+
+        // Update category button text to show current selection
+        binding.categoryButton.text = selectedCategory.label
 
         channelAdapter.setFavorites(withContext(Dispatchers.IO) { repository.catalogStore.favoriteUrls() })
         binding.toolbar.subtitle = buildSubtitle()
@@ -492,6 +515,7 @@ class MainActivity : AppCompatActivity() {
         selectedCategory = category
         selectedMode = category.mode
         selectedGroup = category.group
+        binding.categoryButton.text = category.label
         binding.searchInput.clearFocus()
         hideKeyboard()
         filterChannels(debounce = 0)

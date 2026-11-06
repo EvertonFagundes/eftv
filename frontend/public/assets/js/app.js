@@ -235,7 +235,47 @@
       filtros.appendChild(botao);
     });
 
+    // Populate dropdown menu with category items
+    populateCategoryDropdown(metas, contagem, aoVivoPorCategoria);
+
     atualizarChipsAtivos();
+    updateDropdownActiveState(filtroAtual.categoria || "");
+  }
+
+  function populateCategoryDropdown(metas, contagem, aoVivoPorCategoria) {
+    const menu = document.querySelector("[data-category-dropdown-menu]");
+    if (!menu) return;
+
+    // Find the divider element (after "Sob demanda")
+    const divider = menu.querySelector(".category-dropdown-divider");
+    if (!divider) return;
+
+    // Remove existing category items (after the divider)
+    const existingItems = menu.querySelectorAll(".category-dropdown-item-dynamic");
+    existingItems.forEach((el) => el.remove());
+
+    // Add category items after the divider
+    metas.forEach((meta) => {
+      const qtd = contagem.get(meta.id) || 0;
+      const live = aoVivoPorCategoria.get(meta.id) || 0;
+      const detalhe = live ? ` · ${fmt.format(live)} ao vivo` : "";
+
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "category-dropdown-item category-dropdown-item-dynamic";
+      item.role = "option";
+      item.dataset.categoryFilter = meta.id;
+      item.setAttribute("aria-selected", "false");
+      item.style.setProperty("--cat-color", meta.cor);
+      item.innerHTML = `
+        <span class="category-icon" aria-hidden="true" style="background: color-mix(in srgb, var(--cat-color) 12%, transparent); border-color: color-mix(in srgb, var(--cat-color) 34%, transparent);">${escapeHtml(meta.icone)}</span>
+        <span class="category-info">
+          <strong>${escapeHtml(meta.nome)}</strong>
+          <small>${fmt.format(qtd)} ${qtd === 1 ? "canal" : "canais"}${detalhe}</small>
+        </span>
+      `;
+      divider.insertAdjacentElement("afterend", item);
+    });
   }
 
   function atualizarChipsAtivos() {
@@ -600,12 +640,95 @@
     pintarSoAoVivo();
   }
 
+  /* ------------------------------------------------------ category dropdown */
+  function initCategoryDropdown() {
+    const trigger = document.querySelector("[data-category-dropdown-trigger]");
+    const menu = document.querySelector("[data-category-dropdown-menu]");
+    if (!trigger || !menu) return;
+
+    let isOpen = false;
+
+    const openDropdown = () => {
+      isOpen = true;
+      trigger.setAttribute("aria-expanded", "true");
+      menu.hidden = false;
+      document.addEventListener("click", handleClickOutside);
+      document.addEventListener("keydown", handleKeydown);
+    };
+
+    const closeDropdown = () => {
+      isOpen = false;
+      trigger.setAttribute("aria-expanded", "false");
+      menu.hidden = true;
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleKeydown);
+    };
+
+    const toggleDropdown = () => {
+      if (isOpen) closeDropdown();
+      else openDropdown();
+    };
+
+    const handleClickOutside = (e) => {
+      if (!trigger.contains(e.target) && !menu.contains(e.target)) {
+        closeDropdown();
+      }
+    };
+
+    const handleKeydown = (e) => {
+      if (e.key === "Escape") {
+        closeDropdown();
+        trigger.focus();
+      }
+      if (e.key === "Tab") {
+        closeDropdown();
+      }
+    };
+
+    trigger.addEventListener("click", toggleDropdown);
+
+    // Handle category selection from dropdown
+    menu.addEventListener("click", (evento) => {
+      const item = evento.target.closest("[data-category-filter]");
+      if (!item) return;
+      const categoryId = item.dataset.categoryFilter || "";
+      window.CanaisFiltrar(
+        document.querySelector("[data-channel-filter]")?.value || "",
+        categoryId
+      );
+      closeDropdown();
+      // Update active state
+      updateDropdownActiveState(categoryId);
+    });
+  }
+
+  function updateDropdownActiveState(categoryId) {
+    const menu = document.querySelector("[data-category-dropdown-menu]");
+    if (!menu) return;
+    menu.querySelectorAll("[data-category-filter]").forEach((btn) => {
+      const isActive = (btn.dataset.categoryFilter || "") === categoryId;
+      btn.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    // Also update the trigger label if needed
+    const triggerLabel = document.querySelector(".category-dropdown-label");
+    if (triggerLabel) {
+      const activeBtn = menu.querySelector(`[data-category-filter="${categoryId}"]`);
+      if (activeBtn) {
+        const text = activeBtn.textContent.trim();
+        triggerLabel.textContent = text === "Todas" ? "Categorias" : text;
+      } else {
+        triggerLabel.textContent = "Categorias";
+      }
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     initBusca();
     initFiltroCanais();
     ligarBotaoAdultos();
     initAdultos();
     initSoAoVivo();
+    initCategoryDropdown();
     // Volta da tela anterior: o texto digitado volta para o campo de filtro.
     const campo = document.querySelector("[data-channel-filter]");
     if (campo && filtroAtual.texto) campo.value = filtroAtual.texto;

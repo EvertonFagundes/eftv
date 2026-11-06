@@ -50,6 +50,7 @@
             android:textSize="15sp" />
     </com.google.android.material.textfield.TextInputLayout>
 
+<<<<<<< HEAD
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/categoryList"
         android:layout_width="0dp"
@@ -60,6 +61,21 @@
         android:paddingEnd="12dp"
         android:paddingBottom="8dp"
         app:layout_constraintEnd_toEndOf="parent"
+=======
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/categoryButton"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:icon="@drawable/ic_category"
+        android:iconGravity="start"
+        android:iconTint="@color/on_background"
+        android:text="@string/categories"
+        android:textAllCaps="false"
+        android:textSize="14sp"
+>>>>>>> 3739781 (feat: adiciona dropdown de categorias)
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/searchLayout" />
 
@@ -70,7 +86,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/categoryList">
+        app:layout_constraintTop_toBottomOf="@id/categoryButton">
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/channelList"

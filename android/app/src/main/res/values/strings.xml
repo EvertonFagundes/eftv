@@ -15,6 +15,7 @@
     <string name="refresh">Atualizar lista</string>
 
     <!-- Navegacao da lista -->
+    <string name="categories">Categorias</string>
     <string name="favorites">Favoritos</string>
     <string name="recents">Recentes</string>
     <string name="favorite_add">Adicionar aos favoritos</string>

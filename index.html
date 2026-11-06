@@ -196,6 +196,20 @@
         </div>
         <div class="filter-row">
           <input class="channel-filter" type="search" placeholder="Filtrar por nome ou grupo..." data-channel-filter>
+          <div class="category-dropdown" data-category-dropdown>
+            <button class="category-filter category-dropdown-trigger" type="button" data-category-dropdown-trigger aria-haspopup="listbox" aria-expanded="false" aria-label="Filtrar por categoria">
+              <span class="category-dropdown-icon" aria-hidden="true">📁</span>
+              <span class="category-dropdown-label">Categorias</span>
+              <span class="category-dropdown-arrow" aria-hidden="true">▼</span>
+            </button>
+            <div class="category-dropdown-menu" data-category-dropdown-menu role="listbox" aria-label="Categorias" hidden>
+              <button class="category-dropdown-item" type="button" role="option" data-category-filter="" aria-selected="true">Todas</button>
+              <button class="category-dropdown-item" type="button" role="option" data-category-filter="__ao_vivo">Ao vivo</button>
+              <button class="category-dropdown-item" type="button" role="option" data-category-filter="__sob_demanda">Sob demanda</button>
+              <hr class="category-dropdown-divider">
+              <!-- Category items will be inserted here by JS -->
+            </div>
+          </div>
           <button class="category-filter" type="button" data-so-ao-vivo aria-pressed="false"
                   title="Mostrar só os canais que estão transmitindo neste momento">Só ao vivo</button>
         </div>
