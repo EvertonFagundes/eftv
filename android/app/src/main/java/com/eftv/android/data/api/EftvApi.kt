@@ -60,6 +60,14 @@ class EftvApi(
         return tokenPair(request("POST", "/auth/login", body = body))
     }
 
+    suspend fun register(email: String, password: String, fullName: String? = null): TokenPair {
+        val body = JSONObject()
+            .put("email", email.trim())
+            .put("password", password)
+        fullName?.let { body.put("full_name", it) }
+        return tokenPair(request("POST", "/auth/register", body = body))
+    }
+
     suspend fun refresh(refreshToken: String): TokenPair {
         val body = JSONObject().put("refresh_token", refreshToken)
         return tokenPair(request("POST", "/auth/refresh", body = body))
@@ -123,8 +131,8 @@ class EftvApi(
 
         try {
             connection.requestMethod = method
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 20_000
+            connection.connectTimeout = 30_000
+            connection.readTimeout = 60_000
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("User-Agent", "EFTV-Android/${BuildConfig.VERSION_NAME}")
             accessToken?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
