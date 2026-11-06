@@ -13,7 +13,16 @@
         android:background="@android:color/black"
         app:resize_mode="fit"
         app:show_buffering="when_playing"
-        app:use_controller="true" />
+        app:use_controller="false" />
+
+    <!-- Camada de toque: mostra/esconde o overlay sem interferir nos botões -->
+    <View
+        android:id="@+id/touchLayer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/transparent"
+        android:clickable="true"
+        android:focusable="false" />
 
     <!-- Top Bar: voltar, nome canal, badge ao vivo, qualidade -->
     <LinearLayout
@@ -27,7 +36,9 @@
         android:paddingStart="12dp"
         android:paddingTop="10dp"
         android:paddingEnd="12dp"
-        android:paddingBottom="10dp">
+        android:paddingBottom="10dp"
+        android:visibility="gone"
+        tools:visibility="visible">
 
         <ImageButton
             android:id="@+id/closeButton"

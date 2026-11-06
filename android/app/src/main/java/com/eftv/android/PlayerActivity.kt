@@ -13,7 +13,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -26,6 +25,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import com.eftv.android.databinding.ActivityPlayerBinding
+import com.google.android.material.slider.Slider
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
@@ -71,6 +71,9 @@ class PlayerActivity : AppCompatActivity() {
     /** Se o overlay (topBar + bottomControls) esta visível no momento. */
     private var overlayVisible = false
 
+    /** Evita que a barra de progresso "pule" enquanto o usuario arrasta. */
+    private var userSeeking = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityPlayerBinding.inflate(layoutInflater)
@@ -98,8 +101,30 @@ class PlayerActivity : AppCompatActivity() {
         // Inicialmente o progresso VOD fica escondido
         binding.vodProgressText.visibility = View.GONE
 
-        // Toque na playerView alterna a visibilidade do overlay (topBar + controles)
-        binding.playerView.setOnClickListener { toggleOverlay() }
+        // Toque na tela alterna a visibilidade do overlay (topBar + controles)
+        binding.touchLayer.setOnClickListener { toggleOverlay() }
+
+        binding.btnPlayPause.setOnClickListener { togglePlayPause() }
+        binding.btnRewind.setOnClickListener { seekBy(-SEEK_STEP_MS) }
+        binding.btnForward.setOnClickListener { seekBy(SEEK_STEP_MS) }
+
+        // Barra de progresso: procura ao soltar o dedo (estilo Netflix/Prime)
+        binding.progressSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {
+                userSeeking = true
+            }
+
+            override fun onStopTrackingTouch(slider: Slider) {
+                userSeeking = false
+                val current = player ?: return
+                val duration = current.duration
+                if (duration > 0) {
+                    current.seekTo((slider.value / 100f * duration).toLong())
+                }
+                updatePlaybackUi()
+                scheduleHideOverlay()
+            }
+        })
     }
 
     override fun onStart() {
@@ -221,18 +246,13 @@ class PlayerActivity : AppCompatActivity() {
                         binding.liveBadge.visibility = if (isLive) View.VISIBLE else View.GONE
                         binding.qualityBadgePlayer.visibility = View.VISIBLE
 
-                        if (isLive) {
-                            binding.vodProgressText.visibility = View.GONE
-                            cancelVodProgress()
-                        } else {
-                            binding.vodProgressText.visibility = View.VISIBLE
-                            startVodProgressUpdates()
-                        }
+                        // Atualiza os controles de acordo com o tipo de conteudo
+                        startUiUpdates()
+                        updatePlaybackUi()
 
                         // Mostra o overlay (topBar + controles) e agenda o escondimento apos 3s
                         showOverlay()
                         scheduleHideOverlay()
-                        updateVodProgress()
                     }
 
                     Player.STATE_ENDED -> {
@@ -250,7 +270,6 @@ class PlayerActivity : AppCompatActivity() {
         })
 
         binding.playerView.player = exoPlayer
-        configurePlayerUi()
         exoPlayer.setMediaItem(
             MediaItem.Builder()
                 .setUri(streamUrl)
@@ -268,35 +287,22 @@ class PlayerActivity : AppCompatActivity() {
         updateLiveBadge()
     }
 
-    /** Canal ao vivo nao tem barra de tempo; esconde posicao/duracao do controle. */
-    private fun configurePlayerUi() {
-        binding.playerView.post {
-            listOf(
-                androidx.media3.ui.R.id.exo_position,
-                androidx.media3.ui.R.id.exo_duration,
-                androidx.media3.ui.R.id.exo_progress,
-            ).forEach { id ->
-                binding.playerView.findViewById<View>(id)?.visibility = View.GONE
-            }
-        }
-    }
-
     private fun updateLiveBadge() {
         binding.liveBadge.visibility =
             if (player?.isCurrentMediaItemLive == true) View.VISIBLE else View.GONE
     }
 
     /**
-     * Inicia atualizacoes periodicas do progresso do VOD (assistido / restante).
-     * Chamado apenas para conteudo sob demanda.
+     * Inicia as atualizacoes periodicas da interface do player:
+     * botao play/pause, barra de progresso e texto "Assistido/Restam" (VOD).
      */
-    private fun startVodProgressUpdates() {
+    private fun startUiUpdates() {
         cancelVodProgress()
         vodProgressCallback = object : Runnable {
             override fun run() {
-                updateVodProgress()
-                if (!stopped && !isFinishing && !isDestroyed && !isLive) {
-                    handler.postDelayed(this, 1000)
+                updatePlaybackUi()
+                if (!stopped && !isFinishing && !isDestroyed) {
+                    handler.postDelayed(this, UI_TICK_MS)
                 }
             }
         }
@@ -308,27 +314,91 @@ class PlayerActivity : AppCompatActivity() {
         vodProgressCallback = null
     }
 
-    /** Atualiza o texto de progresso do VOD (assistido / restante). */
-    private fun updateVodProgress() {
+    /** Atualiza botao play/pause e, para VOD, barra e tempos assistido/restante. */
+    private fun updatePlaybackUi() {
         val current = player ?: return
+
+        val playing = current.isPlaying
+        binding.btnPlayPause.setImageResource(
+            if (playing) R.drawable.ic_pause else R.drawable.ic_play,
+        )
+        binding.btnPlayPause.contentDescription =
+            getString(if (playing) R.string.player_pause else R.string.player_play)
+
+        // Ao vivo nao tem linha do tempo: mostra so play/pause.
         if (isLive) {
             binding.vodProgressText.visibility = View.GONE
+            binding.positionText.visibility = View.GONE
+            binding.durationText.visibility = View.GONE
+            binding.progressSlider.visibility = View.GONE
+            binding.btnRewind.visibility = View.GONE
+            binding.btnForward.visibility = View.GONE
             return
         }
 
-        val durationMs = current.duration
-        val positionMs = current.currentPosition
+        binding.positionText.visibility = View.VISIBLE
+        binding.durationText.visibility = View.VISIBLE
+        binding.progressSlider.visibility = View.VISIBLE
+        binding.btnRewind.visibility = View.VISIBLE
+        binding.btnForward.visibility = View.VISIBLE
 
-        if (durationMs == C.TIME_UNSET || durationMs <= 0) {
-            // Duracao desconhecida: mostra so o tempo decorrido
-            binding.vodProgressText.text = "Assistido: ${formatTime(positionMs)} · Restam: -- min"
-        } else {
-            val assistidoMs = positionMs.coerceAtLeast(0)
-            val restanteMs = (durationMs - positionMs).coerceAtLeast(0)
+        val durationMs = current.duration
+        val positionMs = current.currentPosition.coerceAtLeast(0)
+
+        binding.positionText.text = formatClock(positionMs)
+
+        if (durationMs <= 0) {
+            binding.durationText.text = "--:--"
             binding.vodProgressText.text =
-                "Assistido: ${formatTime(assistidoMs)} · Restam: ${formatTime(restanteMs)}"
+                "Assistido: ${formatTime(positionMs)} · Restam: --"
+            binding.progressSlider.value = 0f
+        } else {
+            binding.durationText.text = formatClock(durationMs)
+            if (!userSeeking) {
+                binding.progressSlider.value =
+                    (positionMs.toFloat() / durationMs * 100f).coerceIn(0f, 100f)
+            }
+            val remainingMs = (durationMs - positionMs).coerceAtLeast(0)
+            binding.vodProgressText.text =
+                "Assistido: ${formatTime(positionMs)} · Restam: ${formatTime(remainingMs)}"
         }
         binding.vodProgressText.visibility = View.VISIBLE
+    }
+
+    /** Play/pause pelo botao central. */
+    private fun togglePlayPause() {
+        val current = player ?: return
+        if (current.isPlaying) current.pause() else current.play()
+        updatePlaybackUi()
+        scheduleHideOverlay()
+    }
+
+    /** Avanca/retrocede (apenas VOD; ao vivo fica sempre no ponto ao vivo). */
+    private fun seekBy(deltaMs: Long) {
+        val current = player ?: return
+        if (isLive) return
+
+        val durationMs = current.duration
+        var target = current.currentPosition + deltaMs
+        if (target < 0) target = 0
+        if (durationMs > 0 && target > durationMs) target = durationMs
+
+        current.seekTo(target)
+        updatePlaybackUi()
+        scheduleHideOverlay()
+    }
+
+    /** Formata milissegundos como mm:ss ou hh:mm:ss (usado nos tempos do player). */
+    private fun formatClock(ms: Long): String {
+        val totalSeconds = TimeUnit.MILLISECONDS.toSeconds(ms.coerceAtLeast(0))
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            "%d:%02d:%02d".format(hours, minutes, seconds)
+        } else {
+            "%02d:%02d".format(minutes, seconds)
+        }
     }
 
     /** Formata milissegundos em "X min" ou "X:XX" se menor que 1 hora. */
@@ -341,7 +411,7 @@ class PlayerActivity : AppCompatActivity() {
             val remainingMin = minutes % 60
             "${hours}h ${remainingMin}min"
         } else if (minutes > 0) {
-            "${minutes}min ${"%02d".format(seconds)}s"
+            "${minutes}min ${String.format("%02d", seconds)}s"
         } else {
             "${seconds}s"
         }
@@ -354,6 +424,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun showOverlay() {
         cancelHideOverlay()
         overlayVisible = true
+        Timber.d("Overlay visivel (nome/badges/controles)")
         binding.topBar.visibility = View.VISIBLE
         binding.bottomControls.visibility = View.VISIBLE
     }
@@ -365,6 +436,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun hideOverlay() {
         cancelHideOverlay()
         overlayVisible = false
+        Timber.d("Overlay oculto (apenas video)")
         binding.topBar.visibility = View.GONE
         binding.bottomControls.visibility = View.GONE
     }
@@ -542,6 +614,12 @@ class PlayerActivity : AppCompatActivity() {
 
         /** Delay para esconder nome/badges apos o conteudo comecar a tocar (ms). */
         private const val HIDE_OVERLAY_DELAY_MS = 3000L
+
+        /** Intervalo de atualizacao dos controles do player (ms). */
+        private const val UI_TICK_MS = 500L
+
+        /** Quanto os botoes de avancar/retroceder pulam (ms). */
+        private const val SEEK_STEP_MS = 10_000L
 
         // Buffer: segura mais alguns segundos para atravessar oscilacao de rede.
         private const val MIN_BUFFER_MS = 15_000

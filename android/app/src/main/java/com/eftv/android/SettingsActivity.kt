@@ -1,6 +1,7 @@
 package com.eftv.android
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceFragmentCompat
@@ -35,6 +36,9 @@ class SettingsActivity : AppCompatActivity() {
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.preferences, rootKey)
+
+            findPreference<androidx.preference.Preference>("pref_version")?.summary =
+                BuildConfig.VERSION_NAME
         }
     }
 
@@ -44,12 +48,14 @@ class SettingsActivity : AppCompatActivity() {
         const val PREFS_NAME = "eftv_settings"
 
         /** Verifica se o conteudo adulto esta liberado. */
+        @JvmStatic
         fun isAdultContentEnabled(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getBoolean(PREF_SHOW_ADULT, false)
         }
 
         /** Define se o conteudo adulto esta liberado. */
+        @JvmStatic
         fun setAdultContentEnabled(context: Context, enabled: Boolean) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             prefs.edit().putBoolean(PREF_SHOW_ADULT, enabled).apply()

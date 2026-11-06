@@ -73,6 +73,9 @@ class MainActivity : AppCompatActivity() {
     private var searchQuery: String = ""
     private var hasCatalog = false
 
+    /** Ultimo estado da preferencia de conteudo adulto (detecta mudanca). */
+    private var adultEnabled = false
+
     /** Catalogo vem do servidor embutido no proprio aparelho. */
     private val localMode: Boolean
         get() = BuildConfig.LOCAL_MODE ||
@@ -94,12 +97,38 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        adultEnabled = SettingsActivity.isAdultContentEnabled(this)
+
         setupToolbar()
         setupLists()
         setupSearch()
         setupRefresh()
 
         startCatalog()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!::repository.isInitialized || !hasCatalog) return
+
+        val enabled = SettingsActivity.isAdultContentEnabled(this)
+        if (enabled == adultEnabled) return
+        adultEnabled = enabled
+
+        // Preferencia mudou nas configuracoes escondidas: reconstroi o
+        // dropdown e recarrega a lista sem reiniciar o app.
+        lifecycleScope.launch {
+            val groups = withContext(Dispatchers.IO) { repository.catalogStore.groups() }
+            rebuildCategoryItems(groups)
+
+            if (!enabled && selectedGroup.equals(ADULT_GROUP, ignoreCase = true)) {
+                selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL)
+                selectedMode = ChannelMode.ALL
+                selectedGroup = null
+            }
+            binding.categoryButton.text = selectedCategory.label
+            filterChannels(debounce = 0)
+        }
     }
 
     private fun setupToolbar() {
@@ -495,16 +524,7 @@ class MainActivity : AppCompatActivity() {
         catalogMetadata = metadata
 
         val groups = withContext(Dispatchers.IO) { repository.catalogStore.groups() }
-        val favoritesLabel = getString(R.string.favorites)
-        val recentsLabel = getString(R.string.recents)
-
-        // Build category items for dropdown
-        categoryItems = buildList {
-            add(CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL))
-            add(CategoryAdapter.Category(favoritesLabel, ChannelMode.FAVORITES))
-            add(CategoryAdapter.Category(recentsLabel, ChannelMode.RECENTS))
-            groups.forEach { title -> add(CategoryAdapter.Category(title, ChannelMode.ALL, title)) }
-        }
+        rebuildCategoryItems(groups)
 
         selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL)
         selectedMode = ChannelMode.ALL
@@ -517,6 +537,28 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.subtitle = buildSubtitle()
         binding.swipeRefresh.visibility = View.VISIBLE
         filterChannels(debounce = 0)
+    }
+
+    /**
+     * Monta as categorias do dropdown.
+     * O grupo "Adultos" so entra quando liberado nas configuracoes escondidas.
+     */
+    private fun rebuildCategoryItems(groups: List<String>) {
+        val showAdult = SettingsActivity.isAdultContentEnabled(this)
+        val favoritesLabel = getString(R.string.favorites)
+        val recentsLabel = getString(R.string.recents)
+
+        categoryItems = buildList {
+            add(CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL))
+            add(CategoryAdapter.Category(favoritesLabel, ChannelMode.FAVORITES))
+            add(CategoryAdapter.Category(recentsLabel, ChannelMode.RECENTS))
+            groups.forEach { title ->
+                if (!showAdult && title.equals(ADULT_GROUP, ignoreCase = true)) {
+                    return@forEach
+                }
+                add(CategoryAdapter.Category(title, ChannelMode.ALL, title))
+            }
+        }
     }
 
     private fun buildSubtitle(shown: Int? = null): CharSequence {
@@ -563,9 +605,10 @@ class MainActivity : AppCompatActivity() {
 
     /** Se verdadeiro, exclui conteudo adulto de listagens e buscas. */
     private fun shouldExcludeAdults(): Boolean {
-        return selectedMode == ChannelMode.ALL &&
-            selectedGroup == null &&
-            !SettingsActivity.isAdultContentEnabled(this)
+        if (SettingsActivity.isAdultContentEnabled(this)) return false
+        // A categoria "Adultos" nem aparece no dropdown quando desligado,
+        // mas a protecao vale tambem para Favoritos, Recentes e busca.
+        return !selectedGroup.equals(ADULT_GROUP, ignoreCase = true)
     }
 
     private fun filterChannels(debounce: Long) {
@@ -892,6 +935,9 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_SKIP_AUTH = "extra_skip_auth"
+
+        /** Grupo de conteudo adulto (oculto por padrao). */
+        private const val ADULT_GROUP = "Adultos"
 
         /** Depois disso, o app tenta atualizar a lista em segundo plano. */
         private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
