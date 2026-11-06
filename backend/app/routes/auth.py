@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.models.device import SubscriptionDevice
+from app.models.plan import Plan
+from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.auth import (
     MessageResponse,
@@ -49,32 +52,59 @@ async def register(
             detail="Email já cadastrado",
         )
 
+    # Verifica se já existe algum admin no banco; se não, este usuário vira admin
+    admin_result = await db.execute(select(User).where(User.is_admin == True))  # noqa: E712
+    existing_admin = admin_result.scalar_one_or_none()
+    is_first_user = existing_admin is None
+
+    # Garante que exista um plano default (grátis, para o dono do app)
+    plan_result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc()))  # noqa: E712
+    plan = plan_result.scalar_one_or_none()
+    if plan is None:
+        plan = Plan(
+            name="Dono do App",
+            description="Plano default para o proprietário da instância EFTV",
+            price_cents=0,
+            currency="BRL",
+            interval="month",
+            max_simultaneous_streams=5,
+            max_devices=10,
+            features={"hd": True, "full_hd": True, "4k": False},
+            sort_order=0,
+        )
+        db.add(plan)
+        await db.flush()
+
     # Cria usuário
     user = User(
         email=data.email,
         password_hash=hash_password(data.password),
         full_name=data.full_name,
         phone=data.phone,
+        is_admin=is_first_user,
     )
     db.add(user)
     await db.flush()  # Para obter o ID
 
-    # Se plan_id fornecido, cria subscription pendente (integração Mercado Pago vem na Fase 2)
-    if data.plan_id:
-        from app.models.plan import Plan
-        from app.models.subscription import Subscription
+    # Cria subscription ativa para o usuário (dono do app ou assinante)
+    now = datetime.now(UTC)
+    period_end = now.replace(year=now.year + 1)  # 1 ano de validade
+    subscription = Subscription(
+        user_id=user.id,
+        plan_id=plan.id,
+        status="active",
+        current_period_start=now,
+        current_period_end=period_end,
+        auto_renew=True,
+    )
+    db.add(subscription)
 
-        plan_result = await db.execute(select(Plan).where(Plan.id == data.plan_id))
-        plan = plan_result.scalar_one_or_none()
-        if plan:
-            subscription = Subscription(
-                user_id=user.id,
-                plan_id=plan.id,
-                status="pending",
-                current_period_start=datetime.now(UTC),
-                current_period_end=datetime.now(UTC),
-            )
-            db.add(subscription)
+    # Se plan_id fornecido pelo frontend, sobrescreve (integração Mercado Pago fica para Fase 2)
+    if data.plan_id:
+        plan_result2 = await db.execute(select(Plan).where(Plan.id == data.plan_id))
+        plan2 = plan_result2.scalar_one_or_none()
+        if plan2:
+            subscription.plan_id = plan2.id
 
     await db.commit()
     await db.refresh(user)

@@ -11,10 +11,82 @@ from app.models.channel import Channel
 from app.models.device import SubscriptionDevice
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.security.dependencies import require_admin
+from app.security.dependencies import get_current_user, require_admin
 from app.services.devices import revoke_all_devices
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+
+@router.post("/claim-ownership")
+async def claim_ownership(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Permite que o primeiro usuário logado se torne dono do app (admin)
+    se ainda não houver nenhum administrador cadastrado.
+    """
+    admin_result = await db.execute(select(User).where(User.is_admin == True))  # noqa: E712
+    existing_admin = admin_result.scalar_one_or_none()
+    if existing_admin is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Já existe um administrador cadastrado.",
+        )
+
+    current_user.is_admin = True
+    current_user.is_active = True
+
+    # Garante plano default
+    plan_result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc()))  # noqa: E712
+    plan = plan_result.scalar_one_or_none()
+    if plan is None:
+        plan = Plan(
+            name="Dono do App",
+            description="Plano default para o proprietário da instância EFTV",
+            price_cents=0,
+            currency="BRL",
+            interval="month",
+            max_simultaneous_streams=5,
+            max_devices=10,
+            features={"hd": True, "full_hd": True, "4k": False},
+            sort_order=0,
+        )
+        db.add(plan)
+        await db.flush()
+
+    # Ativa ou cria subscription
+    sub_result = await db.execute(select(Subscription).where(Subscription.user_id == current_user.id))
+    subscription = sub_result.scalar_one_or_none()
+    now = datetime.now(UTC)
+    period_end = now.replace(year=now.year + 1)
+    if subscription is None:
+        subscription = Subscription(
+            user_id=current_user.id,
+            plan_id=plan.id,
+            status="active",
+            current_period_start=now,
+            current_period_end=period_end,
+            auto_renew=True,
+        )
+        db.add(subscription)
+    else:
+        subscription.plan_id = plan.id
+        subscription.status = "active"
+        subscription.current_period_start = now
+        subscription.current_period_end = period_end
+        subscription.auto_renew = True
+        subscription.cancelled_at = None
+
+    await db.commit()
+    await db.refresh(current_user)
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "is_admin": current_user.is_admin,
+        "is_active": current_user.is_active,
+        "message": "Você é agora o dono do app. Tudo liberado.",
+    }
 
 
 @router.get("/stats")
@@ -182,3 +254,71 @@ async def toggle_user_active(
     user.is_active = not user.is_active
     await db.commit()
     return {"id": user.id, "is_active": user.is_active}
+
+
+@router.post("/users/{user_id}/make-owner")
+async def make_user_owner(
+    user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
+):
+    """
+    Promove um usuário a dono do app (admin) e ativa sua subscription.
+    Útil para configurar o proprietário após o cadastro.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+
+    user.is_admin = True
+    user.is_active = True
+
+    # Garante plano default
+    plan_result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc()))  # noqa: E712
+    plan = plan_result.scalar_one_or_none()
+    if plan is None:
+        plan = Plan(
+            name="Dono do App",
+            description="Plano default para o proprietário da instância EFTV",
+            price_cents=0,
+            currency="BRL",
+            interval="month",
+            max_simultaneous_streams=5,
+            max_devices=10,
+            features={"hd": True, "full_hd": True, "4k": False},
+            sort_order=0,
+        )
+        db.add(plan)
+        await db.flush()
+
+    # Ativa ou cria subscription
+    sub_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
+    subscription = sub_result.scalar_one_or_none()
+    now = datetime.now(UTC)
+    period_end = now.replace(year=now.year + 1)
+    if subscription is None:
+        subscription = Subscription(
+            user_id=user.id,
+            plan_id=plan.id,
+            status="active",
+            current_period_start=now,
+            current_period_end=period_end,
+            auto_renew=True,
+        )
+        db.add(subscription)
+    else:
+        subscription.plan_id = plan.id
+        subscription.status = "active"
+        subscription.current_period_start = now
+        subscription.current_period_end = period_end
+        subscription.auto_renew = True
+        subscription.cancelled_at = None
+
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "id": user.id,
+        "email": user.email,
+        "is_admin": user.is_admin,
+        "is_active": user.is_active,
+        "subscription_status": subscription.status,
+    }
