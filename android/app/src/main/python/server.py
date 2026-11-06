@@ -475,9 +475,9 @@ def filename_from_url(url: str) -> str:
     return name or "Playlist"
 
 
-def fetch_text(url: str) -> tuple[str, str]:
+def fetch_text(url: str, user_agent: str = "") -> tuple[str, str]:
     headers = {
-        "User-Agent": USER_AGENT,
+        "User-Agent": user_agent or USER_AGENT,
         "Accept": "application/x-mpegURL, application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*",
         "Accept-Encoding": "identity",
     }
@@ -1090,6 +1090,13 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(corpo)
             return
 
+        if route == "/api/playlist.m3u":
+            # Playlist gerada na hora para o app Android: os streams apontam
+            # para o proxy local, entao o aparelho nao precisa conhecer a URL
+            # original nem os cabecalhos exigidos pelo provedor.
+            self._send_playlist()
+            return
+
         if route == "/api/proxy":
             self._handle_proxy(parts.query)
             return
@@ -1134,31 +1141,15 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         try:
-            # Rotas de playlist desabilitadas: o usuario nao pode adicionar
-            # ou modificar playlists. Apenas a playlist ja configurada esta
-            # disponivel.
-            if route == "/api/playlists":
-                # GET continua permitido para listar a playlist ja configurada
-                if self.command == "GET":
-                    store = load_store()
-                    self._send_json(
-                        {"ok": True, "playlists": [summarize(p) for p in store.get("playlists", [])]}
-                    )
-                    return
-                # POST/PUT/DELETE bloqueados
-                self._error("Adicao/modificacao de playlists nao e permitida.", 403)
-                return
-
-            if route == "/api/playlists/upload":
-                self._error("Upload de playlists nao e permitido.", 403)
-                return
-
-            if route == "/api/playlists/refresh":
-                self._error("Atualizacao de playlists nao e permitida.", 403)
-                return
-
-            if route == "/api/playlists/clear":
-                self._error("Limpeza de playlists nao e permitida.", 403)
+            # O cat�logo vem fixo com o APK: n�o h� rotas de inclus�o,
+            # upload, atualiza��o ou remo��o de playlists pelo usu�rio.
+            if route in (
+                "/api/playlists",
+                "/api/playlists/upload",
+                "/api/playlists/refresh",
+                "/api/playlists/clear",
+            ):
+                self._error("Somente leitura: a playlist j� vem configurada com o app.", 403)
                 return
 
             if route == "/api/servidor":
@@ -1189,12 +1180,27 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._same_origin():
             self._error("Origem não permitida.", 403)
             return
-        # Remocao de playlists desabilitada: o usuario nao pode remover playlists
+        # Playlist fixa: nao permite remocao pelo usuario.
         if parts.path == "/api/playlists":
-            self._error("Remocao de playlists nao e permitida.", 403)
+            self._error("Somente leitura: a playlist ja vem configurada com o app.", 403)
             return
-        self._error("Rota não encontrada.", 404)
-        return
+        if parts.path != "/api/playlists":
+            self._error("Rota não encontrada.", 404)
+            return
+        query = parse_qs(parts.query)
+        pid = (query.get("id") or [""])[0].strip()
+        if not pid:
+            self._error("Informe o id da playlist.", 400)
+            return
+        with STORE_LOCK:
+            store = load_store()
+            antes = len(store["playlists"])
+            store["playlists"] = [p for p in store["playlists"] if p.get("id") != pid]
+            save_store(store)
+        if len(store["playlists"]) == antes:
+            self._error("Playlist não encontrada.", 404)
+            return
+        self._send_json({"ok": True})
 
     # --------------------------------------------------------- manipuladores
     def _add_from_url(self, payload: dict) -> None:
@@ -1205,7 +1211,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not is_http_url(url):
             raise ValueError("O link precisa começar com http:// ou https://.")
 
-        text, final_url = fetch_text(url)
+        text, final_url = fetch_text(url, str(payload.get("user_agent", "")).strip())
         nome_playlist, channels, truncada = parse_playlist_text(text, final_url, nome)
         if not channels:
             raise ValueError(
@@ -1214,6 +1220,7 @@ class Handler(SimpleHTTPRequestHandler):
             )
 
         playlist = make_playlist(nome or nome_playlist or filename_from_url(final_url), final_url, channels)
+        playlist["user_agent"] = str(payload.get("user_agent", "")).strip()
         with STORE_LOCK:
             store = load_store()
             store["playlists"].append(playlist)
@@ -1271,7 +1278,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not is_http_url(url):
                 raise ValueError("Esta playlist foi enviada por arquivo e não tem URL para atualizar.")
 
-            text, final_url = fetch_text(url)
+            text, final_url = fetch_text(url, str(playlist.get("user_agent", "")).strip())
             _, channels, truncada = parse_playlist_text(text, final_url, playlist.get("name", ""))
             if not channels:
                 raise ValueError("A playlist não tem mais canais válidos.")
@@ -1368,6 +1375,45 @@ class Handler(SimpleHTTPRequestHandler):
             }
         return {}
 
+    def _send_playlist(self) -> None:
+        """Devolve todas as playlists salvas em um unico .m3u.
+
+        Cada canal aponta para /api/proxy?url=..., assim o app Android fala
+        somente com 127.0.0.1:8124. Isso resolve CORS, User-Agent e Referer
+        exigidos por muitos provedores de IPTV.
+        """
+        store = load_store()
+        host = self.headers.get("Host") or "%s:%s" % self.server.server_address[:2]
+        base = f"http://{host}"
+        linhas = ["#EXTM3U"]
+        total = 0
+        for playlist in store.get("playlists", []):
+            for canal in playlist.get("channels", []):
+                url = (canal.get("url") or "").strip()
+                if not is_http_url(url):
+                    continue
+                nome = (canal.get("name") or "Sem nome").replace('"', "'")
+                grupo = (canal.get("group") or "").replace('"', "'")
+                logo = (canal.get("logo") or "").replace('"', "'")
+                tvg_id = (canal.get("tvg_id") or "").replace('"', "'")
+                linhas.append(
+                    '#EXTINF:-1 tvg-id="%s" tvg-name="%s" tvg-logo="%s" '
+                    'group-title="%s",%s'
+                    % (tvg_id, nome, logo, grupo, nome)
+                )
+                linhas.append(base + proxy_url(url))
+                total += 1
+
+        data = ("\n".join(linhas) + "\n").encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/x-mpegurl; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-EFTV-Channels", str(total))
+        self._cors_publico()
+        self.end_headers()
+        self.wfile.write(data)
+
     def _handle_proxy(self, query: str) -> None:
         params = parse_qs(query)
         target = (params.get("url") or [""])[0].strip()
@@ -1379,12 +1425,17 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         headers = {
-            "User-Agent": USER_AGENT,
+            # O app envia o User-Agent configurado (VLC, por exemplo); o
+            # navegador envia o dele. Repassar evita bloqueio de provedores.
+            "User-Agent": (self.headers.get("User-Agent") or "").strip() or USER_AGENT,
             "Accept": "*/*",
             "Accept-Encoding": "identity",
         }
         parts = urlsplit(target)
-        headers["Referer"] = f"{parts.scheme}://{parts.netloc}/"
+        referer = (self.headers.get("Referer") or "").strip()
+        if not referer or "127.0.0.1" in referer or "localhost" in referer:
+            referer = f"{parts.scheme}://{parts.netloc}/"
+        headers["Referer"] = referer
         range_header = self.headers.get("Range")
         if range_header:
             headers["Range"] = range_header

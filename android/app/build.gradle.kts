@@ -20,6 +20,11 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+// Modo local: o catalogo vem do servidor embutido (127.0.0.1:8124), sem
+// login e sem backend na nuvem.
+val localMode: Boolean =
+    localProperties.getProperty("EFTV_LOCAL_MODE", "true").trim().toBoolean()
+
 /**
  * Gera PlaylistConfig.kt em tempo de build.
  *
@@ -110,6 +115,7 @@ android {
             "API_BASE_URL",
             "\"${configuredApiUrl.ifBlank { "http://127.0.0.1:8000" }}\"",
         )
+        buildConfigField("boolean", "LOCAL_MODE", localMode.toString())
 
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -164,10 +170,6 @@ chaquopy {
 }
 
 val repoRoot = rootProject.projectDir.parentFile
-val syncEftvPython = tasks.register<Copy>("syncEftvPython") {
-    from(repoRoot.resolve("server.py"))
-    into(layout.projectDirectory.dir("src/main/python"))
-}
 val syncEftvAssets = tasks.register<Copy>("syncEftvAssets") {
     from(repoRoot) {
         include("index.html", "canal.html", "manifest.webmanifest", "sw.js")
@@ -176,7 +178,7 @@ val syncEftvAssets = tasks.register<Copy>("syncEftvAssets") {
     into(layout.projectDirectory.dir("src/main/assets/eftv"))
 }
 tasks.named("preBuild") {
-    dependsOn(syncEftvPython, syncEftvAssets)
+    dependsOn(syncEftvAssets)
 }
 
 dependencies {

@@ -475,9 +475,9 @@ def filename_from_url(url: str) -> str:
     return name or "Playlist"
 
 
-def fetch_text(url: str) -> tuple[str, str]:
+def fetch_text(url: str, user_agent: str = "") -> tuple[str, str]:
     headers = {
-        "User-Agent": USER_AGENT,
+        "User-Agent": user_agent or USER_AGENT,
         "Accept": "application/x-mpegURL, application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*",
         "Accept-Encoding": "identity",
     }
@@ -1090,6 +1090,13 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(corpo)
             return
 
+        if route == "/api/playlist.m3u":
+            # Playlist gerada na hora para o app Android: os streams apontam
+            # para o proxy local, entao o aparelho nao precisa conhecer a URL
+            # original nem os cabecalhos exigidos pelo provedor.
+            self._send_playlist()
+            return
+
         if route == "/api/proxy":
             self._handle_proxy(parts.query)
             return
@@ -1134,31 +1141,15 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         try:
-            if route == "/api/playlists":
-                payload = self._read_json()
-                self._add_from_url(payload)
-                return
-
-            if route == "/api/playlists/upload":
-                query = parse_qs(parts.query)
-                name = (query.get("name") or [""])[0].strip()
-                raw = self._read_body()
-                try:
-                    text = raw.decode("utf-8-sig")
-                except UnicodeDecodeError:
-                    text = raw.decode("latin-1")
-                self._add_from_text(text, name or "Playlist enviada")
-                return
-
-            if route == "/api/playlists/refresh":
-                payload = self._read_json()
-                self._refresh_playlist(payload.get("id", ""))
-                return
-
-            if route == "/api/playlists/clear":
-                with STORE_LOCK:
-                    save_store({"playlists": []})
-                self._send_json({"ok": True})
+            # O cat�logo vem fixo com o APK: n�o h� rotas de inclus�o,
+            # upload, atualiza��o ou remo��o de playlists pelo usu�rio.
+            if route in (
+                "/api/playlists",
+                "/api/playlists/upload",
+                "/api/playlists/refresh",
+                "/api/playlists/clear",
+            ):
+                self._error("Somente leitura: a playlist j� vem configurada com o app.", 403)
                 return
 
             if route == "/api/servidor":
@@ -1189,6 +1180,10 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._same_origin():
             self._error("Origem não permitida.", 403)
             return
+        # Playlist fixa: nao permite remocao pelo usuario.
+        if parts.path == "/api/playlists":
+            self._error("Somente leitura: a playlist ja vem configurada com o app.", 403)
+            return
         if parts.path != "/api/playlists":
             self._error("Rota não encontrada.", 404)
             return
@@ -1216,7 +1211,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not is_http_url(url):
             raise ValueError("O link precisa começar com http:// ou https://.")
 
-        text, final_url = fetch_text(url)
+        text, final_url = fetch_text(url, str(payload.get("user_agent", "")).strip())
         nome_playlist, channels, truncada = parse_playlist_text(text, final_url, nome)
         if not channels:
             raise ValueError(
@@ -1225,6 +1220,7 @@ class Handler(SimpleHTTPRequestHandler):
             )
 
         playlist = make_playlist(nome or nome_playlist or filename_from_url(final_url), final_url, channels)
+        playlist["user_agent"] = str(payload.get("user_agent", "")).strip()
         with STORE_LOCK:
             store = load_store()
             store["playlists"].append(playlist)
@@ -1282,7 +1278,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not is_http_url(url):
                 raise ValueError("Esta playlist foi enviada por arquivo e não tem URL para atualizar.")
 
-            text, final_url = fetch_text(url)
+            text, final_url = fetch_text(url, str(playlist.get("user_agent", "")).strip())
             _, channels, truncada = parse_playlist_text(text, final_url, playlist.get("name", ""))
             if not channels:
                 raise ValueError("A playlist não tem mais canais válidos.")
@@ -1379,6 +1375,45 @@ class Handler(SimpleHTTPRequestHandler):
             }
         return {}
 
+    def _send_playlist(self) -> None:
+        """Devolve todas as playlists salvas em um unico .m3u.
+
+        Cada canal aponta para /api/proxy?url=..., assim o app Android fala
+        somente com 127.0.0.1:8124. Isso resolve CORS, User-Agent e Referer
+        exigidos por muitos provedores de IPTV.
+        """
+        store = load_store()
+        host = self.headers.get("Host") or "%s:%s" % self.server.server_address[:2]
+        base = f"http://{host}"
+        linhas = ["#EXTM3U"]
+        total = 0
+        for playlist in store.get("playlists", []):
+            for canal in playlist.get("channels", []):
+                url = (canal.get("url") or "").strip()
+                if not is_http_url(url):
+                    continue
+                nome = (canal.get("name") or "Sem nome").replace('"', "'")
+                grupo = (canal.get("group") or "").replace('"', "'")
+                logo = (canal.get("logo") or "").replace('"', "'")
+                tvg_id = (canal.get("tvg_id") or "").replace('"', "'")
+                linhas.append(
+                    '#EXTINF:-1 tvg-id="%s" tvg-name="%s" tvg-logo="%s" '
+                    'group-title="%s",%s'
+                    % (tvg_id, nome, logo, grupo, nome)
+                )
+                linhas.append(base + proxy_url(url))
+                total += 1
+
+        data = ("\n".join(linhas) + "\n").encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/x-mpegurl; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-EFTV-Channels", str(total))
+        self._cors_publico()
+        self.end_headers()
+        self.wfile.write(data)
+
     def _handle_proxy(self, query: str) -> None:
         params = parse_qs(query)
         target = (params.get("url") or [""])[0].strip()
@@ -1390,12 +1425,17 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         headers = {
-            "User-Agent": USER_AGENT,
+            # O app envia o User-Agent configurado (VLC, por exemplo); o
+            # navegador envia o dele. Repassar evita bloqueio de provedores.
+            "User-Agent": (self.headers.get("User-Agent") or "").strip() or USER_AGENT,
             "Accept": "*/*",
             "Accept-Encoding": "identity",
         }
         parts = urlsplit(target)
-        headers["Referer"] = f"{parts.scheme}://{parts.netloc}/"
+        referer = (self.headers.get("Referer") or "").strip()
+        if not referer or "127.0.0.1" in referer or "localhost" in referer:
+            referer = f"{parts.scheme}://{parts.netloc}/"
+        headers["Referer"] = referer
         range_header = self.headers.get("Range")
         if range_header:
             headers["Range"] = range_header

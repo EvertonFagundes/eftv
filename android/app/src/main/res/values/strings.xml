@@ -76,6 +76,16 @@
     <string name="server_channel_name">Servidor local</string>
     <string name="server_notification_title">EFTV</string>
     <string name="server_notification_text">Servidor local na porta %1$d</string>
+    <string name="server_not_ready">O servidor local ainda está iniciando. Tente novamente em alguns segundos.</string>
+    <string name="server_no_playlist">Nenhuma playlist configurada.\n\nToque em ⋮ → Adicionar playlist e cole o link .m3u do seu provedor. Depois toque em Atualizar.</string>
+    <string name="add_playlist">Adicionar playlist</string>
+    <string name="add_playlist_hint">Cole o link completo da playlist .m3u/.m3u8 do seu provedor (normalmente termina em .m3u ou contém get.php…type=m3u_plus).</string>
+    <string name="add_playlist_url">Link da playlist</string>
+    <string name="add_playlist_blank">Cole o link da playlist .m3u ou .m3u8.</string>
+    <string name="add_playlist_importing">Importando a playlist… Isso pode levar alguns segundos.</string>
+    <string name="add_playlist_success">%1$s</string>
+    <string name="add_playlist_failed">Não foi possível adicionar: %1$s</string>
+    <string name="open_web">Abrir interface web</string>
 
     <!-- Configuracoes -->
     <string name="settings_title">Configuracoes</string>

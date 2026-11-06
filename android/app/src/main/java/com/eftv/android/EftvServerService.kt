@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.chaquo.python.Python
@@ -20,11 +21,14 @@ import kotlin.concurrent.thread
 
 class EftvServerService : Service() {
 
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        acquireWakeLock()
         startInForeground("Iniciando servidor local...")
         thread(name = "eftv-server-boot", isDaemon = true) {
             try {
@@ -64,7 +68,21 @@ class EftvServerService : Service() {
         } catch (e: Exception) {
             Timber.w(e, "Falha ao parar servidor EFTV")
         }
+        releaseWakeLock()
         super.onDestroy()
+    }
+
+    private fun acquireWakeLock() {
+        val manager = getSystemService(POWER_SERVICE) as? PowerManager ?: return
+        wakeLock = manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "EFTV:server").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
     }
 
     private fun syncAssets(): File {
@@ -120,7 +138,7 @@ class EftvServerService : Service() {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)

@@ -13,6 +13,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -318,7 +319,7 @@ class PlayerActivity : AppCompatActivity() {
         val durationMs = current.duration
         val positionMs = current.currentPosition
 
-        if (durationMs == Player.TIME_UNKNOWN || durationMs <= 0) {
+        if (durationMs == C.TIME_UNSET || durationMs <= 0) {
             // Duracao desconhecida: mostra so o tempo decorrido
             binding.vodProgressText.text = "Assistido: ${formatTime(positionMs)} · Restam: -- min"
         } else {
@@ -340,7 +341,7 @@ class PlayerActivity : AppCompatActivity() {
             val remainingMin = minutes % 60
             "${hours}h ${remainingMin}min"
         } else if (minutes > 0) {
-            "${minutes}min ${seconds:02d}s"
+            "${minutes}min ${"%02d".format(seconds)}s"
         } else {
             "${seconds}s"
         }

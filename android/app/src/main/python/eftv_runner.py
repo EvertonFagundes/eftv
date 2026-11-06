@@ -35,6 +35,23 @@ def start_server(root: str, data_dir: str, host: str = "0.0.0.0", port: int = 81
         os.chdir(www)
         store = srv.load_store()
         if not store.get("playlists"):
+            # Playlist fixa que vem junto com o APK: o usu�rio n�o pode
+            # adicionar nem remover, s� assiste ao j� configurado.
+            amostra = os.path.join(www, "sample_playlist.m3u")
+            if os.path.exists(amostra):
+                try:
+                    with open(amostra, "r", encoding="utf-8") as fh:
+                        texto = fh.read()
+                    nome, canais, _ = srv.parse_playlist_text(
+                        texto, amostra, "Canal EFTV"
+                    )
+                    if canais:
+                        playlist = srv.make_playlist(nome or "Canal EFTV", amostra, canais)
+                        store["playlists"].append(playlist)
+                        srv.save_store(store)
+                        print(f"EFTV: playlist fixa carregada com {len(canais)} canal(is).")
+                except OSError:
+                    pass
             srv.save_store(store)
 
         try:

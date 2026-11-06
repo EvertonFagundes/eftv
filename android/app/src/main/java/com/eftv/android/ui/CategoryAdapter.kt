@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.eftv.android.R
+import com.eftv.android.SettingsActivity
 import com.eftv.android.data.ChannelMode
 import com.eftv.android.databinding.ItemCategoryBinding
 import java.util.ArrayList
@@ -265,7 +266,8 @@ class CategoryAdapter(
 
         // Estado selecionado: borda mais escura e texto mais forte
         val isSelected = position == selectedPosition
-        binding.categoryCard.setStrokeWidth(if (isSelected) 2f else 0f)
+        val strokePx = (2 * binding.root.resources.displayMetrics.density).toInt()
+        binding.categoryCard.strokeWidth = if (isSelected) strokePx else 0
         binding.categoryCard.strokeColor = ContextCompat.getColor(context, item.colorRes)
 
         binding.categoryLabel.setTextColor(

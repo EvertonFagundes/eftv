@@ -50,18 +50,6 @@
             android:textSize="15sp" />
     </com.google.android.material.textfield.TextInputLayout>
 
-<<<<<<< HEAD
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/categoryList"
-        android:layout_width="0dp"
-        android:layout_height="100dp"
-        android:clipToPadding="false"
-        android:paddingStart="12dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="8dp"
-        app:layout_constraintEnd_toEndOf="parent"
-=======
     <com.google.android.material.button.MaterialButton
         android:id="@+id/categoryButton"
         style="@style/Widget.Material3.Button.OutlinedButton"
@@ -69,13 +57,12 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginTop="8dp"
-        android:icon="@drawable/ic_category"
-        android:iconGravity="start"
-        android:iconTint="@color/on_background"
+        app:icon="@drawable/ic_category"
+        app:iconGravity="start"
+        app:iconTint="@color/on_background"
         android:text="@string/categories"
         android:textAllCaps="false"
         android:textSize="14sp"
->>>>>>> 3739781 (feat: adiciona dropdown de categorias)
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/searchLayout" />
 

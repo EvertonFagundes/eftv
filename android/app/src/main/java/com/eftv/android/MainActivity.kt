@@ -3,6 +3,7 @@ package com.eftv.android
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
@@ -11,6 +12,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -24,6 +26,7 @@ import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.Channel
 import com.eftv.android.data.ChannelMode
 import com.eftv.android.data.DeviceIdentity
+import com.eftv.android.data.LocalServer
 import com.eftv.android.data.PlaylistRepository
 import com.eftv.android.data.PlaylistSource
 import com.eftv.android.data.SessionStore
@@ -56,10 +59,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: PlaylistRepository
     private var source: PlaylistSource = PlaylistSource.local()
     private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage, ::toggleFavorite)
-<<<<<<< HEAD
-    private val categoryAdapter = CategoryAdapter(::onCategorySelected, this)
-=======
->>>>>>> 3739781 (feat: adiciona dropdown de categorias)
 
     private var selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
     private var selectedMode = ChannelMode.ALL
@@ -73,6 +72,11 @@ class MainActivity : AppCompatActivity() {
     private var deviceBlocked = false
     private var searchQuery: String = ""
     private var hasCatalog = false
+
+    /** Catalogo vem do servidor embutido no proprio aparelho. */
+    private val localMode: Boolean
+        get() = BuildConfig.LOCAL_MODE ||
+            (BuildConfig.DEBUG && intent.getBooleanExtra(EXTRA_SKIP_AUTH, false))
 
     private var refreshJob: Job? = null
     private var filterJob: Job? = null
@@ -100,10 +104,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupToolbar() {
         binding.toolbar.inflateMenu(R.menu.menu_main)
+        binding.toolbar.menu.findItem(R.id.action_open_web)?.isVisible = localMode
+        binding.toolbar.menu.findItem(R.id.action_device)?.isVisible = !localMode
+        binding.toolbar.menu.findItem(R.id.action_logout)?.isVisible = !localMode
+
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_refresh -> {
-                    refreshCatalog(revalidateSource = true)
+                    refreshCatalog(revalidateSource = !localMode)
+                    true
+                }
+
+                R.id.action_open_web -> {
+                    openLocalWeb()
                     true
                 }
 
@@ -193,8 +206,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRefresh() {
-        binding.swipeRefresh.setOnRefreshListener { refreshCatalog(revalidateSource = true) }
-        binding.retryButton.setOnClickListener { refreshCatalog(revalidateSource = true) }
+        binding.swipeRefresh.setOnRefreshListener {
+            refreshCatalog(revalidateSource = !localMode)
+        }
+        binding.retryButton.setOnClickListener {
+            if (!localMode || LocalServer.isReady()) {
+                refreshCatalog(revalidateSource = !localMode)
+            } else {
+                startCatalog()
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -206,14 +227,25 @@ class MainActivity : AppCompatActivity() {
      * local. Nunca bloqueia o app por causa do backend.
      */
     private fun startCatalog() {
-        // Produção: sempre usa backend (skipAuth = false)
-        // skipAuth=true só em builds de debug para testes locais
-        val skipAuth = BuildConfig.DEBUG && intent.getBooleanExtra(EXTRA_SKIP_AUTH, false)
-
         lifecycleScope.launch {
             showLoading()
-            source = if (skipAuth) {
-                PlaylistSource.local()
+            source = if (localMode) {
+                // O servidor sobe junto com o app; espera responder antes de
+                // baixar a playlist local.
+                if (!LocalServer.waitUntilReady()) {
+                    showError(getString(R.string.server_not_ready))
+                    return@launch
+                }
+                if (LocalServer.playlistCount() == 0) {
+                    showMessage(
+                        message = getString(R.string.server_no_playlist),
+                        showProgress = false,
+                        showRetry = false,
+                        iconRes = R.drawable.ic_tv,
+                    )
+                    return@launch
+                }
+                LocalServer.playlistSource()
             } else {
                 try {
                     resolveSource()
@@ -398,18 +430,26 @@ class MainActivity : AppCompatActivity() {
 
         refreshJob = lifecycleScope.launch {
             try {
-                if (revalidateSource) {
-                    val skipAuth = intent.getBooleanExtra(EXTRA_SKIP_AUTH, false)
-                    if (!skipAuth) {
-                        try {
-                            revalidateServerAccess()
-                        } catch (e: DeviceBlockedException) {
-                            showDeviceBlocked(e.message.orEmpty())
-                            return@launch
-                        }
-                        // O vinculo pode ter mudado a origem (servidor x local).
-                        repository = PlaylistRepository(this@MainActivity, source)
+                if (localMode && LocalServer.playlistCount() == 0) {
+                    binding.swipeRefresh.isRefreshing = false
+                    showMessage(
+                        message = getString(R.string.server_no_playlist),
+                        showProgress = false,
+                        showRetry = false,
+                        iconRes = R.drawable.ic_tv,
+                    )
+                    return@launch
+                }
+
+                if (revalidateSource && !localMode) {
+                    try {
+                        revalidateServerAccess()
+                    } catch (e: DeviceBlockedException) {
+                        showDeviceBlocked(e.message.orEmpty())
+                        return@launch
                     }
+                    // O vinculo pode ter mudado a origem (servidor x local).
+                    repository = PlaylistRepository(this@MainActivity, source)
                 }
 
                 val result = repository.refresh { count ->
@@ -702,6 +742,18 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
     // Estados e atalhos de navegacao
     // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // Servidor local / playlists
+    // ------------------------------------------------------------------
+
+    private fun openLocalWeb() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${LocalServer.BASE_URL}/")))
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.server_not_ready, Toast.LENGTH_LONG).show()
+        }
+    }
 
     private fun showLoading() {
         showMessage(getString(R.string.loading_channels), showProgress = true, showRetry = false)

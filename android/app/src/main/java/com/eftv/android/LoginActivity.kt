@@ -37,6 +37,13 @@ class LoginActivity : AppCompatActivity() {
             BuildConfig.API_BASE_URL,
         )
 
+        // No modo local o servidor embutido e a fonte do catalogo: nao ha
+        // login nem backend para esperar.
+        if (BuildConfig.LOCAL_MODE) {
+            openCatalog(skipAuth = true)
+            return
+        }
+
         if (session.hasSession()) {
             openCatalog()
             return

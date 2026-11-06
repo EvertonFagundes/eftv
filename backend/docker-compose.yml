@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eftv-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./eftv.db
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production}
+      - AUTHORIZED_PLAYLIST_URL=${AUTHORIZED_PLAYLIST_URL:-https://example.com/playlist.m3u}
+      - AUTHORIZED_PLAYLIST_USER_AGENT=${AUTHORIZED_PLAYLIST_USER_AGENT:-VLC/3.0.20 LibVLC/3.0.20}
+      - MAX_DEVICES_PER_USER=${MAX_DEVICES_PER_USER:-1}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Opcional: PostgreSQL para produção
+  # db:
+  #   image: postgres:16-alpine
+  #   container_name: eftv-db
+  #   environment:
+  #     - POSTGRES_USER=eftv
+  #     - POSTGRES_PASSWORD=${DB_PASSWORD:-eftvpass}
+  #     - POSTGRES_DB=eftv
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U eftv"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+volumes:
+  # pgdata:
