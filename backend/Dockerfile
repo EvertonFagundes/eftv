@@ -17,6 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copia código da aplicação
 COPY . .
 
+# Copia entrypoint e dá permissão de execução (ainda como root)
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Usuário não-root para segurança
 RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
@@ -26,6 +30,4 @@ USER app
 EXPOSE 8000
 
 # Comando de inicialização (Render/Heroku injetam PORT; local usa 8000)
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
