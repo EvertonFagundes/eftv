@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.Channel
+import com.eftv.android.data.ChannelKind
 import com.eftv.android.data.ChannelMode
 import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.LocalServer
@@ -36,6 +37,7 @@ import com.eftv.android.databinding.ActivityMainBinding
 import com.eftv.android.ui.CategoryAdapter
 import com.eftv.android.ui.ChannelAdapter
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -60,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private var source: PlaylistSource = PlaylistSource.local()
     private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage, ::toggleFavorite)
 
+    private var selectedKind = ChannelKind.LIVE
     private var selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
     private var selectedMode = ChannelMode.ALL
     private var selectedGroup: String? = null
@@ -100,6 +103,7 @@ class MainActivity : AppCompatActivity() {
         adultEnabled = SettingsActivity.isAdultContentEnabled(this)
 
         setupToolbar()
+        setupKindTabs()
         setupLists()
         setupSearch()
         setupRefresh()
@@ -112,22 +116,41 @@ class MainActivity : AppCompatActivity() {
         if (!::repository.isInitialized || !hasCatalog) return
 
         val enabled = SettingsActivity.isAdultContentEnabled(this)
-        if (enabled == adultEnabled) return
+        val adultChanged = enabled != adultEnabled
         adultEnabled = enabled
 
-        // Preferencia mudou nas configuracoes escondidas: reconstroi o
-        // dropdown e recarrega a lista sem reiniciar o app.
-        lifecycleScope.launch {
-            val groups = withContext(Dispatchers.IO) { repository.catalogStore.groups() }
-            rebuildCategoryItems(groups)
+        if (adultChanged) {
+            // Preferencia mudou: reconstroi o dropdown e recarrega a lista
+            // sem reiniciar o app.
+            lifecycleScope.launch {
+                val kind = selectedKind
+                val groups = withContext(Dispatchers.IO) {
+                    repository.catalogStore.groups(kind)
+                }
+                if (selectedKind != kind) return@launch
+                rebuildCategoryItems(groups)
 
-            if (!enabled && selectedGroup.equals(ADULT_GROUP, ignoreCase = true)) {
-                selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL)
-                selectedMode = ChannelMode.ALL
-                selectedGroup = null
+                if (!enabled && ChannelKind.isAdultGroup(selectedGroup)) {
+                    resetCategorySelection()
+                }
+                binding.categoryButton.text = selectedCategory.label
+                filterChannels(debounce = 0)
             }
-            binding.categoryButton.text = selectedCategory.label
-            filterChannels(debounce = 0)
+        } else if (selectedKind != ChannelKind.LIVE) {
+            // Ao voltar do player, atualiza "min restantes" nas capas.
+            refreshProgress()
+        }
+    }
+
+    /** Atualiza o progresso das capas de filmes/series ja carregadas. */
+    private fun refreshProgress() {
+        val urls = channelAdapter.loadedUrls()
+        if (urls.isEmpty()) return
+        lifecycleScope.launch {
+            val progress = withContext(Dispatchers.IO) {
+                repository.catalogStore.progressFor(urls)
+            }
+            channelAdapter.updateProgress(progress)
         }
     }
 
@@ -146,6 +169,11 @@ class MainActivity : AppCompatActivity() {
 
                 R.id.action_open_web -> {
                     openLocalWeb()
+                    true
+                }
+
+                R.id.action_settings -> {
+                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
                     true
                 }
 
@@ -171,13 +199,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupLists() {
-        val columns = resources.getInteger(R.integer.channel_columns).coerceAtLeast(1)
         binding.channelList.apply {
-            layoutManager = if (columns > 1) {
-                GridLayoutManager(this@MainActivity, columns)
-            } else {
-                LinearLayoutManager(this@MainActivity)
-            }
             adapter = channelAdapter
             setHasFixedSize(true)
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -196,7 +218,60 @@ class MainActivity : AppCompatActivity() {
                 }
             })
         }
+        updateLayoutManager()
         setupCategoryButton()
+    }
+
+    /** Abas principais: separa canais ao vivo de filmes e series. */
+    private fun setupKindTabs() {
+        val tabs = binding.kindTabs
+        tabs.removeAllTabs()
+        tabs.addTab(tabs.newTab().setText(R.string.kind_live).setTag(ChannelKind.LIVE), true)
+        tabs.addTab(tabs.newTab().setText(R.string.kind_movies).setTag(ChannelKind.MOVIE))
+        tabs.addTab(tabs.newTab().setText(R.string.kind_series).setTag(ChannelKind.SERIES))
+
+        tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                val kind = tab.tag as? ChannelKind ?: return
+                if (kind == selectedKind && hasCatalog) return
+
+                selectedKind = kind
+                resetCategorySelection()
+                updateLayoutManager()
+                binding.categoryButton.text = selectedCategory.label
+
+                if (!::repository.isInitialized || !hasCatalog) return
+                lifecycleScope.launch {
+                    val groups = withContext(Dispatchers.IO) {
+                        repository.catalogStore.groups(kind)
+                    }
+                    if (selectedKind != kind) return@launch
+                    rebuildCategoryItems(groups)
+                    binding.categoryButton.text = selectedCategory.label
+                    filterChannels(debounce = 0)
+                }
+            }
+
+            override fun onTabUnselected(tab: TabLayout.Tab) = Unit
+            override fun onTabReselected(tab: TabLayout.Tab) = Unit
+        })
+    }
+
+    /**
+     * Ao vivo usa lista horizontal; filmes/series usam grade de capas.
+     * A troca de layout manager limpa as paginas antigas para nao misturar
+     * itens de tipos diferentes durante a transicao.
+     */
+    private fun updateLayoutManager() {
+        val columns = when {
+            selectedKind == ChannelKind.LIVE -> 1
+            isTelevision -> 3
+            else -> 2
+        }
+        channelAdapter.setKind(selectedKind)
+        channelAdapter.reset(0)
+        binding.channelList.layoutManager =
+            if (columns > 1) GridLayoutManager(this, columns) else LinearLayoutManager(this)
     }
 
     private fun setupCategoryButton() {
@@ -523,25 +598,25 @@ class MainActivity : AppCompatActivity() {
         hasCatalog = metadata.total > 0
         catalogMetadata = metadata
 
-        val groups = withContext(Dispatchers.IO) { repository.catalogStore.groups() }
+        val groups = withContext(Dispatchers.IO) {
+            repository.catalogStore.groups(selectedKind)
+        }
         rebuildCategoryItems(groups)
+        resetCategorySelection()
 
-        selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL)
-        selectedMode = ChannelMode.ALL
-        selectedGroup = null
-
-        // Update category button text to show current selection
         binding.categoryButton.text = selectedCategory.label
 
         channelAdapter.setFavorites(withContext(Dispatchers.IO) { repository.catalogStore.favoriteUrls() })
+        updateLayoutManager()
+        binding.channelList.visibility = View.VISIBLE
         binding.toolbar.subtitle = buildSubtitle()
         binding.swipeRefresh.visibility = View.VISIBLE
         filterChannels(debounce = 0)
     }
 
     /**
-     * Monta as categorias do dropdown.
-     * O grupo "Adultos" so entra quando liberado nas configuracoes escondidas.
+     * Monta as categorias do dropdown do tipo ativo.
+     * Grupos adultos so entram quando liberados nas configuracoes.
      */
     private fun rebuildCategoryItems(groups: List<String>) {
         val showAdult = SettingsActivity.isAdultContentEnabled(this)
@@ -553,12 +628,18 @@ class MainActivity : AppCompatActivity() {
             add(CategoryAdapter.Category(favoritesLabel, ChannelMode.FAVORITES))
             add(CategoryAdapter.Category(recentsLabel, ChannelMode.RECENTS))
             groups.forEach { title ->
-                if (!showAdult && title.equals(ADULT_GROUP, ignoreCase = true)) {
+                if (!showAdult && ChannelKind.isAdultGroup(title)) {
                     return@forEach
                 }
                 add(CategoryAdapter.Category(title, ChannelMode.ALL, title))
             }
         }
+    }
+
+    private fun resetCategorySelection() {
+        selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL)
+        selectedMode = ChannelMode.ALL
+        selectedGroup = null
     }
 
     private fun buildSubtitle(shown: Int? = null): CharSequence {
@@ -574,11 +655,12 @@ class MainActivity : AppCompatActivity() {
             status
         } else {
             val number = NumberFormat.getIntegerInstance()
-            val counts = if (shown != null && shown != meta.total) {
-                getString(R.string.subtitle_filtered, number.format(shown), number.format(meta.total))
-            } else {
-                getString(R.string.subtitle_total, number.format(meta.total))
-            }
+            val count = shown ?: meta.total
+            val counts = getString(
+                R.string.subtitle_total_kind,
+                number.format(count),
+                kindNoun(count),
+            )
             val time = if (meta.updatedAt > 0) {
                 DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(meta.updatedAt))
             } else {
@@ -593,6 +675,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** "1 canal" / "2 canais", "1 filme" / "2 filmes"... */
+    private fun kindNoun(count: Int): String = when (selectedKind) {
+        ChannelKind.LIVE -> getString(
+            if (count == 1) R.string.kind_live_singular else R.string.kind_live_plural,
+        )
+        ChannelKind.MOVIE -> getString(
+            if (count == 1) R.string.kind_movies_singular else R.string.kind_movies_plural,
+        )
+        ChannelKind.SERIES -> getString(
+            if (count == 1) R.string.kind_series_singular else R.string.kind_series_plural,
+        )
+    }
+
     private fun onCategorySelected(category: CategoryAdapter.Category) {
         selectedCategory = category
         selectedMode = category.mode
@@ -604,12 +699,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Se verdadeiro, exclui conteudo adulto de listagens e buscas. */
-    private fun shouldExcludeAdults(): Boolean {
-        if (SettingsActivity.isAdultContentEnabled(this)) return false
-        // A categoria "Adultos" nem aparece no dropdown quando desligado,
-        // mas a protecao vale tambem para Favoritos, Recentes e busca.
-        return !selectedGroup.equals(ADULT_GROUP, ignoreCase = true)
-    }
+    private fun shouldExcludeAdults(): Boolean =
+        !SettingsActivity.isAdultContentEnabled(this)
 
     private fun filterChannels(debounce: Long) {
         if (!::repository.isInitialized) return
@@ -620,6 +711,7 @@ class MainActivity : AppCompatActivity() {
         val group = selectedGroup
         val query = searchQuery.normalizedForSearch()
         val mode = selectedMode
+        val kind = selectedKind
         val excludeAdults = shouldExcludeAdults()
 
         filterJob = lifecycleScope.launch {
@@ -627,13 +719,14 @@ class MainActivity : AppCompatActivity() {
 
             val total = withContext(Dispatchers.IO) {
                 if (excludeAdults) {
-                    repository.catalogStore.countExcludingAdults(group, query, mode)
+                    repository.catalogStore.countExcludingAdults(group, query, mode, kind)
                 } else {
-                    repository.catalogStore.count(group, query, mode)
+                    repository.catalogStore.count(group, query, mode, kind)
                 }
             }
             if (!isActive) return@launch
 
+            channelAdapter.setKind(kind)
             channelAdapter.reset(total)
             binding.channelList.scrollToPosition(0)
             binding.toolbar.subtitle = buildSubtitle(total)
@@ -663,18 +756,20 @@ class MainActivity : AppCompatActivity() {
     private fun emptyMessage(): String = when {
         selectedMode == ChannelMode.FAVORITES -> getString(R.string.empty_favorites)
         selectedMode == ChannelMode.RECENTS -> getString(R.string.empty_recents)
-        hasCatalog -> getString(R.string.empty_search)
-        else -> getString(R.string.empty_catalog)
+        !hasCatalog -> getString(R.string.empty_catalog)
+        searchQuery.isNotBlank() || selectedGroup != null -> getString(R.string.empty_search)
+        selectedKind == ChannelKind.MOVIE -> getString(R.string.empty_movies)
+        selectedKind == ChannelKind.SERIES -> getString(R.string.empty_series)
+        else -> getString(R.string.empty_live)
     }
 
-    private fun emptyIcon(): Int = when (selectedMode) {
-        ChannelMode.FAVORITES -> R.drawable.ic_star_outline
-        ChannelMode.RECENTS -> R.drawable.ic_history
-        else -> if (searchQuery.isNotBlank() || selectedGroup != null) {
-            R.drawable.ic_search
-        } else {
-            R.drawable.ic_tv
-        }
+    private fun emptyIcon(): Int = when {
+        selectedMode == ChannelMode.FAVORITES -> R.drawable.ic_star_outline
+        selectedMode == ChannelMode.RECENTS -> R.drawable.ic_history
+        searchQuery.isNotBlank() || selectedGroup != null -> R.drawable.ic_search
+        selectedKind == ChannelKind.MOVIE -> R.drawable.ic_movie
+        selectedKind == ChannelKind.SERIES -> R.drawable.ic_series
+        else -> R.drawable.ic_tv
     }
 
     private fun requestPage(page: Int) {
@@ -688,6 +783,7 @@ class MainActivity : AppCompatActivity() {
         val group = selectedGroup
         val query = searchQuery.normalizedForSearch()
         val mode = selectedMode
+        val kind = selectedKind
         val excludeAdults = shouldExcludeAdults()
 
         val job = lifecycleScope.launch {
@@ -700,6 +796,7 @@ class MainActivity : AppCompatActivity() {
                             limit = ChannelAdapter.PAGE_SIZE,
                             offset = page * ChannelAdapter.PAGE_SIZE,
                             mode = mode,
+                            kind = kind,
                         )
                     } else {
                         repository.catalogStore.page(
@@ -708,6 +805,7 @@ class MainActivity : AppCompatActivity() {
                             limit = ChannelAdapter.PAGE_SIZE,
                             offset = page * ChannelAdapter.PAGE_SIZE,
                             mode = mode,
+                            kind = kind,
                         )
                     }
                 }
@@ -758,7 +856,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Card de serie abre temporadas e episodios; o resto vai direto ao player. */
+    private fun openSeries(channel: Channel) {
+        binding.searchInput.clearFocus()
+        hideKeyboard()
+        startActivity(
+            Intent(this, SeriesActivity::class.java).apply {
+                putExtra(SeriesActivity.EXTRA_KEY, channel.seriesKey)
+                putExtra(SeriesActivity.EXTRA_TITLE, channel.seriesTitle.ifBlank { channel.name })
+                putExtra(SeriesActivity.EXTRA_LOGO, channel.logo)
+                putExtra(
+                    SeriesActivity.EXTRA_USER_AGENT,
+                    channel.userAgent ?: source.userAgent,
+                )
+            }
+        )
+    }
+
     private fun openPlayer(channel: Channel) {
+        if (channel.isSeriesCard) {
+            openSeries(channel)
+            return
+        }
+
         if (::repository.isInitialized) {
             // Historico em segundo plano; nao atrasa a abertura do canal.
             lifecycleScope.launch(Dispatchers.IO) {
@@ -778,6 +898,7 @@ class MainActivity : AppCompatActivity() {
                     channel.userAgent ?: source.userAgent,
                 )
                 putExtra(PlayerActivity.EXTRA_REFERER, channel.referer)
+                putExtra(PlayerActivity.EXTRA_KIND, channel.kind.name)
             }
         )
     }
@@ -935,9 +1056,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_SKIP_AUTH = "extra_skip_auth"
-
-        /** Grupo de conteudo adulto (oculto por padrao). */
-        private const val ADULT_GROUP = "Adultos"
 
         /** Depois disso, o app tenta atualizar a lista em segundo plano. */
         private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L

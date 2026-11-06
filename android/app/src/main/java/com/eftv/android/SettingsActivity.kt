@@ -11,7 +11,7 @@ import com.eftv.android.databinding.ActivitySettingsBinding
  * Tela de configuracoes do app.
  *
  * A opcao de conteudo adulto fica DESLIGADA por padrao.
- * Esta tela so e acessada por toque longo no titulo "EFTV" na toolbar principal.
+ * Acessivel pelo menu (⋮ -> Configuracoes) e pelo toque longo no titulo.
  */
 class SettingsActivity : AppCompatActivity() {
 
@@ -35,6 +35,8 @@ class SettingsActivity : AppCompatActivity() {
 
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            // Usa o mesmo arquivo lido por isAdultContentEnabled().
+            preferenceManager.sharedPreferencesName = SettingsActivity.PREFS_NAME
             setPreferencesFromResource(R.xml.preferences, rootKey)
 
             findPreference<androidx.preference.Preference>("pref_version")?.summary =

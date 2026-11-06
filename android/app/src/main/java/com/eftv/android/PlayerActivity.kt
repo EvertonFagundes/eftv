@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -24,8 +25,12 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import com.eftv.android.data.CatalogStore
+import com.eftv.android.data.ChannelKind
 import com.eftv.android.databinding.ActivityPlayerBinding
 import com.google.android.material.slider.Slider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
@@ -50,6 +55,14 @@ class PlayerActivity : AppCompatActivity() {
     private var channelLogo: String = ""
     private var userAgent: String = PlaylistConfig.USER_AGENT
     private var referer: String? = null
+    private var channelKind: ChannelKind = ChannelKind.LIVE
+
+    /** Posicao salva para retomar um filme/serie. */
+    private var savedPositionMs = 0L
+    private var resumeApplied = false
+    private var lastProgressSaveAt = 0L
+
+    private val catalog by lazy { CatalogStore.get(this) }
 
     /** Se o conteudo atual e ao vivo (true) ou sob demanda (false). */
     private var isLive = false
@@ -87,6 +100,9 @@ class PlayerActivity : AppCompatActivity() {
         channelLogo = intent.getStringExtra(EXTRA_LOGO).orEmpty()
         userAgent = intent.getStringExtra(EXTRA_USER_AGENT) ?: PlaylistConfig.USER_AGENT
         referer = intent.getStringExtra(EXTRA_REFERER)
+        channelKind = intent.getStringExtra(EXTRA_KIND)
+            ?.let { runCatching { ChannelKind.valueOf(it) }.getOrNull() }
+            ?: ChannelKind.LIVE
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         volumeControlStream = AudioManager.STREAM_MUSIC
@@ -151,6 +167,8 @@ class PlayerActivity : AppCompatActivity() {
         softRecoveryAttempts = 0
         lastReadyAt = 0L
         lastErrorDetail = null
+        isLive = channelKind == ChannelKind.LIVE
+        lastProgressSaveAt = 0L
         hideError()
         hideReconnecting()
         cancelVodProgress()
@@ -161,6 +179,12 @@ class PlayerActivity : AppCompatActivity() {
     @androidx.annotation.OptIn(UnstableApi::class)
     private fun preparePlayer() {
         releasePlayer()
+
+        if (channelKind != ChannelKind.LIVE) {
+            savedPositionMs = runCatching { catalog.progress(streamUrl)?.positionMs ?: 0L }
+                .getOrDefault(0L)
+            resumeApplied = false
+        }
 
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(userAgent)
@@ -236,9 +260,24 @@ class PlayerActivity : AppCompatActivity() {
                         hideError()
                         hideReconnecting()
 
-                        // Detecta se e ao vivo ou sob demanda
-                        isLive = exoPlayer.isCurrentMediaItemLive
+                        // Detecta se e ao vivo ou sob demanda. O tipo vindo
+                        // do catalogo tem prioridade para canais ao vivo.
+                        isLive = channelKind == ChannelKind.LIVE ||
+                            exoPlayer.isCurrentMediaItemLive
                         updateLiveBadge()
+
+                        if (!isLive && !resumeApplied) {
+                            val duration = exoPlayer.duration
+                            if (duration > 0) {
+                                if (savedPositionMs > RESUME_MIN_MS &&
+                                    savedPositionMs < duration - RESUME_END_GUARD_MS
+                                ) {
+                                    exoPlayer.seekTo(savedPositionMs)
+                                }
+                                resumeApplied = true
+                                savedPositionMs = 0L
+                            }
+                        }
 
                         // Para TODOS os conteudos (ao vivo e VOD): mostra o overlay
                         // por 3 segundos, depois esconde para ficar so o conteudo
@@ -256,10 +295,24 @@ class PlayerActivity : AppCompatActivity() {
                     }
 
                     Player.STATE_ENDED -> {
-                        // Muitos servidores IPTV fecham o stream depois de N segundos.
-                        lastErrorDetail = getString(R.string.stream_ended_by_server)
-                        // Retoma sem recriar o player (evita o recarregamento visivel).
-                        resumeFromDefaultPosition()
+                        if (channelKind == ChannelKind.LIVE || isLive) {
+                            // Muitos servidores IPTV fecham o stream depois de N segundos.
+                            lastErrorDetail = getString(R.string.stream_ended_by_server)
+                            // Retoma sem recriar o player (evita o recarregamento visivel).
+                            resumeFromDefaultPosition()
+                        } else {
+                            // VOD: salva (ou limpa, se chegou ao fim) e para.
+                            val duration = exoPlayer.duration
+                            val position = exoPlayer.currentPosition
+                            if (duration > 0 && duration - position <= RESUME_END_GUARD_MS) {
+                                persistProgress(position, duration, clear = true)
+                            } else {
+                                persistProgress(position, duration)
+                            }
+                            updatePlaybackUi()
+                            showOverlay()
+                            scheduleHideOverlay()
+                        }
                     }
                 }
             }
@@ -289,7 +342,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun updateLiveBadge() {
         binding.liveBadge.visibility =
-            if (player?.isCurrentMediaItemLive == true) View.VISIBLE else View.GONE
+            if (isLive || player?.isCurrentMediaItemLive == true) View.VISIBLE else View.GONE
     }
 
     /**
@@ -312,6 +365,38 @@ class PlayerActivity : AppCompatActivity() {
     private fun cancelVodProgress() {
         vodProgressCallback?.let { handler.removeCallbacks(it) }
         vodProgressCallback = null
+    }
+
+    /**
+     * Salva o progresso do VOD em segundo plano. Com clear = true remove o
+     * progresso quando o filme/episodio chega ao fim.
+     */
+    private fun persistProgress(positionMs: Long, durationMs: Long, clear: Boolean = false) {
+        if (channelKind == ChannelKind.LIVE || durationMs <= 0) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching {
+                if (clear) {
+                    catalog.clearProgress(streamUrl)
+                } else {
+                    catalog.saveProgress(streamUrl, positionMs.coerceAtLeast(0), durationMs)
+                }
+            }
+        }
+    }
+
+    /** Salva de forma sincrona ao sair, antes de destruir o player. */
+    private fun saveCurrentProgress() {
+        val current = player ?: return
+        if (channelKind == ChannelKind.LIVE) return
+        val duration = current.duration
+        if (duration <= 0) return
+        runCatching {
+            catalog.saveProgress(
+                streamUrl,
+                current.currentPosition.coerceAtLeast(0),
+                duration,
+            )
+        }
     }
 
     /** Atualiza botao play/pause e, para VOD, barra e tempos assistido/restante. */
@@ -361,6 +446,13 @@ class PlayerActivity : AppCompatActivity() {
             val remainingMs = (durationMs - positionMs).coerceAtLeast(0)
             binding.vodProgressText.text =
                 "Assistido: ${formatTime(positionMs)} · Restam: ${formatTime(remainingMs)}"
+
+            // Guarda a posicao a cada poucos segundos para retomar depois.
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastProgressSaveAt >= PROGRESS_SAVE_INTERVAL_MS) {
+                lastProgressSaveAt = now
+                persistProgress(positionMs, durationMs)
+            }
         }
         binding.vodProgressText.visibility = View.VISIBLE
     }
@@ -484,7 +576,13 @@ class PlayerActivity : AppCompatActivity() {
 
         hideError()
         hideReconnecting()
-        current.seekToDefaultPosition()
+        if (channelKind != ChannelKind.LIVE && !isLive) {
+            val saved = runCatching { catalog.progress(streamUrl)?.positionMs }.getOrNull() ?: 0L
+            val target = if (saved > 0) saved else current.currentPosition.coerceAtLeast(0)
+            current.seekTo(target)
+        } else {
+            current.seekToDefaultPosition()
+        }
         current.prepare()
         current.playWhenReady = true
 
@@ -578,6 +676,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun releasePlayer() {
+        saveCurrentProgress()
         handler.removeCallbacksAndMessages(null)
         cancelVodProgress()
         cancelHideOverlay()
@@ -629,10 +728,18 @@ class PlayerActivity : AppCompatActivity() {
         private const val MAX_LOAD_RETRIES = 6
         private const val MAX_SOFT_RECOVERIES = 2
 
+        /** Nao retoma se o progresso salvo estiver no comeco/fim demais. */
+        private const val RESUME_MIN_MS = 5_000L
+        private const val RESUME_END_GUARD_MS = 10_000L
+
+        /** Intervalo para gravar a posicao do VOD (ms). */
+        private const val PROGRESS_SAVE_INTERVAL_MS = 5_000L
+
         const val EXTRA_URL = "extra_url"
         const val EXTRA_NAME = "extra_name"
         const val EXTRA_LOGO = "extra_logo"
         const val EXTRA_USER_AGENT = "extra_user_agent"
         const val EXTRA_REFERER = "extra_referer"
+        const val EXTRA_KIND = "extra_kind"
     }
 }

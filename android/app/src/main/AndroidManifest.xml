@@ -65,6 +65,11 @@
             android:exported="false"
             android:theme="@style/Theme.EFTV.NoActionBar" />
 
+        <activity
+            android:name=".SeriesActivity"
+            android:exported="false"
+            android:theme="@style/Theme.EFTV.NoActionBar" />
+
         <service
             android:name=".EftvServerService"
             android:exported="false"

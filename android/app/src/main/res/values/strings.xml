@@ -6,7 +6,7 @@
     <string name="loading_channel">Carregando…</string>
     <string name="importing_channels">Importando canais… %1$s</string>
     <string name="empty_catalog">A lista não retornou canais.</string>
-    <string name="empty_search">Nenhum canal encontrado para essa busca.</string>
+    <string name="empty_search">Nenhum item encontrado para essa busca.</string>
     <string name="load_error">Não foi possível carregar a lista de canais.</string>
     <string name="using_cached_list">Sem conexão. Mostrando a última lista salva.</string>
 
@@ -88,10 +88,42 @@
     <string name="open_web">Abrir interface web</string>
 
     <!-- Configuracoes -->
-    <string name="settings_title">Configuracoes</string>
-    <string name="settings_category_privacy">Privacidade e conteudo</string>
-    <string name="settings_adult_title">Mostrar conteudo adulto</string>
-    <string name="settings_adult_summary">Exibe a categoria Adultos na lista de canais. Desligado por padrao.</string>
+    <string name="settings_title">Configurações</string>
+    <string name="settings_category_privacy">Privacidade e conteúdo</string>
+    <string name="settings_adult_title">Mostrar conteúdo adulto</string>
+    <string name="settings_adult_summary">Exibe a categoria Adultos na lista de canais. Desativado por padrão.</string>
     <string name="settings_category_about">Sobre</string>
-    <string name="settings_about_version">Versao do app</string>
+    <string name="settings_about_version">Versão do app</string>
+
+    <!-- Tipos de conteudo -->
+    <string name="kind_live">Ao Vivo</string>
+    <string name="kind_movies">Filmes</string>
+    <string name="kind_series">Séries</string>
+    <string name="kind_live_plural">canais</string>
+    <string name="kind_movies_plural">filmes</string>
+    <string name="kind_series_plural">séries</string>
+    <string name="kind_live_singular">canal</string>
+    <string name="kind_movies_singular">filme</string>
+    <string name="kind_series_singular">série</string>
+    <string name="kind_movie_badge">FILME</string>
+    <string name="kind_series_badge">SÉRIE</string>
+    <string name="empty_live">Nenhum canal encontrado.</string>
+    <string name="empty_movies">Nenhum filme encontrado.</string>
+    <string name="empty_series">Nenhuma série encontrada.</string>
+    <string name="subtitle_total_kind">%1$s %2$s</string>
+    <string name="vod_remaining_min">%1$d min restantes</string>
+    <string name="vod_watched_min">%1$d min assistidos</string>
+    <string name="search_hint_all">Buscar canal, filme ou série</string>
+    <plurals name="series_seasons_count">
+        <item quantity="one">%d temporada</item>
+        <item quantity="other">%d temporadas</item>
+    </plurals>
+    <plurals name="series_episodes_count">
+        <item quantity="one">%d episódio</item>
+        <item quantity="other">%d episódios</item>
+    </plurals>
+    <string name="series_season_tab">Temporada %d</string>
+    <string name="series_season_specials">Especiais</string>
+    <string name="series_episode_label">Episódio %d</string>
+    <string name="series_empty">Nenhum episódio encontrado.</string>
 </resources>
