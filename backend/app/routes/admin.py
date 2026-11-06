@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.category import Category
 from app.models.channel import Channel
 from app.models.device import SubscriptionDevice
+from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.security.dependencies import get_current_user, require_admin
