@@ -1,5 +1,5 @@
 # routes/auth.py - Rotas de autenticação
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
@@ -13,15 +13,18 @@ from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.auth import (
+    EmailVerificationResponse,
     MessageResponse,
     RefreshTokenRequest,
+    ResendVerificationRequest,
     Token,
     UserLogin,
     UserRegister,
     UserResponse,
     UserUpdate,
+    VerifyEmailRequest,
 )
-from app.security.dependencies import get_current_user
+from app.security.dependencies import get_current_user, rate_limit_dependency
 from app.services.auth_service import (
     create_token_pair,
     decode_token,
@@ -30,20 +33,53 @@ from app.services.auth_service import (
     is_token_expired,
     verify_password,
 )
+from app.services.email_service import EmailService
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
+
+email_service = EmailService()
+
+
+def _get_or_create_default_plan(db: AsyncSession) -> Plan:
+    """Garante que exista um plano default gratuito (trial de 7 dias)."""
+    plan_result = db.execute(
+        select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc())  # noqa: E712
+    )
+    plan = plan_result.scalar_one_or_none()
+    if plan is None:
+        plan = Plan(
+            name="Dono do App",
+            description="Plano default para o proprietario da instância EFTV",
+            price_cents=0,
+            currency="BRL",
+            interval="month",
+            max_simultaneous_streams=5,
+            max_devices=10,
+            features={"hd": True, "full_hd": True, "4k": False},
+            sort_order=0,
+        )
+        db.add(plan)
+        db.flush()
+    return plan
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(
     data: UserRegister,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """
     Registra novo usuário.
-    Se plan_id fornecido, cria assinatura pendente (checkout posterior).
+
+    A conta e criada com email_verified=False. Um token de verificacao e
+    enviado por email. Somente apos verificar o email o trial gratuito de
+    7 dias e ativado.
     """
+    # Rate limiting por IP para evitar cadastros em massa
+    await rate_limit_dependency(request)
+
     # Verifica se email já existe
     result = await db.execute(select(User).where(User.email == data.email))
     if result.scalar_one_or_none():
@@ -57,59 +93,36 @@ async def register(
     existing_admin = admin_result.scalar_one_or_none()
     is_first_user = existing_admin is None
 
-    # Garante que exista um plano default (grátis, para o dono do app)
-    plan_result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc()))  # noqa: E712
-    plan = plan_result.scalar_one_or_none()
-    if plan is None:
-        plan = Plan(
-            name="Dono do App",
-            description="Plano default para o proprietário da instância EFTV",
-            price_cents=0,
-            currency="BRL",
-            interval="month",
-            max_simultaneous_streams=5,
-            max_devices=10,
-            features={"hd": True, "full_hd": True, "4k": False},
-            sort_order=0,
-        )
-        db.add(plan)
-        await db.flush()
-
-    # Cria usuário
+    # Cria usuário (sem subscription ainda - so apos verificar email)
     user = User(
         email=data.email,
         password_hash=hash_password(data.password),
         full_name=data.full_name,
         phone=data.phone,
         is_admin=is_first_user,
+        email_verified=False,
     )
     db.add(user)
     await db.flush()  # Para obter o ID
 
-    # Cria subscription ativa para o usuário (dono do app ou assinante)
-    now = datetime.now(UTC)
-    period_end = now.replace(year=now.year + 1)  # 1 ano de validade
-    subscription = Subscription(
-        user_id=user.id,
-        plan_id=plan.id,
-        status="active",
-        current_period_start=now,
-        current_period_end=period_end,
-        auto_renew=True,
-    )
-    db.add(subscription)
+    # Gera token de verificacao de email (valido por 24h)
+    verification_token = user.generate_email_verification_token()
 
-    # Se plan_id fornecido pelo frontend, sobrescreve (integração Mercado Pago fica para Fase 2)
-    if data.plan_id:
-        plan_result2 = await db.execute(select(Plan).where(Plan.id == data.plan_id))
-        plan2 = plan_result2.scalar_one_or_none()
-        if plan2:
-            subscription.plan_id = plan2.id
+    # Envia email de verificacao (nao bloqueia o cadastro se falhar)
+    try:
+        await email_service.send_verification_email(
+            to_email=data.email,
+            token=verification_token,
+            full_name=data.full_name,
+        )
+    except Exception:
+        # Falha ao enviar email nao deve impedir o cadastro
+        pass
 
     await db.commit()
     await db.refresh(user)
 
-    # Gera tokens
+    # Gera tokens de acesso (login automatico apos cadastro)
     access_token, access_jti, refresh_token, refresh_jti = create_token_pair(str(user.id))
 
     # Cookie HttpOnly para refresh token
@@ -127,6 +140,131 @@ async def register(
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+@router.post("/verify-email", response_model=EmailVerificationResponse)
+async def verify_email(
+    data: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Verifica o email do usuário usando o token enviado por email.
+
+    Apos a verificacao bem-sucedida, ativa o trial gratuito de 7 dias
+    (status='trial') se o usuario ainda nao tiver uma assinatura ativa.
+    """
+    result = await db.execute(
+        select(User).where(User.email_verification_token == data.token)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de verificacao invalido",
+        )
+
+    if not user.is_email_verification_token_valid(data.token):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de verificacao expirado ou invalido",
+        )
+
+    if user.email_verified:
+        # Ja verificado - retorna sucesso idempotente
+        return EmailVerificationResponse(
+            message="Email ja verificado anteriormente",
+            email_verified=True,
+        )
+
+    # Marca email como verificado e limpa o token
+    user.email_verified = True
+    user.email_verification_token = None
+    user.email_verification_expires_at = None
+
+    # Verifica se ja existe uma subscription ativa/trial para este usuario
+    existing_sub_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user.id).order_by(
+            Subscription.created_at.desc()
+        )
+    )
+    existing_sub = existing_sub_result.scalar_one_or_none()
+
+    if not existing_sub or existing_sub.status not in ["active", "trial"]:
+        # Ativa trial gratuito de 7 dias
+        plan = _get_or_create_default_plan(db)
+        now = datetime.now(UTC)
+        trial_end = now + timedelta(days=settings.FREE_TRIAL_DAYS)
+        subscription = Subscription(
+            user_id=user.id,
+            plan_id=plan.id,
+            status="trial",
+            current_period_start=now,
+            current_period_end=trial_end,
+            trial_end=trial_end,
+            auto_renew=False,
+        )
+        db.add(subscription)
+
+    await db.commit()
+    await db.refresh(user)
+
+    # Envia email de boas-vindas (nao bloqueia se falhar)
+    try:
+        await email_service.send_welcome_email(
+            to_email=user.email,
+            full_name=user.full_name,
+        )
+    except Exception:
+        pass
+
+    return EmailVerificationResponse(
+        message="Email verificado com sucesso. Seus 7 dias gratis foram ativados!",
+        email_verified=True,
+    )
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+async def resend_verification(
+    data: ResendVerificationRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reenvia o email de verificacao para um usuário nao verificado.
+    """
+    await rate_limit_dependency(request)
+
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # Retorna sucesso generico para nao revelar se o email existe
+        return MessageResponse(
+            message="Se o email estiver cadastrado e nao verificado, um novo link sera enviado."
+        )
+
+    if user.email_verified:
+        return MessageResponse(message="Este email ja esta verificado.")
+
+    # Gera novo token de verificacao
+    verification_token = user.generate_email_verification_token()
+
+    # Envia email
+    try:
+        await email_service.send_verification_email(
+            to_email=user.email,
+            token=verification_token,
+            full_name=user.full_name,
+        )
+    except Exception:
+        pass
+
+    await db.commit()
+
+    return MessageResponse(
+        message="Se o email estiver cadastrado e nao verificado, um novo link sera enviado."
     )
 
 

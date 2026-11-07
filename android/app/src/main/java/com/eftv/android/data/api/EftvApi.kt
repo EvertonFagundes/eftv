@@ -35,6 +35,11 @@ class EftvApi(
         val daysRemaining: Int,
     )
 
+    data class EmailVerificationResult(
+        val message: String,
+        val emailVerified: Boolean,
+    )
+
     data class DeviceBinding(
         val deviceId: String,
         val deviceName: String?,
@@ -66,6 +71,21 @@ class EftvApi(
             .put("password", password)
         fullName?.let { body.put("full_name", it) }
         return tokenPair(request("POST", "/auth/register", body = body))
+    }
+
+    suspend fun verifyEmail(token: String): EmailVerificationResult {
+        val body = JSONObject().put("token", token)
+        val json = request("POST", "/auth/verify-email", body = body)
+        return EmailVerificationResult(
+            message = json.optString("message", ""),
+            emailVerified = json.optBoolean("email_verified", false),
+        )
+    }
+
+    suspend fun resendVerification(email: String): String {
+        val body = JSONObject().put("email", email.trim())
+        val json = request("POST", "/auth/resend-verification", body = body)
+        return json.optString("message", "")
     }
 
     suspend fun refresh(refreshToken: String): TokenPair {

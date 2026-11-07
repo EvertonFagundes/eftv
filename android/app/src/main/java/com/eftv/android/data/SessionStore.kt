@@ -11,13 +11,14 @@ class SessionStore(context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun save(tokens: EftvApi.TokenPair, email: String) {
+    fun save(tokens: EftvApi.TokenPair, email: String, emailVerified: Boolean = false) {
         val expiresAt = System.currentTimeMillis() +
             (tokens.expiresInSeconds * 1000L) - EXPIRY_MARGIN_MS
         prefs.edit()
             .putString(KEY_ACCESS, tokens.accessToken)
             .putString(KEY_REFRESH, tokens.refreshToken)
             .putString(KEY_EMAIL, email)
+            .putBoolean(KEY_EMAIL_VERIFIED, emailVerified)
             .putLong(KEY_EXPIRES_AT, expiresAt)
             .apply()
     }
@@ -28,6 +29,8 @@ class SessionStore(context: Context) {
 
     fun email(): String? = prefs.getString(KEY_EMAIL, null)
 
+    fun isEmailVerified(): Boolean = prefs.getBoolean(KEY_EMAIL_VERIFIED, false)
+
     fun hasSession(): Boolean = !accessToken().isNullOrBlank()
 
     fun isAccessTokenExpired(now: Long = System.currentTimeMillis()): Boolean =
@@ -37,11 +40,16 @@ class SessionStore(context: Context) {
         prefs.edit().clear().apply()
     }
 
+    fun setEmailVerified(verified: Boolean) {
+        prefs.edit().putBoolean(KEY_EMAIL_VERIFIED, verified).apply()
+    }
+
     private companion object {
         const val PREFS = "eftv_session"
         const val KEY_ACCESS = "access_token"
         const val KEY_REFRESH = "refresh_token"
         const val KEY_EMAIL = "email"
+        const val KEY_EMAIL_VERIFIED = "email_verified"
         const val KEY_EXPIRES_AT = "expires_at"
 
         /** Renova um pouco antes de expirar, para nao falhar no meio do uso. */

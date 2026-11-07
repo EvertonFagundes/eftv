@@ -433,7 +433,7 @@ class MainActivity : AppCompatActivity() {
 
         return try {
             val tokens = api.refresh(refreshToken)
-            session.save(tokens, session.email().orEmpty())
+            session.save(tokens, session.email().orEmpty(), session.isEmailVerified())
             true
         } catch (e: Exception) {
             Timber.w(e, "Nao foi possivel renovar a sessao")

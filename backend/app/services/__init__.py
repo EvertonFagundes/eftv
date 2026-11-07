@@ -8,6 +8,7 @@ from app.services.auth_service import (
     hash_password,
     verify_password,
 )
+from app.services.email_service import EmailService
 from app.services.mercadopago import create_checkout_preference, process_webhook
 from app.services.streaming import generate_stream_url
 
@@ -20,6 +21,8 @@ __all__ = [
     "create_stream_token",
     "decode_token",
     "create_token_pair",
+    # Email
+    "EmailService",
     # Mercado Pago
     "create_checkout_preference",
     "process_webhook",

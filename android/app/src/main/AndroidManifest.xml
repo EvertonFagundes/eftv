@@ -43,7 +43,21 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+
+            <!-- Deep link de verificacao de email (ex: eftv://verify-email?token=...) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="eftv" android:host="verify-email" />
+            </intent-filter>
         </activity>
+
+        <activity
+            android:name=".EmailVerificationActivity"
+            android:exported="false"
+            android:theme="@style/Theme.EFTV.NoActionBar"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
 
         <activity
             android:name=".MainActivity"

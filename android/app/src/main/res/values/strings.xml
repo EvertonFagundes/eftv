@@ -60,6 +60,28 @@
     <string name="login_remember">Lembrar-me</string>
     <string name="login_forgot_password">Esqueci a senha</string>
 
+    <!-- Cadastro -->
+    <string name="register_create_account">Criar conta</string>
+    <string name="register_full_name">Nome completo</string>
+    <string name="register_already_have_account">Já tem conta? Entrar</string>
+    <string name="register_password_too_short">A senha deve ter pelo menos 8 caracteres.</string>
+    <string name="register_email_exists">Este e-mail já está cadastrado.</string>
+
+    <!-- Verificacao de email -->
+    <string name="verify_title">Confirme seu e-mail</string>
+    <string name="verify_email_for">Verificando e-mail para %1$s</string>
+    <string name="verify_subtitle">Enviamos um código de confirmação para o seu e-mail. Digite-o abaixo para ativar seus 7 dias grátis.</string>
+    <string name="verify_token_hint">Código de confirmação</string>
+    <string name="verify_button">Verificar e-mail</string>
+    <string name="verify_resend">Reenviar código</string>
+    <string name="verify_open_browser">Abrir link no navegador</string>
+    <string name="verify_enter_token">Digite o código de confirmação.</string>
+    <string name="verify_invalid_or_expired_token">Código inválido ou expirado. Solicite um novo.</string>
+    <string name="verify_failed">Não foi possível verificar o e-mail. Tente novamente.</string>
+    <string name="verify_network_error">Erro de conexão. Tente novamente.</string>
+    <string name="verify_no_email">Nenhum e-mail encontrado na sessão.</string>
+    <string name="verify_resent">Nova mensagem enviada.</string>
+
     <!-- Vinculo de aparelho -->
     <string name="device_title">Aparelho</string>
     <string name="device_limit_info">Aparelhos vinculados: %1$d de %2$d.\n\nPara trocar de aparelho, desvincule este e entre no outro.</string>

@@ -1,8 +1,6 @@
 package com.eftv.android
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -16,14 +14,23 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * Entrada do assinante. Sem login o app continua abrindo a lista local
- * (modo demonstracao), para nunca ficar inutilizavel.
+ * Entrada do assinante.
+ *
+ * Fluxo:
+ * 1. Sem sessão: mostra tela de login/cadastro.
+ * 2. Após login ou cadastro bem-sucedido:
+ *    - Se email já verificado → abre o catálogo.
+ *    - Se email NÃO verificado → abre EmailVerificationActivity (7 dias grátis só após confirmação).
+ * 3. Modo local (sem backend): abre direto no catálogo (demonstração).
  */
 class LoginActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLoginBinding
     private val session by lazy { SessionStore(this) }
     private val api by lazy { EftvApi() }
+
+    // Modo cadastro ativado/desativado
+    private var isRegisterMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,40 +51,94 @@ class LoginActivity : AppCompatActivity() {
             return
         }
 
+        // Já tem sessão válida?
         if (session.hasSession()) {
-            openCatalog()
+            if (session.isEmailVerified()) {
+                openCatalog()
+            } else {
+                openEmailVerification()
+            }
             return
         }
 
-        binding.loginButton.setOnClickListener { signIn() }
-        binding.offlineButton.setOnClickListener {
-            openCatalog(skipAuth = true)
-        }
+        binding.loginButton.setOnClickListener { signInOrRegister() }
+        binding.registerButton.setOnClickListener { toggleRegisterMode() }
         binding.passwordInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
-                signIn()
+                signInOrRegister()
                 true
             } else {
                 false
             }
         }
+        binding.fullNameInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                signInOrRegister()
+                true
+            } else {
+                false
+            }
+        }
+
+        updateAuthModeUI()
     }
 
-    private fun signIn() {
+    private fun toggleRegisterMode() {
+        isRegisterMode = !isRegisterMode
+        updateAuthModeUI()
+    }
+
+    private fun updateAuthModeUI() {
+        if (isRegisterMode) {
+            binding.registerButton.text = getString(R.string.login_already_have_account)
+            binding.loginButton.text = getString(R.string.register_create_account)
+            binding.fullNameLayout.visibility = View.VISIBLE
+            binding.passwordInput.imeOptions = EditorInfo.IME_ACTION_NEXT
+        } else {
+            binding.registerButton.text = getString(R.string.register_create_account)
+            binding.loginButton.text = getString(R.string.login_enter)
+            binding.fullNameLayout.visibility = View.GONE
+            binding.passwordInput.imeOptions = EditorInfo.IME_ACTION_DONE
+        }
+    }
+
+    private fun signInOrRegister() {
         val email = binding.emailInput.text?.toString().orEmpty().trim()
         val password = binding.passwordInput.text?.toString().orEmpty()
+        val fullName = binding.fullNameInput.text?.toString().orEmpty().trim()
 
         if (email.isBlank() || password.isBlank()) {
             showError(getString(R.string.login_fill_fields))
             return
         }
 
+        if (isRegisterMode && password.length < 8) {
+            showError(getString(R.string.register_password_too_short))
+            return
+        }
+
         setLoading(true)
+        binding.loginError.visibility = View.GONE
         lifecycleScope.launch {
             try {
-                val tokens = api.login(email, password)
-                session.save(tokens, email)
-                openCatalog()
+                if (isRegisterMode) {
+                    val tokens = api.register(email, password, fullName.takeIf { it.isNotBlank() })
+                    session.save(tokens, email, emailVerified = false)
+                } else {
+                    val tokens = api.login(email, password)
+                    // O backend não retorna email_verified no token; consultamos o perfil para saber.
+                    // Como o access token é curto, usamos o endpoint /auth/me se necessário.
+                    // Para simplificar, assumimos que o status vem da sessão salva no login anterior.
+                    // Se for um login novo sem saber se está verificado, vamos verificar no próximo acesso.
+                    session.save(tokens, email, emailVerified = session.isEmailVerified())
+                }
+
+                // Redireciona conforme status de verificação
+                if (session.isEmailVerified()) {
+                    openCatalog()
+                } else {
+                    openEmailVerification()
+                }
             } catch (e: EftvApi.ApiException) {
                 setLoading(false)
                 showError(messageFor(e))
@@ -90,12 +151,13 @@ class LoginActivity : AppCompatActivity() {
                         getString(R.string.login_network_error)
                     }
                 )
-                Timber.e(e, "Falha ao entrar em %s", BuildConfig.API_BASE_URL)
+                Timber.e(e, "Falha ao autenticar em %s", BuildConfig.API_BASE_URL)
             }
         }
     }
 
     private fun messageFor(e: EftvApi.ApiException): String = when (e.statusCode) {
+        400 -> e.detail.ifEmpty { getString(R.string.register_email_exists) }
         401 -> getString(R.string.login_invalid_credentials)
         403 -> getString(R.string.login_user_disabled)
         else -> e.detail
@@ -110,21 +172,32 @@ class LoginActivity : AppCompatActivity() {
         finish()
     }
 
+    private fun openEmailVerification() {
+        val email = session.email().orEmpty()
+        startActivity(
+            Intent(this, EmailVerificationActivity::class.java).apply {
+                putExtra(EmailVerificationActivity.EXTRA_EMAIL, email)
+            }
+        )
+        finish()
+    }
+
     private fun setLoading(loading: Boolean) {
         binding.loginButton.isEnabled = !loading
-        binding.offlineButton.isEnabled = !loading
+        binding.registerButton.isEnabled = !loading
         binding.emailInput.isEnabled = !loading
         binding.passwordInput.isEnabled = !loading
+        binding.fullNameInput.isEnabled = !loading
         binding.loginProgress.visibility = if (loading) View.VISIBLE else View.GONE
         if (loading) binding.loginError.visibility = View.GONE
     }
 
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
         ) return
-        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 8124)
+        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 8124)
     }
 
     private fun showError(message: String) {

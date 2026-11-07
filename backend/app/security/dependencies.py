@@ -114,8 +114,17 @@ async def get_current_active_subscription(
 ) -> Subscription:
     """
     Dependency para obter assinatura ativa do usuário logado.
-    Raises 403 se não tem assinatura ativa.
+    Raises 403 se não tem assinatura ativa ou email não verificado.
     """
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "email_not_verified",
+                "message": "Confirme seu email antes de acessar o conteudo.",
+            },
+        )
+
     result = await db.execute(
         select(Subscription)
         .where(Subscription.user_id == user.id)
@@ -127,13 +136,19 @@ async def get_current_active_subscription(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Nenhuma assinatura ativa encontrada",
+            detail={
+                "code": "no_active_subscription",
+                "message": "Nenhuma assinatura ativa encontrada",
+            },
         )
 
     if not subscription.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Assinatura expirada ou cancelada",
+            detail={
+                "code": "subscription_expired",
+                "message": "Assinatura expirada ou cancelada",
+            },
         )
 
     return subscription

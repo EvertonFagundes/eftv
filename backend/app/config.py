@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str | None = None
     EMAIL_FROM: str = "EFTV <noreply@eftv.com.br>"
 
+    # Verificacao de email
+    EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
+    # Dias de trial gratuito apos verificacao de email
+    FREE_TRIAL_DAYS: int = 7
+
     # Frontend URL (para links em emails, redirects)
     FRONTEND_URL: str = "http://localhost:3000"
 
