@@ -107,12 +107,14 @@ class EmailVerificationActivity : AppCompatActivity() {
         binding.error.visibility = View.GONE
         lifecycleScope.launch {
             try {
-                val message = api.resendVerification(email)
+                api.resendVerification(email)
                 setLoading(false)
-                binding.error.text = getString(R.string.verify_resent, message)
+                binding.error.text = getString(R.string.verify_resent)
                 binding.error.visibility = View.VISIBLE
                 binding.error.setTextColor(
-                    androidx.core.content.ContextCompat.getColor(this, R.color.primary)
+                    androidx.core.content.ContextCompat.getColor(
+                        this@EmailVerificationActivity, R.color.primary,
+                    )
                 )
             } catch (e: Exception) {
                 setLoading(false)

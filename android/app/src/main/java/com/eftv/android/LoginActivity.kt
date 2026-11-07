@@ -90,7 +90,7 @@ class LoginActivity : AppCompatActivity() {
 
     private fun updateAuthModeUI() {
         if (isRegisterMode) {
-            binding.registerButton.text = getString(R.string.login_already_have_account)
+            binding.registerButton.text = getString(R.string.register_already_have_account)
             binding.loginButton.text = getString(R.string.register_create_account)
             binding.fullNameLayout.visibility = View.VISIBLE
             binding.passwordInput.imeOptions = EditorInfo.IME_ACTION_NEXT
