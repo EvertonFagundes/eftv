@@ -126,11 +126,14 @@ class LoginActivity : AppCompatActivity() {
                     session.save(tokens, email, emailVerified = false)
                 } else {
                     val tokens = api.login(email, password)
-                    // O backend não retorna email_verified no token; consultamos o perfil para saber.
-                    // Como o access token é curto, usamos o endpoint /auth/me se necessário.
-                    // Para simplificar, assumimos que o status vem da sessão salva no login anterior.
-                    // Se for um login novo sem saber se está verificado, vamos verificar no próximo acesso.
-                    session.save(tokens, email, emailVerified = session.isEmailVerified())
+                    // A flag local pode estar desatualizada (conta verificada
+                    // em outro aparelho/site), entao consultamos o servidor.
+                    val verified = try {
+                        api.me(tokens.accessToken).emailVerified
+                    } catch (_: Exception) {
+                        session.isEmailVerified()
+                    }
+                    session.save(tokens, email, emailVerified = verified)
                 }
 
                 // Redireciona conforme status de verificação

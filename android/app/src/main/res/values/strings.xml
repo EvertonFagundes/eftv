@@ -81,6 +81,7 @@
     <string name="verify_network_error">Erro de conexão. Tente novamente.</string>
     <string name="verify_no_email">Nenhum e-mail encontrado na sessão.</string>
     <string name="verify_resent">Nova mensagem enviada.</string>
+    <string name="verify_switch_account">Voltar para o login</string>
 
     <!-- Vinculo de aparelho -->
     <string name="device_title">Aparelho</string>

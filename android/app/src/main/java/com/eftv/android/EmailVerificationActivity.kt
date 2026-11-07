@@ -51,6 +51,16 @@ class EmailVerificationActivity : AppCompatActivity() {
         binding.verifyButton.setOnClickListener { verifyEmail() }
         binding.resendButton.setOnClickListener { resendVerification() }
         binding.openBrowserButton.setOnClickListener { openVerificationLinkInBrowser() }
+        binding.switchAccountButton.setOnClickListener {
+            // Sai da conta atual e volta ao login (evita ficar preso na tela).
+            session.clear()
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
+        }
+
+        // Se a conta ja foi verificada no servidor (outro aparelho/site), nao
+        // deixa o usuario preso nesta tela.
+        checkIfAlreadyVerified()
         binding.tokenInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 verifyEmail()
@@ -124,6 +134,25 @@ class EmailVerificationActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Consulta o servidor para saber se o email ja esta verificado. Se estiver,
+     * libera o catalogo imediatamente.
+     */
+    private fun checkIfAlreadyVerified() {
+        val accessToken = session.accessToken()
+        if (accessToken.isNullOrBlank()) return
+        lifecycleScope.launch {
+            try {
+                if (api.me(accessToken).emailVerified) {
+                    session.setEmailVerified(true)
+                    openCatalog()
+                }
+            } catch (_: Exception) {
+                // Sem rede ou token expirado: o usuario continua na tela.
+            }
+        }
+    }
+
     private fun openVerificationLinkInBrowser() {
         val email = session.email().orEmpty()
         // Instrui o usuario a verificar o email e clicar no link, que abre este app via deep link
@@ -146,6 +175,7 @@ class EmailVerificationActivity : AppCompatActivity() {
         binding.verifyButton.isEnabled = !loading
         binding.resendButton.isEnabled = !loading
         binding.openBrowserButton.isEnabled = !loading
+        binding.switchAccountButton.isEnabled = !loading
         binding.tokenInput.isEnabled = !loading
         binding.verifyProgress.visibility = if (loading) View.VISIBLE else View.GONE
     }

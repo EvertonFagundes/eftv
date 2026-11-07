@@ -40,6 +40,12 @@ class EftvApi(
         val emailVerified: Boolean,
     )
 
+    data class Profile(
+        val email: String,
+        val emailVerified: Boolean,
+        val isAdmin: Boolean,
+    )
+
     data class DeviceBinding(
         val deviceId: String,
         val deviceName: String?,
@@ -86,6 +92,15 @@ class EftvApi(
         val body = JSONObject().put("email", email.trim())
         val json = request("POST", "/auth/resend-verification", body = body)
         return json.optString("message", "")
+    }
+
+    suspend fun me(accessToken: String): Profile {
+        val json = request("GET", "/auth/me", accessToken = accessToken)
+        return Profile(
+            email = json.optString("email"),
+            emailVerified = json.optBoolean("email_verified", false),
+            isAdmin = json.optBoolean("is_admin", false),
+        )
     }
 
     suspend fun refresh(refreshToken: String): TokenPair {
