@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import threading
 import time
@@ -72,6 +73,55 @@ class ServerHttpTest(unittest.TestCase):
         store = Path(server.STORE_PATH)
         self.assertTrue(store.is_file())
         self.assertIn("teste", store.read_text(encoding="utf-8"))
+
+    def test_remove_playlist_na_versao_web(self) -> None:
+        self._enviar_playlist("teste")
+        pid = server.load_store()["playlists"][0]["id"]
+
+        req = Request(self._url(f"/api/playlists?id={pid}"), method="DELETE")
+        with urlopen(req, timeout=2) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(server.load_store()["playlists"], [])
+
+    def test_playlists_somente_leitura_dentro_do_apk(self) -> None:
+        self._enviar_playlist("teste")
+        pid = server.load_store()["playlists"][0]["id"]
+        os.environ["EFTV_PLAYLIST_READONLY"] = "1"
+        try:
+            with self.assertRaises(HTTPError) as remover:
+                urlopen(
+                    Request(self._url(f"/api/playlists?id={pid}"), method="DELETE"),
+                    timeout=2,
+                )
+            self.assertEqual(remover.exception.code, 403)
+
+            with self.assertRaises(HTTPError) as adicionar:
+                urlopen(
+                    Request(
+                        self._url("/api/playlists/upload?name=outra"),
+                        data=SAMPLE.encode("utf-8"),
+                        headers={"Content-Type": "audio/x-mpegurl"},
+                        method="POST",
+                    ),
+                    timeout=2,
+                )
+            self.assertEqual(adicionar.exception.code, 403)
+        finally:
+            os.environ.pop("EFTV_PLAYLIST_READONLY", None)
+
+        self.assertEqual(len(server.load_store()["playlists"]), 1)
+
+    def _enviar_playlist(self, nome: str) -> None:
+        req = Request(
+            self._url(f"/api/playlists/upload?name={nome}"),
+            data=SAMPLE.encode("utf-8"),
+            headers={"Content-Type": "audio/x-mpegurl"},
+            method="POST",
+        )
+        with urlopen(req, timeout=2) as resp:
+            self.assertTrue(json.loads(resp.read().decode("utf-8"))["ok"])
 
 
 if __name__ == "__main__":

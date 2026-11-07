@@ -85,6 +85,17 @@ STORE_CACHE: dict = {"chave": None, "dados": {"playlists": []}}
 CATALOGO_CACHE: dict = {"chave": None, "json": b"", "gzip": b""}
 
 
+def playlists_readonly() -> bool:
+    """True quando as playlists sao fixas (APK Android).
+
+    A versao web (server.py rodando no PC) permite adicionar, trocar e
+    remover playlists. Dentro do APK o eftv_runner.py define
+    EFTV_PLAYLIST_READONLY=1 e as rotas de escrita respondem 403.
+    """
+    valor = os.environ.get("EFTV_PLAYLIST_READONLY", "").strip().lower()
+    return valor in ("1", "true", "yes", "on")
+
+
 def configure_paths(root: str | None = None, data_dir: str | None = None) -> None:
     """Redefine ROOT/DATA_DIR. No Android/Chaquopy o APK e somente leitura."""
     global ROOT, DATA_DIR, STORE_PATH
@@ -1141,15 +1152,42 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         try:
-            # O cat�logo vem fixo com o APK: n�o h� rotas de inclus�o,
-            # upload, atualiza��o ou remo��o de playlists pelo usu�rio.
-            if route in (
+            # Rotas de escrita ficam bloqueadas quando o servidor roda
+            # dentro do APK (EFTV_PLAYLIST_READONLY=1): la a playlist e fixa.
+            if playlists_readonly() and route in (
                 "/api/playlists",
                 "/api/playlists/upload",
                 "/api/playlists/refresh",
                 "/api/playlists/clear",
             ):
-                self._error("Somente leitura: a playlist j� vem configurada com o app.", 403)
+                self._error("Somente leitura: a playlist fixa do app nao pode ser alterada.", 403)
+                return
+
+            if route == "/api/playlists":
+                payload = self._read_json()
+                self._add_from_url(payload)
+                return
+
+            if route == "/api/playlists/upload":
+                query = parse_qs(parts.query)
+                name = (query.get("name") or [""])[0].strip()
+                raw = self._read_body()
+                try:
+                    text = raw.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    text = raw.decode("latin-1")
+                self._add_from_text(text, name or "Playlist enviada")
+                return
+
+            if route == "/api/playlists/refresh":
+                payload = self._read_json()
+                self._refresh_playlist(payload.get("id", ""))
+                return
+
+            if route == "/api/playlists/clear":
+                with STORE_LOCK:
+                    save_store({"playlists": []})
+                self._send_json({"ok": True})
                 return
 
             if route == "/api/servidor":
@@ -1180,9 +1218,10 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._same_origin():
             self._error("Origem não permitida.", 403)
             return
-        # Playlist fixa: nao permite remocao pelo usuario.
-        if parts.path == "/api/playlists":
-            self._error("Somente leitura: a playlist ja vem configurada com o app.", 403)
+        # No app Android a playlist fixa e somente leitura; na versao web o
+        # usuario pode remover e trocar. Veja playlists_readonly().
+        if playlists_readonly() and parts.path == "/api/playlists":
+            self._error("Somente leitura: a playlist fixa do app nao pode ser alterada.", 403)
             return
         if parts.path != "/api/playlists":
             self._error("Rota não encontrada.", 404)

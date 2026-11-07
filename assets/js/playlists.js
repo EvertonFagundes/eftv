@@ -16,7 +16,13 @@
   const lista = document.querySelector("[data-playlist-list]");
   const vazio = document.querySelector("[data-playlist-empty]");
   const botaoLimpar = document.querySelector("[data-playlist-clear]");
+  const botaoCancelarTroca = document.querySelector("[data-playlist-cancel-replace]");
+  const rotuloToggle = document.querySelector("[data-playlist-toggle-label]");
   const estatico = !!window.CANAIS_STATIC && !!window.EFTVStatic;
+
+  /* Playlist que sera removida depois que a nova for importada. Vazio quando
+     o usuario esta apenas adicionando mais uma. */
+  let substituindoId = "";
 
   /* ---------------------------------------------- painel de importação
      Quem só assiste não precisa ver o formulário de importação. O painel fica     recolhido no fim da página, atrás de um botão discreto, e abre sozinho
@@ -66,13 +72,29 @@
     ocupado = valor;
     if (botaoAdd) {
       botaoAdd.disabled = valor;
-      botaoAdd.textContent = valor ? "Aguarde..." : "Adicionar link";
     }
     if (botaoLimpar) botaoLimpar.disabled = valor;
     if (lista) {
       lista.querySelectorAll("button").forEach((btn) => {
         btn.disabled = valor;
       });
+    }
+    atualizarBotaoAdicionar();
+  }
+
+  function atualizarBotaoAdicionar() {
+    if (botaoAdd) {
+      if (ocupado) {
+        botaoAdd.textContent = "Aguarde...";
+      } else {
+        botaoAdd.textContent = substituindoId ? "Trocar playlist" : "Adicionar link";
+      }
+    }
+    if (botaoCancelarTroca) {
+      botaoCancelarTroca.hidden = !substituindoId || ocupado;
+    }
+    if (rotuloToggle) {
+      rotuloToggle.textContent = playlists.length ? "Gerenciar playlists" : "Adicionar playlist";
     }
   }
 
@@ -145,6 +167,7 @@
         const atualizar = p.uploaded
           ? ""
           : `<button class="playlist-btn mini" type="button" data-refresh="${id}">Atualizar</button>`;
+        const trocar = `<button class="playlist-btn mini" type="button" data-replace="${id}" title="Remove esta playlist e usa outra no lugar">Trocar</button>`;
         return `
         <div class="playlist-item">
           <div class="playlist-item-main">
@@ -154,6 +177,7 @@
           </div>
           <div class="playlist-item-actions">
             ${atualizar}
+            ${trocar}
             <button class="playlist-btn mini danger" type="button" data-remove="${id}">Remover</button>
           </div>
         </div>`;
@@ -162,6 +186,9 @@
 
     if (vazio) vazio.hidden = playlists.length !== 0;
     if (botaoLimpar) botaoLimpar.hidden = playlists.length === 0;
+    if (substituindoId && !playlists.some((p) => p.id === substituindoId)) {
+      substituindoId = "";
+    }
 
     // Primeiro uso (nenhuma playlist): o formulário aparece sozinho, senão a
     // pessoa não teria por onde começar. Se depois uma playlist entrar, o
@@ -175,6 +202,8 @@
       painelAbertoPorFaltaDePlaylist = false;
       definirPainel(false);
     }
+
+    atualizarBotaoAdicionar();
   }
 
   async function carregarLista() {
@@ -211,6 +240,59 @@
     renderLista();
   }
 
+  /* ------------------------------------------------------ troca / remoção */
+  async function removerPlaylist(id) {
+    if (estatico) {
+      await window.EFTVStatic.remover(id);
+      await carregarLista();
+      if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
+      return;
+    }
+    await pedir("/api/playlists?id=" + encodeURIComponent(id), { method: "DELETE" });
+    await recarregarCatalogo();
+  }
+
+  /* Ativa o modo "trocar": a próxima playlist importada substitui a atual.
+     Assim o usuário resolve a playlist quebrada em um passo só. */
+  function iniciarTroca(id) {
+    const item = playlists.find((p) => p.id === id);
+    if (!item) return;
+    substituindoId = id;
+    definirPainel(true);
+    atualizarBotaoAdicionar();
+    mostrarStatus(
+      `Cole o link (ou envie o arquivo) da nova playlist. "${item.name}" será removida depois que a nova for importada.`,
+      null
+    );
+    if (inputUrl) {
+      inputUrl.value = "";
+      inputUrl.focus();
+    }
+    if (painel) painel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function cancelarTroca() {
+    substituindoId = "";
+    atualizarBotaoAdicionar();
+    mostrarStatus("Troca cancelada. A playlist atual continua ativa.", null);
+  }
+
+  /* Remove a playlist antiga só depois que a nova entrou. Se a remoção
+     falhar, a nova continua valendo e o usuário pode remover a antiga na mão. */
+  async function concluirTroca() {
+    if (!substituindoId) return "";
+    const antiga = playlists.find((p) => p.id === substituindoId);
+    substituindoId = "";
+    atualizarBotaoAdicionar();
+    if (!antiga) return "";
+    try {
+      await removerPlaylist(antiga.id);
+      return ` A playlist "${antiga.name}" foi removida.`;
+    } catch (erro) {
+      return ` A playlist anterior não pôde ser removida: ${erro.message}`;
+    }
+  }
+
   /* ------------------------------------------------------------- ações */
   async function adicionarUrl(url) {
     ocupar(true);
@@ -230,7 +312,8 @@
         await recarregarCatalogo();
       }
       if (inputUrl) inputUrl.value = "";
-      mostrarStatus(dados.message || "Playlist adicionada.", "ok");
+      const extra = await concluirTroca();
+      mostrarStatus((dados.message || "Playlist adicionada.") + extra, "ok");
     } catch (erro) {
       mostrarStatus(erro.message, "error");
     } finally {
@@ -261,7 +344,8 @@
       }
       if (inputFile) inputFile.value = "";
       if (nomeArquivo) nomeArquivo.textContent = "Nenhum arquivo selecionado";
-      mostrarStatus(dados.message || "Playlist importada.", "ok");
+      const extra = await concluirTroca();
+      mostrarStatus((dados.message || "Playlist importada.") + extra, "ok");
     } catch (erro) {
       mostrarStatus(erro.message, "error");
     } finally {
@@ -324,23 +408,23 @@
         const item = playlists.find((p) => p.id === id);
         const nome = item ? item.name : "esta playlist";
         if (!confirm(`Remover "${nome}" e todos os canais importados por ela?`)) return;
+        if (id === substituindoId) substituindoId = "";
         ocupar(true);
         mostrarStatus("Removendo playlist...", null);
         try {
-          if (estatico) {
-            await window.EFTVStatic.remover(id);
-            await carregarLista();
-            if (typeof window.CanaisRenderTudo === "function") window.CanaisRenderTudo();
-          } else {
-            await pedir("/api/playlists?id=" + encodeURIComponent(id), { method: "DELETE" });
-            await recarregarCatalogo();
-          }
+          await removerPlaylist(id);
           mostrarStatus("Playlist removida.", "ok");
         } catch (erro) {
           mostrarStatus(erro.message, "error");
         } finally {
           ocupar(false);
         }
+        return;
+      }
+
+      const trocar = evento.target.closest("[data-replace]");
+      if (trocar) {
+        iniciarTroca(trocar.getAttribute("data-replace"));
         return;
       }
 
@@ -377,6 +461,7 @@
     botaoLimpar.addEventListener("click", async () => {
       if (ocupado || !playlists.length) return;
       if (!confirm("Remover todas as playlists importadas?")) return;
+      substituindoId = "";
       ocupar(true);
       mostrarStatus("Removendo playlists...", null);
       try {
@@ -394,6 +479,13 @@
       } finally {
         ocupar(false);
       }
+    });
+  }
+
+  if (botaoCancelarTroca) {
+    botaoCancelarTroca.addEventListener("click", () => {
+      if (ocupado) return;
+      cancelarTroca();
     });
   }
 

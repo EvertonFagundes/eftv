@@ -225,7 +225,7 @@
       <div class="load-more-row">
         <button class="category-filter load-more" type="button" data-load-more hidden>Mostrar mais canais</button>
       </div>
-      <div class="no-results" data-no-results hidden>Nenhum canal por aqui. Mude o filtro ou toque em “Adicionar playlist”, no fim da página.</div>
+      <div class="no-results" data-no-results hidden>Nenhum canal por aqui. Mude o filtro ou toque em “Gerenciar playlists”, no fim da página.</div>
     </section>
 
     <!-- Importar playlist: recolhido por padrão, para não poluir a tela de
@@ -233,21 +233,23 @@
     <section class="playlist-panel" id="playlists" data-playlist-panel aria-labelledby="playlists-titulo">
       <button class="playlist-expand" type="button" data-playlist-toggle aria-expanded="false"
               aria-controls="playlists-corpo">
-        <span aria-hidden="true">＋</span> Adicionar playlist
+        <span aria-hidden="true">＋</span> <span data-playlist-toggle-label>Adicionar playlist</span>
       </button>
 
       <div class="playlist-corpo" id="playlists-corpo" data-playlist-body hidden>
         <div class="playlist-head">
           <div>
             <span class="playlist-kicker">Sua biblioteca</span>
-            <h2 id="playlists-titulo">Adicionar playlist</h2>
+            <h2 id="playlists-titulo">Suas playlists</h2>
             <p class="playlist-sub">
-              Cole o link de uma lista <code>.m3u</code> / <code>.m3u8</code> ou envie um arquivo.
-              Os canais entram na grade e ficam salvos neste dispositivo.
+              Remova a playlist que não funciona mais ou use <strong>Trocar</strong> para
+              colocar outra no lugar. Também dá para colar um link
+              <code>.m3u</code> / <code>.m3u8</code> ou enviar um arquivo.
             </p>
           </div>
           <div class="playlist-head-actions">
             <button class="playlist-btn ghost" type="button" data-playlist-toggle aria-expanded="true">Ocultar</button>
+            <button class="playlist-btn ghost" type="button" data-playlist-cancel-replace hidden>Cancelar troca</button>
             <button class="playlist-btn ghost" type="button" data-playlist-clear hidden>Remover todas</button>
           </div>
         </div>

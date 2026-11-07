@@ -24,6 +24,9 @@ def start_server(root: str, data_dir: str, host: str = "0.0.0.0", port: int = 81
     os.environ["EFTV_DATA_DIR"] = dados
     os.environ["HOST"] = escuta
     os.environ["PORT"] = str(porta)
+    # Dentro do APK a playlist vem fixa: as rotas de escrita respondem 403.
+    # A versao web (server.py no PC) deixa o usuario trocar/remover playlists.
+    os.environ["EFTV_PLAYLIST_READONLY"] = "1"
 
     srv.configure_paths(www, dados)
 
