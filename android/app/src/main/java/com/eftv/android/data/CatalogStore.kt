@@ -171,17 +171,29 @@ class CatalogStore private constructor(context: Context) {
             group, query, excludeAdults = excludeAdults, kind = ChannelKind.SERIES,
         )
         val args = (filterArgs + limit.toString() + offset.toString()).toTypedArray()
-        // MIN(...) e o unico min/max da consulta: as colunas sem agregacao
-        // (logo, url, nome...) vem da linha escolhida por ele.
+        /**
+         * Usa ROW_NUMBER() para selecionar o episodio representante de cada serie:
+         * aquele com logo nao vazio tem prioridade; se nenhum tiver logo, usa o
+         * primeiro episodio (menor temporada/episodio/id). Assim a capa da serie
+         * eh sempre de um episodio que realmente pertence a ela.
+         */
         val sql = """
-            SELECT c.series_key, c.series_title, c.name, c.group_title, c.logo, c.url,
-                   c.user_agent, c.referer, c.tvg_id,
-                   COUNT(*) AS episodes, COUNT(DISTINCT c.season) AS seasons,
-                   MIN((c.logo = '') * 1000000000 + c.id) AS pick,
-                   $GROUP_KEY AS gkey,
-                   CASE WHEN c.series_key = '' THEN c.name_key ELSE c.series_key END AS sortkey
-            FROM channels c
-            $where
+            SELECT series_key, series_title, name, group_title, logo, url,
+                   user_agent, referer, tvg_id,
+                   COUNT(*) AS episodes, COUNT(DISTINCT season) AS seasons,
+                   gkey, sortkey
+            FROM (
+                SELECT c.*,
+                       CASE WHEN c.series_key = '' THEN 'u' || c.id ELSE c.series_key END AS gkey,
+                       CASE WHEN c.series_key = '' THEN c.name_key ELSE c.series_key END AS sortkey,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY CASE WHEN c.series_key = '' THEN 'u' || c.id ELSE c.series_key END
+                           ORDER BY (c.logo = '') ASC, c.season ASC, c.episode ASC, c.id ASC
+                       ) AS rn
+                FROM channels c
+                $where
+            )
+            WHERE rn = 1
             GROUP BY gkey
             ORDER BY sortkey, gkey
             LIMIT ? OFFSET ?
