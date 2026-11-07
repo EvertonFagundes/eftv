@@ -41,7 +41,7 @@ com a inicializacao (o free nao tem pre-deploy command).
 1. Render: **New > Blueprint** > repositorio.
 2. Em **Blueprint Path**, informe `render.free.yaml`.
 3. Preencha `IPTV_PLAYLIST_URL` e clique em **Apply**.
-4. Use `https://eftv-api.onrender.com` no app, como no passo 4 abaixo.
+4. Use `https://eftv.onrender.com` no app, como no passo 4 abaixo.
 
 Criar o assinante de teste sem Shell (na sua maquina):
 
@@ -73,18 +73,17 @@ O arquivo [`render.yaml`](../render.yaml) ja descreve a API e o banco.
 
 ## 2. Conferir
 
-A URL fica no formato `https://eftv-api.onrender.com` (o nome pode variar se
-ja existir outro servico com esse nome).
+A API esta publicada em `https://eftv.onrender.com`.
 
 ```bash
-curl -fsS https://eftv-api.onrender.com/health
+curl -fsS https://eftv.onrender.com/health
 # {"status":"ok","version":"1.0.0"}
 ```
 
 Teste o login:
 
 ```bash
-curl -s -X POST https://eftv-api.onrender.com/auth/login \
+curl -s -X POST https://eftv.onrender.com/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"SEU_EMAIL","password":"SUA_SENHA"}'
 ```
@@ -110,7 +109,7 @@ IP em *Postgres > Access Control*).
 No `android/local.properties` (ignorado pelo Git):
 
 ```properties
-EFTV_API_URL=https://eftv-api.onrender.com
+EFTV_API_URL=https://eftv.onrender.com
 ```
 
 Depois:

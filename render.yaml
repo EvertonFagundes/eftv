@@ -5,7 +5,7 @@
 #   2. O Render cria o Postgres e pede os valores marcados com sync: false.
 #   3. Preencha IPTV_PLAYLIST_URL (e o referer, se o provedor exigir).
 #
-# O app Android deve apontar para https://eftv-api.onrender.com
+# O app Android deve apontar para https://eftv.onrender.com
 # (ou para o dominio proprio configurado no dashboard).
 
 services:
