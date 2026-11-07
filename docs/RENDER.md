@@ -57,6 +57,25 @@ libere o IP da sua maquina (ou `0.0.0.0/0` temporariamente).
 Quando for atender cliente de verdade, aplique o [`render.yaml`](../render.yaml)
 (mesmos nomes de servico): o Render troca os planos e o banco e preservado.
 
+## Manter a API acordada (opcional, so para teste)
+
+O workflow [`.github/workflows/keepalive.yml`](../.github/workflows/keepalive.yml)
+faz `GET /health` a cada 10 minutos. E o suficiente para o Render nao hibernar,
+entao o primeiro acesso do cliente deixa de esperar ~1 minuto.
+
+Ele roda sozinho, sem servico externo. Para conferir: aba **Actions** >
+**Manter API acordada** > **Run workflow**.
+
+Limites dessa abordagem:
+
+- consome as 750 horas de instancia free do mes (~730h em um mes de 31 dias);
+- nao impede o Postgres free de expirar em 30 dias;
+- o GitHub pode atrasar execucoes agendadas em horarios de pico;
+- se o repositorio ficar 60 dias sem atividade, o GitHub desativa o agendamento.
+
+Se o plano for atender cliente pagante, troque para Starter + Basic: sai mais
+barato do que manter esse esquema e nao tem esses riscos.
+
 ## 1. Subir pelo Blueprint
 
 O arquivo [`render.yaml`](../render.yaml) ja descreve a API e o banco.
