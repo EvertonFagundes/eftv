@@ -146,9 +146,18 @@ class PlayerActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         stopped = false
-        if (::binding.isInitialized && this::streamUrl.isInitialized && !isFinishing) {
+        if (::binding.isInitialized && this::streamUrl.isInitialized && !isFinishing && !isDestroyed) {
             // Sempre (re)comeca do ponto ao vivo ao abrir/voltar para a tela.
             startPlayback()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Pausa o player quando sai da tela ou coloca o app em background.
+        // Isso evita que o audio/video continue rodando e trave o app.
+        player?.let { current ->
+            current.playWhenReady = false
         }
     }
 
@@ -163,6 +172,9 @@ class PlayerActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
 
     private fun startPlayback() {
+        // Nao inicia playback se a activity ja esta sendo encerrada.
+        if (isFinishing || isDestroyed) return
+
         reconnectAttempt = 0
         softRecoveryAttempts = 0
         lastReadyAt = 0L
