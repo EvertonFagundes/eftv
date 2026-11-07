@@ -2,6 +2,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -63,9 +64,49 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Cria tabelas (usado em dev/testes). Em produção usa Alembic."""
+    """Cria tabelas e garante colunas novas (dev/testes e fallback de deploy).
+
+    Em producao as migrations do Alembic rodam no deploy. Se o servico subir
+    sem elas, o SELECT em users falha porque o modelo tem colunas que ainda
+    nao existem no banco. Este bloco aplica essas colunas de forma idempotente.
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        if conn.dialect.name != "postgresql":
+            return
+
+        exists = await conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'users' "
+                "AND column_name = 'email_verification_token'"
+            )
+        )
+        if exists.first() is not None:
+            return
+
+        # Rollout do recurso de verificacao de email: cria as colunas e marca
+        # as contas existentes como verificadas (foram criadas antes do fluxo).
+        await conn.execute(
+            text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                "email_verification_token VARCHAR(255)"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                "email_verification_expires_at TIMESTAMPTZ"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_users_email_verification_token "
+                "ON users (email_verification_token)"
+            )
+        )
+        await conn.execute(text("UPDATE users SET email_verified = true"))
 
 
 async def close_db() -> None:
