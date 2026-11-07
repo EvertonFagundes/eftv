@@ -1,5 +1,6 @@
 import enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import (
     Column,
     DateTime,
@@ -8,7 +9,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -16,7 +16,7 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
-class SubscriptionStatus(str, enum.Enum):
+class SubscriptionStatus(str, enum.Enum):  # noqa: UP042 - mantem o valor gravado no banco
     active = "active"
     inactive = "inactive"
     expired = "expired"
@@ -36,18 +36,18 @@ class User(Base):
         Enum(SubscriptionStatus), default=SubscriptionStatus.trial, nullable=False
     )
     subscription_expires_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
     devices = relationship("Device", back_populates="user", cascade="all, delete-orphan")
-    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    refresh_tokens = relationship(
+        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Device(Base):
@@ -59,9 +59,7 @@ class Device(Base):
     device_name = Column(String(255), nullable=True)
     is_current = Column(Integer, default=0)
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     user = relationship("User", back_populates="devices")
 
@@ -80,8 +78,6 @@ class RefreshToken(Base):
     device_id = Column(String(255), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     user = relationship("User", back_populates="refresh_tokens")

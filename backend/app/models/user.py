@@ -1,5 +1,4 @@
 # models/user.py - Modelo de usuário
-import hashlib
 import hmac
 import secrets
 import uuid
@@ -36,7 +35,9 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Token de verificacao de email (enviado por email ao registrar)
-    email_verification_token: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    email_verification_token: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
     email_verification_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -68,7 +69,6 @@ class User(Base):
 
     def generate_email_verification_token(self) -> str:
         """Gera e armazena um token de verificacao de email valido por 24h."""
-        import secrets
 
         token = secrets.token_urlsafe(32)
         self.email_verification_token = token

@@ -41,7 +41,9 @@ async def claim_ownership(
         current_user.is_active = True
 
         # Garante plano default
-        plan_result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc()))  # noqa: E712
+        plan_result = await db.execute(
+            select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.sort_order.asc())
+        )
         plan = plan_result.scalar_one_or_none()
         if plan is None:
             plan = Plan(
@@ -59,7 +61,9 @@ async def claim_ownership(
             await db.flush()
 
         # Ativa ou cria subscription
-        sub_result = await db.execute(select(Subscription).where(Subscription.user_id == current_user.id))
+        sub_result = await db.execute(
+            select(Subscription).where(Subscription.user_id == current_user.id)
+        )
         subscription = sub_result.scalar_one_or_none()
         now = datetime.now(UTC)
         period_end = now.replace(year=now.year + 1)
@@ -97,7 +101,7 @@ async def claim_ownership(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno: {str(exc)}",
-        )
+        ) from exc
 
 
 @router.get("/stats")
@@ -279,13 +283,17 @@ async def make_user_owner(
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado"
+            )
 
         user.is_admin = True
         user.is_active = True
 
         # Garante plano default
-        plan_result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc()))  # noqa: E712
+        plan_result = await db.execute(
+            select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.sort_order.asc())
+        )
         plan = plan_result.scalar_one_or_none()
         if plan is None:
             plan = Plan(
@@ -341,4 +349,4 @@ async def make_user_owner(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno: {str(exc)}",
-        )
+        ) from exc

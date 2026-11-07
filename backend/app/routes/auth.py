@@ -1,4 +1,5 @@
 # routes/auth.py - Rotas de autenticação
+import contextlib
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -8,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.models.device import SubscriptionDevice
 from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -109,15 +109,12 @@ async def register(
     verification_token = user.generate_email_verification_token()
 
     # Envia email de verificacao (nao bloqueia o cadastro se falhar)
-    try:
+    with contextlib.suppress(Exception):
         await email_service.send_verification_email(
             to_email=data.email,
             token=verification_token,
             full_name=data.full_name,
         )
-    except Exception:
-        # Falha ao enviar email nao deve impedir o cadastro
-        pass
 
     await db.commit()
     await db.refresh(user)
@@ -154,9 +151,7 @@ async def verify_email(
     Apos a verificacao bem-sucedida, ativa o trial gratuito de 7 dias
     (status='trial') se o usuario ainda nao tiver uma assinatura ativa.
     """
-    result = await db.execute(
-        select(User).where(User.email_verification_token == data.token)
-    )
+    result = await db.execute(select(User).where(User.email_verification_token == data.token))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -185,9 +180,9 @@ async def verify_email(
 
     # Verifica se ja existe uma subscription ativa/trial para este usuario
     existing_sub_result = await db.execute(
-        select(Subscription).where(Subscription.user_id == user.id).order_by(
-            Subscription.created_at.desc()
-        )
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .order_by(Subscription.created_at.desc())
     )
     existing_sub = existing_sub_result.scalar_one_or_none()
 
@@ -211,13 +206,11 @@ async def verify_email(
     await db.refresh(user)
 
     # Envia email de boas-vindas (nao bloqueia se falhar)
-    try:
+    with contextlib.suppress(Exception):
         await email_service.send_welcome_email(
             to_email=user.email,
             full_name=user.full_name,
         )
-    except Exception:
-        pass
 
     return EmailVerificationResponse(
         message="Email verificado com sucesso. Seus 7 dias gratis foram ativados!",
@@ -252,14 +245,12 @@ async def resend_verification(
     verification_token = user.generate_email_verification_token()
 
     # Envia email
-    try:
+    with contextlib.suppress(Exception):
         await email_service.send_verification_email(
             to_email=user.email,
             token=verification_token,
             full_name=user.full_name,
         )
-    except Exception:
-        pass
 
     await db.commit()
 

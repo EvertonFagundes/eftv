@@ -1,6 +1,5 @@
 # services/email_service.py - Envio de emails (verificacao, boas-vindas, etc.)
 import logging
-from typing import Optional
 
 from app.config import settings
 
@@ -25,7 +24,7 @@ class EmailService:
         self,
         to_email: str,
         token: str,
-        full_name: Optional[str] = None,
+        full_name: str | None = None,
     ) -> bool:
         """
         Envia email de verificacao de conta com link contendo o token.
@@ -48,7 +47,7 @@ class EmailService:
     async def send_welcome_email(
         self,
         to_email: str,
-        full_name: Optional[str] = None,
+        full_name: str | None = None,
     ) -> bool:
         """Envia email de boas-vindas apos verificacao bem-sucedida."""
         subject = "Bem-vindo ao EFTV - 7 dias grátis ativados"
@@ -65,7 +64,7 @@ class EmailService:
         to_email: str,
         subject: str,
         text_body: str,
-        html_body: Optional[str] = None,
+        html_body: str | None = None,
     ) -> bool:
         """
         Envia email real via Resend se houver API key; caso contrario, apenas
@@ -84,7 +83,7 @@ class EmailService:
         to_email: str,
         subject: str,
         text_body: str,
-        html_body: Optional[str] = None,
+        html_body: str | None = None,
     ) -> bool:
         """Envia email usando a API do Resend."""
         try:
@@ -116,7 +115,7 @@ class EmailService:
 
     @staticmethod
     def _verification_html(
-        full_name: Optional[str],
+        full_name: str | None,
         token: str,
         verification_url: str,
     ) -> str:
