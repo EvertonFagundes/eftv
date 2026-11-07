@@ -66,6 +66,9 @@ entao o primeiro acesso do cliente deixa de esperar ~1 minuto.
 Ele roda sozinho, sem servico externo. Para conferir: aba **Actions** >
 **Manter API acordada** > **Run workflow**.
 
+Se quiser um intervalo mais pontual, um monitor gratuito como o UptimeRobot
+(checagem a cada 5 minutos) faz o mesmo papel, sem depender do cron do GitHub.
+
 Limites dessa abordagem:
 
 - consome as 750 horas de instancia free do mes (~730h em um mes de 31 dias);
