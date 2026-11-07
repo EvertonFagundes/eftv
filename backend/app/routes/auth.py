@@ -40,9 +40,9 @@ router = APIRouter(prefix="/auth", tags=["Autenticação"])
 email_service = EmailService()
 
 
-def _get_or_create_default_plan(db: AsyncSession) -> Plan:
+async def _get_or_create_default_plan(db: AsyncSession) -> Plan:
     """Garante que exista um plano default gratuito (trial de 7 dias)."""
-    plan_result = db.execute(
+    plan_result = await db.execute(
         select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc())  # noqa: E712
     )
     plan = plan_result.scalar_one_or_none()
@@ -59,7 +59,7 @@ def _get_or_create_default_plan(db: AsyncSession) -> Plan:
             sort_order=0,
         )
         db.add(plan)
-        db.flush()
+        await db.flush()
     return plan
 
 
@@ -193,7 +193,7 @@ async def verify_email(
 
     if not existing_sub or existing_sub.status not in ["active", "trial"]:
         # Ativa trial gratuito de 7 dias
-        plan = _get_or_create_default_plan(db)
+        plan = await _get_or_create_default_plan(db)
         now = datetime.now(UTC)
         trial_end = now + timedelta(days=settings.FREE_TRIAL_DAYS)
         subscription = Subscription(

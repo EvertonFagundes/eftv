@@ -1,7 +1,10 @@
 # services/email_service.py - Envio de emails (verificacao, boas-vindas, etc.)
+import logging
 from typing import Optional
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class EmailService:
@@ -70,6 +73,11 @@ class EmailService:
         """
         if self.api_key:
             return await self._send_via_resend(to_email, subject, text_body, html_body)
+
+        # Sem provedor configurado (desenvolvimento): registra o email no log
+        # e segue o fluxo, para dar para testar o cadastro sem enviar nada.
+        logger.info("Email (modo dev) para %s: %s | %s", to_email, subject, text_body)
+        return True
 
     async def _send_via_resend(
         self,
