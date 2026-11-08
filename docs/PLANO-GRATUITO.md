@@ -377,6 +377,11 @@ O `EMAIL_FROM` precisa ser um remetente verificado no Brevo; sem dominio
 proprio, verifique um e-mail seu. A `DATABASE_URL` sera trocada pela do
 Supabase quando a etapa 1 terminar.
 
+**`FRONTEND_URL` e obrigatoria em producao.** Sem ela, o link de confirmacao
+sai como `http://localhost:3000/verify-email.html` e o usuario nao consegue
+abrir. O valor correto nao tem barra final:
+`https://evertonfagundes.github.io/eftv`.
+
 ### Segredos no GitHub (backup)
 
 - `DATABASE_URL`: URL libpq (`postgresql://...?sslmode=require`), sem

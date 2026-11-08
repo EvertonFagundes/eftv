@@ -73,6 +73,14 @@ class EmailService:
 
         Retorna True se enviado com sucesso (ou simulado em dev sem chave).
         """
+        if "localhost" in self.frontend_url and not settings.DEBUG:
+            # Em producao o destinatario nao consegue abrir localhost.
+            logger.error(
+                "FRONTEND_URL aponta para localhost (%s); o link de verificacao "
+                "nao funciona fora da maquina local",
+                self.frontend_url,
+            )
+
         verification_url = f"{self.frontend_url.rstrip('/')}/verify-email.html?token={token}"
 
         subject = "Confirme seu email - EFTV"
