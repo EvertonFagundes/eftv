@@ -396,3 +396,4 @@ Supabase quando a etapa 1 terminar.
 | 2026-11-08 | Workflow noturno de backup cifrado (`pg_dump` + GPG) em artefato de 90 dias |
 | 2026-11-08 | Teste real do Brevo: remetente EFTV ativo, envio HTTP 201 e faixas do Render autorizadas |
 | 2026-11-08 | Pagina `verify-email.html` no GitHub Pages; link do e-mail deixa de cair em 404 |
+| 2026-11-08 | CORS do GitHub Pages validado no Render (preflight 200) apos normalizar a origem |
