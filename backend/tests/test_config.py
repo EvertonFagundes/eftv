@@ -83,15 +83,19 @@ def test_connect_args_disable_statement_caches_on_pooler():
     args = build_connect_args(
         "postgresql+asyncpg://u:p@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
     )
-    assert args == {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
+    assert args["statement_cache_size"] == 0
+    assert args["prepared_statement_cache_size"] == 0
+    name_func = args["prepared_statement_name_func"]
+    assert callable(name_func)
+    assert name_func() == ""
 
 
 def test_connect_args_can_be_forced():
     url = "postgresql+asyncpg://u:p@localhost:5432/eftv"
-    assert build_connect_args(url, use_pooler=True) == {
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
-    }
+    forced = build_connect_args(url, use_pooler=True)
+    assert forced["statement_cache_size"] == 0
+    assert forced["prepared_statement_cache_size"] == 0
+    assert callable(forced["prepared_statement_name_func"])
     pooler = "postgresql+asyncpg://u:p@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
     assert build_connect_args(pooler, use_pooler=False) == {}
 

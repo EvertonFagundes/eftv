@@ -136,9 +136,10 @@ usuarios. O que continua valendo:
       para o Render em Oregon custa dezenas de milissegundos por consulta,
       irrelevante para 5 usuarios. Trocar de regiao exigiria recriar o
       projeto, entao ficou assim.
-- [ ] Copiar os dados do Postgres atual do Render (ou recriar as contas).
-      Catalogo esta vazio (`/channels` e `/categories` em 0), entao o que
-      importa sao usuarios, assinaturas e vinculos de aparelho.
+- [x] Dados copiados do Postgres atual do Render: 3 usuarios, 1 plano,
+      2 assinaturas e 6 vinculos de aparelho. Catalogo estava vazio
+      (`/channels` e `/categories` em 0). Os aparelhos foram revogados na
+      copia para o primeiro aparelho que abrir o app assumir a vaga.
 - [ ] Trocar `DATABASE_URL` no Render e validar login/catalogo.
 - [ ] So depois de validar, apagar o Postgres free do Render.
 
@@ -221,8 +222,15 @@ O `backend/app/config.py` ja converte `postgresql://` para
 
 O pooler e detectado pela porta **6543** ou pelo host
 `*.pooler.supabase.com`; nesse caso o `app/database.py` liga
-`statement_cache_size=0` e `prepared_statement_cache_size=0` automaticamente.
-Dá para forçar com `DATABASE_POOLER=true|false` se o provedor mudar.
+`statement_cache_size=0`, `prepared_statement_cache_size=0` e ainda pede
+**nome vazio** de statement (`prepared_statement_name_func`). Sem o nome
+vazio o asyncpg prepara statements nomeados, que colidem com os de outro
+cliente na mesma conexao fisica do pooler
+(`DuplicatePreparedStatementError`). Dá para forçar com
+`DATABASE_POOLER=true|false` se o provedor mudar.
+
+Teste local contra a porta 6543 (08/11/2026): login, `/subscriptions` e
+`/player/playlist` responderam 200 com os dados restaurados.
 
 Para migrations e seed, usar a porta **5432** (modo session) ou a conexao
 direta, porque o modo transaction nao suporta todos os recursos. O modo
@@ -452,3 +460,5 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | Etapa 2 concluida: cadastro externo, e-mail pelo Brevo, link novo e trial de 7 dias validados de ponta a ponta |
 | 2026-11-08 | Corrigido: trial era barrado no player (`subscription_expired`); acesso agora usa `Subscription.has_access` |
 | 2026-11-08 | Limite de aparelhos passa a ter teto por `MAX_DEVICES_PER_SUBSCRIPTION` (1 por padrao), mesmo que o plano declare mais |
+| 2026-11-08 | Schema criado no Supabase (Ohio) e dados copiados do Render: 3 usuarios, 1 plano, 2 assinaturas, 6 aparelhos |
+| 2026-11-08 | Pooler do Supabase exige statement anonimo (nome vazio), alem dos caches desligados; login e playlist validados na porta 6543 |

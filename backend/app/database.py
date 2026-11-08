@@ -18,20 +18,34 @@ class Base(DeclarativeBase):
     pass
 
 
-def build_connect_args(database_url: str, use_pooler: bool | None = None) -> dict[str, int]:
+def _anonymous_statement_name() -> str:
+    """Faz o asyncpg preparar statements sem nome.
+
+    O modo transaction do pooler troca a conexao fisica entre clientes. Um
+    statement nomeado pode colidir com o de outro cliente na mesma conexao
+    (``DuplicatePreparedStatementError``). Nome vazio = statement anonimo.
+    """
+    return ""
+
+
+def build_connect_args(database_url: str, use_pooler: bool | None = None) -> dict[str, object]:
     """Argumentos de conexao exigidos por pooler (Supavisor/PgBouncer).
 
     Prepared statements sao presos a conexao fisica. Num pooler a conexao
     logica troca de dono entre transacoes, entao um statement preparado por
     um cliente pode nao existir para o proximo. Desligar os dois caches
-    (asyncpg e SQLAlchemy) evita erros de ``prepared statement does not
-    exist`` em producao.
+    (asyncpg e SQLAlchemy) e pedir nome vazio evita erros de
+    ``prepared statement does not exist``/``already exists`` em producao.
     """
     if use_pooler is None:
         use_pooler = is_pooler_url(database_url)
     if not use_pooler:
         return {}
-    return {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
+    return {
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+        "prepared_statement_name_func": _anonymous_statement_name,
+    }
 
 
 # Engine assíncrono
