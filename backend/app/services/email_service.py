@@ -73,7 +73,7 @@ class EmailService:
 
         Retorna True se enviado com sucesso (ou simulado em dev sem chave).
         """
-        verification_url = f"{self.frontend_url}/verify-email?token={token}"
+        verification_url = f"{self.frontend_url.rstrip('/')}/verify-email.html?token={token}"
 
         subject = "Confirme seu email - EFTV"
         html_body = self._verification_html(full_name, token, verification_url)

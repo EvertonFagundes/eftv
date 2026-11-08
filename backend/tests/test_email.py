@@ -144,3 +144,27 @@ async def test_send_rejects_smtp_key_without_calling_api(monkeypatch):
     monkeypatch.setattr(service, "_send_via_brevo", should_not_be_called)
 
     assert await service._send("cliente@example.com", "Assunto", "texto") is False
+
+
+@pytest.mark.asyncio
+async def test_verification_email_points_to_static_page(monkeypatch):
+    service = _service()
+    service.frontend_url = "https://evertonfagundes.github.io/eftv/"
+    captured: dict[str, str] = {}
+
+    async def fake_send(to_email, subject, text_body, html_body=None):
+        captured["text"] = text_body
+        captured["html"] = html_body or ""
+        return True
+
+    monkeypatch.setattr(service, "_send", fake_send)
+
+    assert await service.send_verification_email("cliente@example.com", "token-123") is True
+    assert (
+        "https://evertonfagundes.github.io/eftv/verify-email.html?token=token-123"
+        in captured["text"]
+    )
+    assert (
+        "https://evertonfagundes.github.io/eftv/verify-email.html?token=token-123"
+        in captured["html"]
+    )

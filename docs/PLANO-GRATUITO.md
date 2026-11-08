@@ -134,6 +134,7 @@ usuarios. O que continua valendo:
 - [x] Implementar envio via API `https://api.brevo.com/v3/smtp/email`
       (`EMAIL_PROVIDER=brevo`; Resend continua como alternativa).
 - [x] Variaveis: `BREVO_API_KEY` e `EMAIL_FROM`; Resend como opcao.
+- [x] Pagina estatica `verify-email.html` no GitHub Pages para o link do e-mail.
 - [ ] Testar cadastro de um e-mail externo.
 
 ### Etapa 3 - backup
@@ -201,6 +202,12 @@ O Render free bloqueia SMTP; por isso o envio e por HTTPS. Com
 `backend/app/services/email_service.py` chama
 `POST https://api.brevo.com/v3/smtp/email`. O `EMAIL_FROM` precisa ser um
 remetente verificado no Brevo; sem dominio proprio, verifique um e-mail seu.
+
+O link de confirmacao aponta para `{FRONTEND_URL}/verify-email.html`. Essa
+pagina fica na raiz do repositorio (GitHub Pages publica o site de catalogo,
+nao o `frontend/dist`): ela le o `token` da URL, chama `POST /auth/verify-email`
+e mostra o resultado. Se o CORS bloquear o GitHub Pages, a pagina exibe erro
+de conexao — por isso `CORS_ORIGINS` precisa conter a origem exata.
 
 Sem chave, o provedor cai em modo `dev`: registra o conteudo no log (util para
 testar, inutil em producao). Resend continua disponivel com
@@ -291,7 +298,7 @@ com o provedor e mantem o custo por usuario previsivel.
 | Etapa | Arquivos |
 | --- | --- |
 | 1. Banco | `backend/app/config.py`, `backend/app/database.py`, `render.free.yaml`/`render.yaml`, `android/local.properties` (nao versionado) |
-| 2. E-mail | `backend/app/services/email_service.py`, `backend/app/config.py` |
+| 2. E-mail | `backend/app/services/email_service.py`, `backend/app/config.py`, `verify-email.html` |
 | 3. Backup | `.github/workflows/backup.yml` (novo) |
 | 4. Ping | `.github/workflows/keepalive.yml` (ajuste de 10 para 5 min) |
 | 5. Go-live | `docs/PLANO-GRATUITO.md` (checklist), `README.md` |
@@ -388,3 +395,4 @@ Supabase quando a etapa 1 terminar.
 | 2026-11-08 | Envio de e-mail pela API HTTPS do Brevo, com Resend como alternativa e fallback dev |
 | 2026-11-08 | Workflow noturno de backup cifrado (`pg_dump` + GPG) em artefato de 90 dias |
 | 2026-11-08 | Teste real do Brevo: remetente EFTV ativo, envio HTTP 201 e faixas do Render autorizadas |
+| 2026-11-08 | Pagina `verify-email.html` no GitHub Pages; link do e-mail deixa de cair em 404 |
