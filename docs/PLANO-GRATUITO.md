@@ -128,14 +128,33 @@ usuarios. O que continua valendo:
 - [ ] Trocar `DATABASE_URL` no Render e validar login/catalogo.
 - [ ] So depois de validar, apagar o Postgres free do Render.
 
-### Etapa 2 - e-mail pela Brevo
+### Etapa 2 - e-mail pela Brevo (concluida em 08/11/2026)
 
-- [ ] Criar conta e verificar um remetente.
+- [x] Criar conta e verificar um remetente (remetente `EFTV`, conta
+      compartilhada com o ControlFin).
 - [x] Implementar envio via API `https://api.brevo.com/v3/smtp/email`
       (`EMAIL_PROVIDER=brevo`; Resend continua como alternativa).
 - [x] Variaveis: `BREVO_API_KEY` e `EMAIL_FROM`; Resend como opcao.
+- [x] `FRONTEND_URL=https://evertonfagundes.github.io/eftv` no Render (sem ela
+      o link sai como `http://localhost:3000`).
 - [x] Pagina estatica `verify-email.html` no GitHub Pages para o link do e-mail.
-- [ ] Testar cadastro de um e-mail externo.
+- [x] Liberar as faixas de saida do Render em *Authorized IPs* no Brevo.
+- [x] Testar cadastro de um e-mail externo de ponta a ponta.
+- [ ] Remover o IP temporario `2804:1b94:494:1000:936b:383c:dc4d:d12f` de
+      *Authorized IPs* no Brevo (foi liberado so para o teste manual).
+
+Teste de ponta a ponta (08/11/2026): conta criada com um alias
+`+eftvtest` do Gmail, e-mail entregue pelo Brevo, link abrindo
+`https://evertonfagundes.github.io/eftv/verify-email.html?token=...`, pagina
+mostrando "E-mail confirmado" e trial ativado. A API confirmou a assinatura
+com `status=trial`, periodo de `2026-11-08T18:39:21Z` a
+`2026-11-15T18:39:21Z` e `is_trial=true`. A senha da conta de teste nao e
+registrada no repositorio (ele e publico); quem precisar dela pede ao
+responsavel.
+
+Observacao: `is_active` retorna `false` para o trial por desenho — o campo so
+cobre `status="active"`, enquanto o controle de acesso aceita `active` e
+`trial`. Nao e bug.
 
 ### Etapa 3 - backup
 
@@ -317,7 +336,7 @@ com o provedor e mantem o custo por usuario previsivel.
 ## 8. Checklist de go-live
 
 - [ ] Banco migrado e restore do backup testado
-- [ ] Cadastro e verificacao de e-mail funcionando com e-mail externo
+- [x] Cadastro e verificacao de e-mail funcionando com e-mail externo
 - [ ] Ping redundante ativo e alertando
 - [ ] APK assinado publicado em Releases
 - [ ] Admin com senha forte e 2FA no GitHub/Render/Supabase
@@ -402,3 +421,4 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | Teste real do Brevo: remetente EFTV ativo, envio HTTP 201 e faixas do Render autorizadas |
 | 2026-11-08 | Pagina `verify-email.html` no GitHub Pages; link do e-mail deixa de cair em 404 |
 | 2026-11-08 | CORS do GitHub Pages validado no Render (preflight 200) apos normalizar a origem |
+| 2026-11-08 | Etapa 2 concluida: cadastro externo, e-mail pelo Brevo, link novo e trial de 7 dias validados de ponta a ponta |
