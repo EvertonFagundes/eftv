@@ -184,12 +184,14 @@ continua com o significado estrito de assinatura paga, para os campos da API.
 
 - [x] Workflow noturno com `pg_dump -Fc`, cifrado com `gpg --symmetric`
       (`.github/workflows/backup.yml`, artefato de 90 dias).
-- [ ] Segredo `BACKUP_PASSPHRASE` no GitHub; nunca subir dump sem cifra
+- [x] Segredo `BACKUP_PASSPHRASE` no GitHub; nunca subir dump sem cifra
       (o repositorio e publico).
 - [x] Testar o restore em banco local antes de confiar no backup: dump
       cifrado restaurado em `postgres:17-alpine` com os dados e o Alembic.
       O dump passou a usar `--schema=public` por causa dos schemas internos
       do Supabase.
+- [x] Primeira execucao real do workflow concluida com sucesso em 08/11/2026
+      (run 4), gerando o artefato cifrado.
 
 ### Etapa 4 - ping redundante
 
@@ -426,8 +428,6 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 - Definir o preco do plano mensal e criar o plano comercial (o plano atual
   "Dono do App" tem preco 0 e mostra 10 aparelhos, embora o teto efetivo seja
   1).
-- Adicionar `DATABASE_URL` (session pooler, porta 5432) e
-  `BACKUP_PASSPHRASE` nos secrets do GitHub e rodar o backup manualmente.
 - Criar o monitor no cron-job.org: `GET /health` a cada 5 min com alerta.
 - Remover o IPv6 temporario das *Authorized IPs* do Brevo.
 - Provedor confirmou que libera mais conexoes simultaneas que o painel indica;
@@ -492,3 +492,4 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | Pooler do Supabase exige statement anonimo (nome vazio), alem dos caches desligados; login e playlist validados na porta 6543 |
 | 2026-11-08 | Producao no Supabase: `DATABASE_URL` trocada no Render e login, assinatura, playlist e vinculo de aparelho validados |
 | 2026-11-08 | Backup restrito ao schema `public` e restore cifrado testado em Postgres 17 local |
+| 2026-11-08 | Etapa 3 concluida: secrets configurados e primeira execucao real do backup gerou o artefato cifrado |
