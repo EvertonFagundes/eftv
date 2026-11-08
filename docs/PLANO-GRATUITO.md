@@ -33,7 +33,9 @@ Custo total enquanto estiver dentro das cotas: **R$ 0**.
 2. **Supabase e nao Neon.** O Neon free tem 100 CU-horas por projeto/mes. Com
    trafego continuo o compute fica acordado e a cota estoura, suspendendo o
    banco ate o dia 1. O Supabase free nao tem essa cota: so pausa apos 7 dias
-   sem atividade, com os dados preservados por 1 ano e retomada manual.
+   sem atividade, com os dados preservados por 1 ano e retomada manual. As
+   tarefas agendadas da API (a cada 30 min e 1 h) ja consultam o banco, entao
+   na pratica ele nunca fica 7 dias parado.
 3. **Brevo e nao Resend.** Sem dominio proprio verificado, o Resend so entrega
    no e-mail do dono da conta. O Brevo aceita verificar um unico remetente.
    Como o Render free bloqueia as portas SMTP (25/465/587), a integracao tem
@@ -68,15 +70,16 @@ Custo total enquanto estiver dentro das cotas: **R$ 0**.
 
 ## 4. Capacidade esperada
 
-O gargalo nao e o video (o aparelho baixa direto do provedor), e sim login,
-catalogo, heartbeat de aparelho e tarefas agendadas. Com 0,1 CPU:
+Base inicial: **ate 5 usuarios**. Com esse volume, cota nao e o problema —
+0,1 CPU e 512 MB sobram. O risco real, nessa ordem, e:
 
-- confortavel: dezenas de usuarios ativos simultaneos;
-- apertado: ~200 ativos, dependendo do tamanho do catalogo;
-- acima disso: primeira coisa a pagar e o Render Starter.
+1. perder dados (banco sem backup ou com prazo de validade);
+2. o app dormir e o usuario achar que esta fora do ar;
+3. o trial vencer e nao haver caminho de assinatura.
 
-Medir antes de ampliar: tempo de resposta de `/health`, `/auth/login` e
-`/channels`, e o consumo em *Billing > Included usage* no Render.
+O gargalo de infraestrutura so aparece perto de ~200 ativos. Medir mesmo
+assim: tempo de resposta de `/health`, `/auth/login` e `/channels`, e o consumo
+em *Billing > Included usage* no Render.
 
 ## 5. Etapas
 
@@ -117,9 +120,9 @@ Medir antes de ampliar: tempo de resposta de `/health`, `/auth/login` e
       e-mail em caso de falha.
 - [ ] Manter o workflow do GitHub como reserva.
 
-### Etapa 5 - abrir para um grupo pequeno
+### Etapa 5 - abrir para os 5 primeiros
 
-- [ ] 10 a 20 usuarios, com suporte por WhatsApp/Telegram.
+- [ ] 5 usuarios, com suporte por WhatsApp/Telegram.
 - [ ] Acompanhar erros, tempo de resposta e consumo das cotas por uma semana.
 - [ ] Corrigir o que aparecer antes de divulgar mais.
 
@@ -130,7 +133,8 @@ Migrar quando a receita pagar a infra, nao antes:
 - Render Starter (~US$ 7) = sem hibernar e sem cota de horas;
 - banco do Render Basic (~US$ 6) ou Supabase Pro (~US$ 25), conforme o caso.
 
-Com 3 a 5 assinantes de R$ 20-30, a infra ja se paga.
+Com 5 assinantes de R$ 25, sao R$ 125/mes, que ja cobrem a infra paga
+(~R$ 75) com folga.
 
 ## 6. Detalhes tecnicos da migracao do banco
 
@@ -159,6 +163,26 @@ Manter `DATABASE_POOL_SIZE=3` e `DATABASE_MAX_OVERFLOW=2`. O Supabase free tem
 limite de conexoes por compute; pool pequeno evita erro de `too many
 connections`.
 
+### Descobrir o limite de conexoes da playlist
+
+O provedor nao publica esse numero. Se a playlist for Xtream Codes (a nossa e
+`get.php?type=m3u_plus`), o proprio painel costuma expor o dado em
+`player_api.php`:
+
+```bash
+cd backend
+python scripts/playlist_account.py
+```
+
+O script le a `IPTV_PLAYLIST_URL` do `.env`, mascara usuario e senha e mostra
+status, vencimento, conexoes em uso e o maximo permitido. Se o servidor nao
+tiver `player_api.php`, resta o teste pratico: abrir dois streams ao mesmo
+tempo e ver o codigo de erro (403/458/509 costuma ser limite atingido).
+
+Enquanto o numero for desconhecido, a regra de produto e **1 stream por
+conta**: `MAX_DEVICES_PER_SUBSCRIPTION=1` ja e o padrao. Isso evita surpresa
+com o provedor e mantem o custo por usuario previsivel.
+
 ### O que ja ajuda
 
 - `/health` nao consulta o banco, entao o ping nao gasta computacao do
@@ -175,6 +199,7 @@ connections`.
 | 3. Backup | `.github/workflows/backup.yml` (novo) |
 | 4. Ping | `.github/workflows/keepalive.yml` (ajuste de 10 para 5 min) |
 | 5. Go-live | `docs/PLANO-GRATUITO.md` (checklist), `README.md` |
+| Playlist | `backend/scripts/playlist_account.py` (novo), `backend/.env` (nao versionado) |
 
 ## 7. Riscos aceitos
 
@@ -197,16 +222,40 @@ connections`.
 - [ ] Mercado Pago com webhook testado em sandbox
 - [ ] Consumo das cotas anotado semanalmente
 
-## 9. Pendencias
+## 9. Respostas registradas (2026-11-07)
 
-- Quantos usuarios sao esperados no primeiro mes.
-- O app sera cobrado desde o inicio ou tera periodo gratuito.
-- O provedor da playlist permite quantas conexoes simultaneas (isso e custo
-  por usuario, independente da hospedagem).
+- Base inicial: **no maximo 5 usuarios**.
+- Modelo: **trial gratis de 7 dias** e, se gostar, assinatura **mensal**. So
+  existe plano mensal; nada de trimestral ou anual.
+- Limite de conexoes da playlist: desconhecido; sera descoberto com o script
+  da secao 6.
+
+## 10. Modelo comercial
+
+O trial de 7 dias ja esta implementado (`FREE_TRIAL_DAYS=7`, assinatura com
+status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
+30 minutos, marca a assinatura como expirada e o app bloqueia o player.
+
+- **Plano unico: mensal.** Menos tela, menos suporte e menos regra de
+  renovacao do que ter trimestral/anual agora.
+- **Preco a definir.** Referencia: R$ 25/mes faz 5 assinantes pagarem a infra
+  paga com folga.
+- **Mercado Pago**: sem mensalidade, so taxa por venda (PIX costuma ser mais
+  barato que cartao). E o unico custo variavel do negocio.
+- **Renovacao**: sem plano anual, toda cobranca e mensal; se o pagamento
+  falhar, o job expira a assinatura no ciclo seguinte.
+
+## 11. Pendencias
+
+- Definir o preco do plano mensal.
+- Confirmar a URL atual da playlist: a que esta no `backend/.env` local
+  responde **404**; ou expirou, ou foi rotacionada, ou mudou de dominio.
+- Descobrir o limite de conexoes do provedor quando a URL voltar a responder.
 - Vale registrar um dominio proprio depois da primeira receita.
 
-## 10. Historico
+## 12. Historico
 
 | Data | Mudanca |
 | --- | --- |
 | 2026-11-07 | Criacao do plano; stack R$ 0 definida; etapas 1 a 6 |
+| 2026-11-07 | Base de 5 usuarios, trial de 7 dias e plano mensal unico; script de consulta da playlist |
