@@ -217,7 +217,9 @@ O pooler e detectado pela porta **6543** ou pelo host
 Dá para forçar com `DATABASE_POOLER=true|false` se o provedor mudar.
 
 Para migrations e seed, usar a porta **5432** (modo session) ou a conexao
-direta, porque o modo transaction nao suporta todos os recursos.
+direta, porque o modo transaction nao suporta todos os recursos. O modo
+session do pooler ja resolve isso por IPv4, sem contratar o add-on IPv4 do
+Supabase (que e pago).
 
 ### Pool
 
