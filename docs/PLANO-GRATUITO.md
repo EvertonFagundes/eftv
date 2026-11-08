@@ -222,7 +222,9 @@ e folgado, entao nao vale criar outra conta. Recomendacoes:
   Render recebe HTTP 401 mesmo com a chave certa. Copie as faixas de saida em
   *Render > servico > Connect > Outbound* e cadastre em *Authorized IPs*; nao
   e preciso desativar o bloqueio. Servicos free usam faixas fixas compartilhadas
-  por regiao, exceto workspaces de Oregon criados antes de 23/01/2022;
+  por regiao, exceto workspaces de Oregon criados antes de 23/01/2022.
+  Faixas do servico `eftv` (Oregon, conferidas em 08/11/2026):
+  `74.220.48.0/24` e `74.220.56.0/24`;
 - lembrar que a reputacao de envio e compartilhada: muitas rejeicoes em um
   projeto podem respingar no outro.
 
