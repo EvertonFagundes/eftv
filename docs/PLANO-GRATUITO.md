@@ -140,8 +140,12 @@ usuarios. O que continua valendo:
       2 assinaturas e 6 vinculos de aparelho. Catalogo estava vazio
       (`/channels` e `/categories` em 0). Os aparelhos foram revogados na
       copia para o primeiro aparelho que abrir o app assumir a vaga.
-- [ ] Trocar `DATABASE_URL` no Render e validar login/catalogo.
-- [ ] So depois de validar, apagar o Postgres free do Render.
+- [x] Trocar `DATABASE_URL` no Render e validar login/catalogo. Validado em
+      08/11/2026: login da conta migrada, `/subscriptions`, `/player/playlist`
+      e vinculo de aparelho funcionando direto no Supabase.
+- [ ] Manter o Postgres do Render como copia de seguranca ate o backup
+      cifrado + restore da etapa 3 estarem testados. So depois apagar
+      (ele expira em 06/12/2026 de qualquer forma).
 
 ### Etapa 2 - e-mail pela Brevo (concluida em 08/11/2026)
 
@@ -462,3 +466,4 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | Limite de aparelhos passa a ter teto por `MAX_DEVICES_PER_SUBSCRIPTION` (1 por padrao), mesmo que o plano declare mais |
 | 2026-11-08 | Schema criado no Supabase (Ohio) e dados copiados do Render: 3 usuarios, 1 plano, 2 assinaturas, 6 aparelhos |
 | 2026-11-08 | Pooler do Supabase exige statement anonimo (nome vazio), alem dos caches desligados; login e playlist validados na porta 6543 |
+| 2026-11-08 | Producao no Supabase: `DATABASE_URL` trocada no Render e login, assinatura, playlist e vinculo de aparelho validados |
