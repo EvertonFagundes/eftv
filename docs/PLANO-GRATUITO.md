@@ -319,6 +319,8 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 ## 11. Pendencias
 
 - Definir o preco do plano mensal.
+- Criar o projeto no Supabase (West US / North California) e guardar a
+  connection string do **pooler, porta 6543** para a etapa 1.
 - Provedor confirmou que libera mais conexoes simultaneas que o painel indica;
   o limite de 1 nao e bloqueio (informado em 08/11/2026).
 - Monitorar `active_cons`: se subir sem uso proprio, trocar a senha da playlist.
@@ -327,6 +329,26 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
   `MAX_DEVICES_PER_SUBSCRIPTION` e `IPTV_PLAYLIST_USER_AGENT`.
 - Definir `DATABASE_URL` e `BACKUP_PASSPHRASE` nos secrets do GitHub.
 - Vale registrar um dominio proprio depois da primeira receita.
+
+### Valores para colar no Render
+
+```
+CORS_ORIGINS=https://evertonfagundes.github.io
+FRONTEND_URL=https://evertonfagundes.github.io/eftv
+EMAIL_PROVIDER=brevo
+BREVO_API_KEY=<chave gerada em app.brevo.com/settings/keys/api>
+EMAIL_FROM=EFTV <remetente verificado no Brevo>
+```
+
+O `EMAIL_FROM` precisa ser um remetente verificado no Brevo; sem dominio
+proprio, verifique um e-mail seu. A `DATABASE_URL` sera trocada pela do
+Supabase quando a etapa 1 terminar.
+
+### Segredos no GitHub (backup)
+
+- `DATABASE_URL`: URL libpq (`postgresql://...?sslmode=require`), sem
+  `+asyncpg`.
+- `BACKUP_PASSPHRASE`: senha longa e aleatoria. Sem ela o backup nao roda.
 
 ## 12. Historico
 
