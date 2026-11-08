@@ -389,7 +389,7 @@ plano mensal (nome, preco e limites) entra junto com o Mercado Pago.
 
 ## 8. Checklist de go-live
 
-- [ ] Banco migrado e restore do backup testado
+- [x] Banco migrado e restore do backup testado
 - [x] Cadastro e verificacao de e-mail funcionando com e-mail externo
 - [ ] Ping redundante ativo e alertando
 - [ ] APK assinado publicado em Releases
