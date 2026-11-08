@@ -1,24 +1,66 @@
 # services/email_service.py - Envio de emails (verificacao, boas-vindas, etc.)
 import logging
+import re
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+_FROM_PATTERN = re.compile(r"^\s*(?P<name>[^<]*?)\s*<(?P<email>[^>]+)>\s*$")
+
+PROVIDERS = ("auto", "brevo", "resend", "dev")
+
+
+def parse_email_from(value: str) -> tuple[str, str]:
+    """Separa ``"Nome <email>"`` em ``(nome, email)``.
+
+    Se nao houver nome, usa o proprio endereco nos dois campos.
+    """
+    match = _FROM_PATTERN.match(value)
+    if match:
+        email = match.group("email").strip()
+        name = match.group("name").strip().strip('"') or email
+        return name, email
+    address = value.strip()
+    return address, address
 
 
 class EmailService:
     """
     Servico de envio de emails.
 
-    Em producao usa Resend (RESEND_API_KEY). Em desenvolvimento, se nao houver
-    chave configurada, apenas imprime o conteúdo no log (ou grava em arquivo)
-    para permitir testes sem configurar um provedor de email real.
+    Provedores suportados, escolhidos por ``EMAIL_PROVIDER``:
+
+    - ``brevo``: API HTTPS do Brevo (funciona no Render free, que bloqueia SMTP);
+    - ``resend``: alternativa;
+    - ``auto`` (padrao): Brevo se houver ``BREVO_API_KEY``, senao Resend,
+      senao modo desenvolvimento;
+    - ``dev``: nao envia; registra o conteudo no log para testes.
+
+    Sem nenhum provedor configurado o cadastro continua funcionando e o link
+    aparece no log. Em producao, configure ``BREVO_API_KEY``.
     """
 
     def __init__(self) -> None:
-        self.api_key = settings.RESEND_API_KEY
+        self.brevo_api_key = settings.BREVO_API_KEY
+        self.resend_api_key = settings.RESEND_API_KEY
+        self.provider = self._resolve_provider(settings.EMAIL_PROVIDER)
         self.from_email = settings.EMAIL_FROM
         self.frontend_url = settings.FRONTEND_URL
+
+    def _resolve_provider(self, configured: str) -> str:
+        configured = (configured or "auto").strip().lower()
+        if configured not in PROVIDERS:
+            logger.warning("EMAIL_PROVIDER desconhecido (%s); usando auto", configured)
+            configured = "auto"
+
+        if configured != "auto":
+            return configured
+        if self.brevo_api_key:
+            return "brevo"
+        if self.resend_api_key:
+            return "resend"
+        return "dev"
 
     async def send_verification_email(
         self,
@@ -66,16 +108,82 @@ class EmailService:
         text_body: str,
         html_body: str | None = None,
     ) -> bool:
-        """
-        Envia email real via Resend se houver API key; caso contrario, apenas
-        registra no log (modo desenvolvimento).
-        """
-        if self.api_key:
+        """Envia pelo provedor configurado; em dev apenas registra no log."""
+        if self.provider == "brevo":
+            if not self.brevo_api_key:
+                logger.error(
+                    "EMAIL_PROVIDER=brevo sem BREVO_API_KEY; email para %s nao enviado",
+                    to_email,
+                )
+                return False
+            return await self._send_via_brevo(to_email, subject, text_body, html_body)
+
+        if self.provider == "resend":
+            if not self.resend_api_key:
+                logger.error(
+                    "EMAIL_PROVIDER=resend sem RESEND_API_KEY; email para %s nao enviado",
+                    to_email,
+                )
+                return False
             return await self._send_via_resend(to_email, subject, text_body, html_body)
 
         # Sem provedor configurado (desenvolvimento): registra o email no log
         # e segue o fluxo, para dar para testar o cadastro sem enviar nada.
         logger.info("Email (modo dev) para %s: %s | %s", to_email, subject, text_body)
+        return True
+
+    def _brevo_payload(
+        self,
+        to_email: str,
+        subject: str,
+        text_body: str,
+        html_body: str | None = None,
+    ) -> dict[str, object]:
+        sender_name, sender_email = parse_email_from(self.from_email)
+        payload: dict[str, object] = {
+            "sender": {"name": sender_name, "email": sender_email},
+            "to": [{"email": to_email}],
+            "subject": subject,
+            "textContent": text_body,
+        }
+        if html_body:
+            payload["htmlContent"] = html_body
+        return payload
+
+    async def _send_via_brevo(
+        self,
+        to_email: str,
+        subject: str,
+        text_body: str,
+        html_body: str | None = None,
+    ) -> bool:
+        """Envia email pela API HTTPS do Brevo (porta 443)."""
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://api.brevo.com/v3/smtp/email",
+                    headers={
+                        "api-key": self.brevo_api_key or "",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                    json=self._brevo_payload(to_email, subject, text_body, html_body),
+                )
+        except Exception:
+            # Em falha de rede/provedor, nao bloqueia o fluxo de registro;
+            # o token ainda esta valido e pode ser reenviado.
+            logger.exception("Falha ao enviar email via Brevo")
+            return False
+
+        if response.status_code not in (200, 201, 202):
+            logger.error(
+                "Brevo recusou email: HTTP %s | %s",
+                response.status_code,
+                response.text[:300],
+            )
+            return False
         return True
 
     async def _send_via_resend(
@@ -102,16 +210,23 @@ class EmailService:
                 response = await client.post(
                     "https://api.resend.com/emails",
                     headers={
-                        "Authorization": f"Bearer {self.api_key}",
+                        "Authorization": f"Bearer {self.resend_api_key}",
                         "Content-Type": "application/json",
                     },
                     json=payload,
                 )
-                return response.status_code in (200, 201, 202)
         except Exception:
-            # Em falha de rede/provedor, nao bloqueia o fluxo de registro;
-            # o token ainda esta valido e pode ser reenviado.
+            logger.exception("Falha ao enviar email via Resend")
             return False
+
+        if response.status_code not in (200, 201, 202):
+            logger.error(
+                "Resend recusou email: HTTP %s | %s",
+                response.status_code,
+                response.text[:300],
+            )
+            return False
+        return True
 
     @staticmethod
     def _verification_html(

@@ -49,9 +49,15 @@ services:
       - key: MAX_DEVICES_PER_SUBSCRIPTION
         value: "1"
       - key: CORS_ORIGINS
-        value: '["https://app.eftv.com.br"]'
+        value: https://evertonfagundes.github.io
       - key: FRONTEND_URL
-        value: https://app.eftv.com.br
+        value: https://evertonfagundes.github.io/eftv
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
 
 databases:
   - name: eftv-db

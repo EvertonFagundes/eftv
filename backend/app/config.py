@@ -96,7 +96,9 @@ class Settings(BaseSettings):
     # Limite de aparelhos quando o plano nao define um valor proprio
     MAX_DEVICES_PER_SUBSCRIPTION: int = 1
 
-    # Email (Resend)
+    # Email (Brevo em producao; Resend como alternativa)
+    EMAIL_PROVIDER: str = "auto"  # auto, brevo, resend, dev
+    BREVO_API_KEY: str | None = None
     RESEND_API_KEY: str | None = None
     EMAIL_FROM: str = "EFTV <noreply@eftv.com.br>"
 
