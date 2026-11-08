@@ -111,9 +111,23 @@ def test_connect_args_can_be_forced():
             '["http://localhost:3000","https://app.eftv.com.br"]',
             ["http://localhost:3000", "https://app.eftv.com.br"],
         ),
+        (
+            "https://evertonfagundes.github.io/eftv/",
+            ["https://evertonfagundes.github.io"],
+        ),
+        (
+            "https://a.example.com/,https://a.example.com",
+            ["https://a.example.com"],
+        ),
         ("", []),
     ],
 )
 def test_cors_origins_accepts_csv_and_json(raw, expected):
     settings = Settings(SECRET_KEY="x" * 40, CORS_ORIGINS=raw)
     assert settings.cors_origins == expected
+
+
+def test_default_cors_allows_github_pages(monkeypatch):
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+    settings = Settings(SECRET_KEY="x" * 40, _env_file=None)
+    assert "https://evertonfagundes.github.io" in settings.cors_origins

@@ -11,6 +11,25 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _DROPPED_QUERY_PARAMS = {"channel_binding", "pgbouncer"}
 
 
+def normalize_origin(value: str) -> str:
+    """Reduz uma URL a origem CORS (esquema + host + porta).
+
+    Aceita ``https://site.com/eftv/`` e devolve ``https://site.com``; tambem
+    preserva valores especiais como ``*``.
+    """
+    value = value.strip().rstrip("/")
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return value
+
+
+def _clean_origins(values: list[str]) -> list[str]:
+    """Normaliza, remove vazios e repete sem duplicatas (mantendo a ordem)."""
+    cleaned = [normalize_origin(item) for item in values if item.strip()]
+    return list(dict.fromkeys(cleaned))
+
+
 def is_pooler_url(url: str) -> bool:
     """Detecta conexao via pooler (Supavisor/PgBouncer).
 
@@ -63,7 +82,10 @@ class Settings(BaseSettings):
     BCRYPT_ROUNDS: int = 12
 
     # CORS (lista separada por virgula ou JSON, ver cors_origins)
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://app.eftv.com.br"
+    CORS_ORIGINS: str = (
+        "http://localhost:3000,http://localhost:5173,"
+        "https://app.eftv.com.br,https://evertonfagundes.github.io"
+    )
 
     # Rate limiting
     RATE_LIMIT_REQUESTS: int = 100
@@ -166,9 +188,9 @@ class Settings(BaseSettings):
                 pass
             else:
                 if isinstance(values, list):
-                    return [str(item).strip() for item in values if str(item).strip()]
+                    return _clean_origins([str(item) for item in values])
 
-        return [item.strip() for item in raw.split(",") if item.strip()]
+        return _clean_origins(raw.split(","))
 
 
 @lru_cache
