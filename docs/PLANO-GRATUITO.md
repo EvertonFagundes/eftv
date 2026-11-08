@@ -387,3 +387,4 @@ Supabase quando a etapa 1 terminar.
 | 2026-11-08 | `CORS_ORIGINS` passa a aceitar virgula ou JSON (corrige boot com a URL do GitHub Pages) |
 | 2026-11-08 | Envio de e-mail pela API HTTPS do Brevo, com Resend como alternativa e fallback dev |
 | 2026-11-08 | Workflow noturno de backup cifrado (`pg_dump` + GPG) em artefato de 90 dias |
+| 2026-11-08 | Teste real do Brevo: remetente EFTV ativo, envio HTTP 201 e faixas do Render autorizadas |
