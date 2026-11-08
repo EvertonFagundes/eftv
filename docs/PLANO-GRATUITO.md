@@ -127,7 +127,7 @@ conexoes (ou uma linha por usuario) e senha nova.
       disponivel.
 - [ ] Copiar a connection string do **pooler** (IPv4, porta 6543) e nao a
       conexao direta (IPv6).
-- [ ] Ajustar o backend (ver secao 6).
+- [x] Ajustar o backend para o pooler (ver secao 6).
 - [ ] Rodar `alembic upgrade head` e o seed.
 - [ ] Trocar `DATABASE_URL` no Render e validar login/catalogo.
 - [ ] So depois de validar, apagar o Postgres free do Render.
@@ -179,12 +179,13 @@ postgresql://postgres.<ref>:SENHA@aws-0-us-east-1.pooler.supabase.com:6543/postg
 ```
 
 O `backend/app/config.py` ja converte `postgresql://` para
-`postgresql+asyncpg://` e `sslmode=require` para `ssl=require`. Falta:
+`postgresql+asyncpg://` e `sslmode=require` para `ssl=require`, e remove
+`channel_binding`/`pgbouncer` (parametros do libpq que o asyncpg recusa).
 
-1. remover `channel_binding=require` (o asyncpg nao aceita esse parametro);
-2. para o pooler em modo transaction (porta 6543), desligar o cache de
-   prepared statements: `statement_cache_size=0` e
-   `prepared_statement_cache_size=0` no `connect_args`.
+O pooler e detectado pela porta **6543** ou pelo host
+`*.pooler.supabase.com`; nesse caso o `app/database.py` liga
+`statement_cache_size=0` e `prepared_statement_cache_size=0` automaticamente.
+Dá para forçar com `DATABASE_POOLER=true|false` se o provedor mudar.
 
 Para migrations e seed, usar a porta **5432** (modo session) ou a conexao
 direta, porque o modo transaction nao suporta todos os recursos.
@@ -309,3 +310,4 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 | 2026-11-07 | Criacao do plano; stack R$ 0 definida; etapas 1 a 6 |
 | 2026-11-07 | Base de 5 usuarios, trial de 7 dias e plano mensal unico; script de consulta da playlist |
 | 2026-11-08 | Consulta real pela API do Render: servico em Oregon; banco expira 06/12/2026; playlist com 1 conexao e 8 em uso |
+| 2026-11-08 | Backend pronto para o pooler do Supabase: limpa `channel_binding`/`pgbouncer` e desliga caches de prepared statements |

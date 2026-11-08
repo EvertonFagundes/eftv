@@ -1,8 +1,32 @@
 # config.py - Configurações da aplicação (pydantic-settings)
 from functools import lru_cache
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Parametros de URL que o asyncpg nao entende e que o pooler costuma mandar.
+# `channel_binding` vem do libpq; `pgbouncer` sinaliza o modo de compatibilidade.
+_DROPPED_QUERY_PARAMS = {"channel_binding", "pgbouncer"}
+
+
+def is_pooler_url(url: str) -> bool:
+    """Detecta conexao via pooler (Supavisor/PgBouncer).
+
+    Em pooler os prepared statements nao sobrevivem entre requisicoes: a
+    conexao fisica pode ser reaproveitada por outro cliente. Nesse caso e
+    obrigatorio desligar os caches de statement (ver ``app.database``).
+    """
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        port = parsed.port
+    except ValueError:  # URL malformada: deixa o engine reportar o erro real
+        return False
+
+    if port == 6543:
+        return True
+    return host.endswith("pooler.supabase.com") or host.endswith("pooler.supabase.co")
 
 
 class Settings(BaseSettings):
@@ -27,6 +51,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/eftv"
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
+    # None = detecta pela URL; force True/False se o provedor mudar de padrao.
+    DATABASE_POOLER: bool | None = None
 
     # Security
     SECRET_KEY: str = Field(..., description="Chave secreta para JWT - DEVE ser definida no .env")
@@ -97,14 +123,33 @@ class Settings(BaseSettings):
         """
         Aceita a URL como os provedores entregam (Render/Heroku usam
         ``postgresql://``) e converte para o driver async do SQLAlchemy.
+
+        Tambem limpa parametros do libpq que o asyncpg recusa:
+        ``sslmode`` vira ``ssl``; ``channel_binding`` e ``pgbouncer`` saem
+        (o modo pooler e detectado pela porta/host, nao pelo parametro).
         """
         if value.startswith("postgres://"):
             value = "postgresql+asyncpg://" + value[len("postgres://") :]
         elif value.startswith("postgresql://"):
             value = "postgresql+asyncpg://" + value[len("postgresql://") :]
 
-        # asyncpg espera ssl=require, nao o sslmode= do libpq.
-        return value.replace("sslmode=require", "ssl=require")
+        base, separator, query = value.partition("?")
+        if not separator:
+            return value
+
+        kept: list[str] = []
+        for pair in query.split("&"):
+            if not pair:
+                continue
+            key = pair.split("=", 1)[0]
+            if key in _DROPPED_QUERY_PARAMS:
+                continue
+            if key == "sslmode":
+                # asyncpg espera ssl=require, nao o sslmode= do libpq.
+                pair = "ssl" + pair[len("sslmode") :]
+            kept.append(pair)
+
+        return f"{base}?{'&'.join(kept)}" if kept else base
 
 
 @lru_cache

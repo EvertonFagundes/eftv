@@ -11,11 +11,27 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from app.config import settings
+from app.config import is_pooler_url, settings
 
 
 class Base(DeclarativeBase):
     pass
+
+
+def build_connect_args(database_url: str, use_pooler: bool | None = None) -> dict[str, int]:
+    """Argumentos de conexao exigidos por pooler (Supavisor/PgBouncer).
+
+    Prepared statements sao presos a conexao fisica. Num pooler a conexao
+    logica troca de dono entre transacoes, entao um statement preparado por
+    um cliente pode nao existir para o proximo. Desligar os dois caches
+    (asyncpg e SQLAlchemy) evita erros de ``prepared statement does not
+    exist`` em producao.
+    """
+    if use_pooler is None:
+        use_pooler = is_pooler_url(database_url)
+    if not use_pooler:
+        return {}
+    return {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
 
 
 # Engine assíncrono
@@ -25,6 +41,7 @@ engine: AsyncEngine = create_async_engine(
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=True,
+    connect_args=build_connect_args(settings.DATABASE_URL, settings.DATABASE_POOLER),
 )
 
 # Session factory
