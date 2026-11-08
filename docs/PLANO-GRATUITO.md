@@ -310,6 +310,13 @@ Enquanto o numero for desconhecido, a regra de produto e **1 stream por
 conta**: `MAX_DEVICES_PER_SUBSCRIPTION=1` ja e o padrao. Isso evita surpresa
 com o provedor e mantem o custo por usuario previsivel.
 
+O limite efetivo e o **menor** entre o `max_devices` do plano e
+`MAX_DEVICES_PER_SUBSCRIPTION`. O plano existente ("Dono do App", criado como
+default antes do modelo comercial) declara 10 aparelhos e 5 streams; sem o
+teto, todo trial sairia com 10 aparelhos e poderia ser compartilhado. Quando
+existir um plano pago com mais aparelhos, basta subir a variavel. A criacao do
+plano mensal (nome, preco e limites) entra junto com o Mercado Pago.
+
 ### O que ja ajuda
 
 - `/health` nao consulta o banco, entao o ping nao gasta computacao do
@@ -428,3 +435,4 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | CORS do GitHub Pages validado no Render (preflight 200) apos normalizar a origem |
 | 2026-11-08 | Etapa 2 concluida: cadastro externo, e-mail pelo Brevo, link novo e trial de 7 dias validados de ponta a ponta |
 | 2026-11-08 | Corrigido: trial era barrado no player (`subscription_expired`); acesso agora usa `Subscription.has_access` |
+| 2026-11-08 | Limite de aparelhos passa a ter teto por `MAX_DEVICES_PER_SUBSCRIPTION` (1 por padrao), mesmo que o plano declare mais |

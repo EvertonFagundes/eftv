@@ -1,5 +1,6 @@
 import pytest
 
+from app.config import settings
 from app.services.devices import (
     DEVICE_ID_PATTERN,
     InvalidDeviceError,
@@ -48,9 +49,18 @@ class FakeSubscriptionWithoutPlan:
     plan = None
 
 
-def test_device_limit_uses_plan():
+def test_device_limit_uses_plan(monkeypatch):
+    monkeypatch.setattr(settings, "MAX_DEVICES_PER_SUBSCRIPTION", 5)
+
     assert device_limit(FakeSubscription()) == 2
-    assert device_limit(FakeSubscriptionWithoutPlan()) >= 1
+    assert device_limit(FakeSubscriptionWithoutPlan()) == 5
+
+
+def test_device_limit_never_exceeds_configured_cap(monkeypatch):
+    monkeypatch.setattr(settings, "MAX_DEVICES_PER_SUBSCRIPTION", 1)
+
+    assert device_limit(FakeSubscription()) == 1
+    assert device_limit(FakeSubscriptionWithoutPlan()) == 1
 
 
 class FakeResult:

@@ -38,11 +38,17 @@ def normalize_device_name(raw: str | None) -> str | None:
 
 
 def device_limit(subscription: Subscription) -> int:
-    """Limite de aparelhos do plano, com fallback configuravel."""
+    """Limite efetivo de aparelhos do plano.
+
+    O plano diz o que o produto promete; ``MAX_DEVICES_PER_SUBSCRIPTION`` e o
+    teto operacional (1 por padrao). Assim um plano antigo ou criado por
+    engano com 10 aparelhos nao fura a regra de um aparelho por assinatura.
+    """
+    cap = max(1, settings.MAX_DEVICES_PER_SUBSCRIPTION)
     plan = getattr(subscription, "plan", None)
     if plan is not None and plan.max_devices and plan.max_devices > 0:
-        return int(plan.max_devices)
-    return max(1, settings.MAX_DEVICES_PER_SUBSCRIPTION)
+        return min(int(plan.max_devices), cap)
+    return cap
 
 
 def decide_binding(existing: bool, active_count: int, limit: int) -> str:
