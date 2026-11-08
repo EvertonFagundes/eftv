@@ -206,6 +206,21 @@ Sem chave, o provedor cai em modo `dev`: registra o conteudo no log (util para
 testar, inutil em producao). Resend continua disponivel com
 `EMAIL_PROVIDER=resend` e `RESEND_API_KEY`.
 
+**Conta compartilhada com o ControlFin.** O limite de 300 envios/dia e **por
+conta**, nao por remetente: os dois projetos somam na mesma cota. Para o volume
+do EFTV (verificacao + boas-vindas, no maximo alguns e-mails por cadastro) isso
+e folgado, entao nao vale criar outra conta. Recomendacoes:
+
+- criar um remetente **EFTV** verificado; se o ControlFin ja tem dominio
+  autenticado no Brevo, um endereco desse dominio ja sai verificado;
+- criar uma **API key separada** (SMTP & API > API Keys), para revogar sem
+  afetar o ControlFin;
+- lembrar que a reputacao de envio e compartilhada: muitas rejeicoes em um
+  projeto podem respingar no outro.
+
+Depois de 300 envios no dia, o Brevo ainda segura ate 1.000 transacionais numa
+fila de reenvio; mesmo assim, o normal e nunca chegar perto disso.
+
 ### Backup
 
 `.github/workflows/backup.yml` roda todo dia as 03:17 (Brasilia), gera
