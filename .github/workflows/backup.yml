@@ -1,0 +1,56 @@
+name: Backup do banco
+
+on:
+  schedule:
+    # 06:17 UTC = 03:17 em Brasilia, fora do horario de pico do GitHub.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar segredos
+        id: check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Defina DATABASE_URL e BACKUP_PASSPHRASE para ativar o backup."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Gerar dump cifrado
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+
+          # asyncpg e um driver do app; o pg_dump fala o protocolo libpq.
+          pg_url="${DATABASE_URL/postgresql+asyncpg:\/\//postgresql://}"
+
+          file="eftv-$(date -u +%Y%m%d-%H%M%S).dump.gpg"
+
+          docker run --rm --env PGURL="$pg_url" postgres:17-alpine \
+            pg_dump --format=custom --no-owner --no-acl "$PGURL" \
+            | gpg --batch --yes --passphrase "$BACKUP_PASSPHRASE" \
+                --symmetric --cipher-algo AES256 -o "$file"
+
+          ls -lh "$file"
+          echo "FILE=$file" >> "$GITHUB_ENV"
+
+      - name: Publicar artefato
+        if: steps.check.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: ${{ env.FILE }}
+          retention-days: 90

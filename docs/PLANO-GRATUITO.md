@@ -72,8 +72,8 @@ Custo total enquanto estiver dentro das cotas: **R$ 0**.
 | Supabase: sem backup | Um erro pode apagar tudo | `pg_dump` diario criptografado (etapa 3) |
 | Brevo: 300/dia | Cadastros param no limite | Suficiente para centenas de cadastros |
 | GitHub: cron desativado | Keepalive para sozinho | cron-job.org nao depende de commit |
-| Provedor: **1 conexao** | So um usuario assiste por vez | Contratar plano com 5 conexoes ou uma linha por usuario |
-| Provedor: 8 conexoes ativas | Conta de 1 conexao ja saturada | Trocar a senha, derrubar sessoes e monitorar |
+| Provedor: painel diz **1 conexao** | Nao bloqueia: o provedor libera mais (confirmado) | Monitorar `active_cons` e manter 1 aparelho por assinatura |
+| Provedor: 8 conexoes ativas | Pode ser uso normal ou credencial compartilhada | Se crescer sem uso proprio, trocar a senha e derrubar sessoes |
 
 ## 4. Capacidade esperada
 
@@ -88,18 +88,14 @@ O gargalo de infraestrutura so aparece perto de ~200 ativos. Medir mesmo
 assim: tempo de resposta de `/health`, `/auth/login` e `/channels`, e o consumo
 em *Billing > Included usage* no Render.
 
-O gargalo real, hoje, **nao e a hospedagem: e a conta da playlist**. O painel
-do provedor informa `max_connections = 1` e `active_cons = 8`. Ou seja: o plano
-permite uma conexao simultanea e ja existem oito em uso. Com 5 usuarios
-assistindo ao mesmo tempo, dois problemas aparecem antes de qualquer cota do
-Render:
+O painel do provedor informa `max_connections = 1` e `active_cons = 8`, mas o
+provedor confirmou que libera **mais conexoes simultaneas** do que o painel
+mostra (informado em 08/11/2026). Portanto isso **nao e bloqueio** para os 5
+usuarios. O que continua valendo:
 
-1. o provedor bloqueia o excedente (erro no player);
-2. se as credenciais estiverem vazadas, terceiros consomem a conexao e
-   derrubam seus usuarios.
-
-Antes de abrir para os 5, resolver isso: plano do provedor com pelo menos 5
-conexoes (ou uma linha por usuario) e senha nova.
+1. monitorar `active_cons`; se crescer sem uso proprio, trocar a senha;
+2. um aparelho por assinatura (`MAX_DEVICES_PER_SUBSCRIPTION=1`) para manter o
+   custo por usuario previsivel.
 
 ## 5. Etapas
 
@@ -135,13 +131,15 @@ conexoes (ou uma linha por usuario) e senha nova.
 ### Etapa 2 - e-mail pela Brevo
 
 - [ ] Criar conta e verificar um remetente.
-- [ ] Implementar envio via API `https://api.brevo.com/v3/smtp/email`.
-- [ ] Variaveis: `BREVO_API_KEY` e `EMAIL_FROM`; manter Resend como opcao.
+- [x] Implementar envio via API `https://api.brevo.com/v3/smtp/email`
+      (`EMAIL_PROVIDER=brevo`; Resend continua como alternativa).
+- [x] Variaveis: `BREVO_API_KEY` e `EMAIL_FROM`; Resend como opcao.
 - [ ] Testar cadastro de um e-mail externo.
 
 ### Etapa 3 - backup
 
-- [ ] Workflow noturno com `pg_dump -Fc`, cifrado com `gpg --symmetric`.
+- [x] Workflow noturno com `pg_dump -Fc`, cifrado com `gpg --symmetric`
+      (`.github/workflows/backup.yml`, artefato de 90 dias).
 - [ ] Segredo `BACKUP_PASSPHRASE` no GitHub; nunca subir dump sem cifra
       (o repositorio e publico).
 - [ ] Testar o restore em banco local antes de confiar no backup.
@@ -195,6 +193,32 @@ direta, porque o modo transaction nao suporta todos os recursos.
 Manter `DATABASE_POOL_SIZE=3` e `DATABASE_MAX_OVERFLOW=2`. O Supabase free tem
 limite de conexoes por compute; pool pequeno evita erro de `too many
 connections`.
+
+### E-mail
+
+O Render free bloqueia SMTP; por isso o envio e por HTTPS. Com
+`EMAIL_PROVIDER=brevo` e `BREVO_API_KEY`, o
+`backend/app/services/email_service.py` chama
+`POST https://api.brevo.com/v3/smtp/email`. O `EMAIL_FROM` precisa ser um
+remetente verificado no Brevo; sem dominio proprio, verifique um e-mail seu.
+
+Sem chave, o provedor cai em modo `dev`: registra o conteudo no log (util para
+testar, inutil em producao). Resend continua disponivel com
+`EMAIL_PROVIDER=resend` e `RESEND_API_KEY`.
+
+### Backup
+
+`.github/workflows/backup.yml` roda todo dia as 03:17 (Brasilia), gera
+`pg_dump -Fc` num container `postgres:17-alpine` e cifra com GPG simetrico
+(AES256) usando `BACKUP_PASSPHRASE`. O arquivo vira artefato por 90 dias.
+
+Segredos necessarios no GitHub: `DATABASE_URL` (URL libpq, com
+`postgresql://` e `sslmode=require`) e `BACKUP_PASSPHRASE`. Sem eles o job nao
+falha: apenas avisa que falta configuracao. Para restaurar:
+
+```bash
+gpg --decrypt eftv-AAAA.dump.gpg | pg_restore -d postgresql://...
+```
 
 ### Descobrir o limite de conexoes da playlist
 
@@ -274,8 +298,8 @@ com o provedor e mantem o custo por usuario previsivel.
 - Base inicial: **no maximo 5 usuarios**.
 - Modelo: **trial gratis de 7 dias** e, se gostar, assinatura **mensal**. So
   existe plano mensal; nada de trimestral ou anual.
-- Limite de conexoes da playlist: **1 simultanea** (consulta em 08/11/2026),
-  com 8 conexoes ativas no momento da verificacao.
+- Conexoes da playlist: painel informa 1 simultanea, mas o provedor confirmou
+  que libera mais; os 8 ativos no momento da consulta nao sao bloqueio.
 
 ## 10. Modelo comercial
 
@@ -295,12 +319,13 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 ## 11. Pendencias
 
 - Definir o preco do plano mensal.
-- Resolver a conta da playlist: **1 conexao** para 5 usuarios nao fecha;
-  definir plano com 5 conexoes (ou uma conta por assinante).
-- Trocar a senha da playlist e derrubar as 8 conexoes ativas.
+- Provedor confirmou que libera mais conexoes simultaneas que o painel indica;
+  o limite de 1 nao e bloqueio (informado em 08/11/2026).
+- Monitorar `active_cons`: se subir sem uso proprio, trocar a senha da playlist.
 - Configurar no Render as variaveis que hoje so existem com default:
-  `CORS_ORIGINS`, `MAX_DEVICES_PER_SUBSCRIPTION`, e-mail (Brevo) e
-  `IPTV_PLAYLIST_USER_AGENT`.
+  `CORS_ORIGINS`, `FRONTEND_URL`, `EMAIL_PROVIDER`/`BREVO_API_KEY`/`EMAIL_FROM`,
+  `MAX_DEVICES_PER_SUBSCRIPTION` e `IPTV_PLAYLIST_USER_AGENT`.
+- Definir `DATABASE_URL` e `BACKUP_PASSPHRASE` nos secrets do GitHub.
 - Vale registrar um dominio proprio depois da primeira receita.
 
 ## 12. Historico
@@ -311,3 +336,6 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 | 2026-11-07 | Base de 5 usuarios, trial de 7 dias e plano mensal unico; script de consulta da playlist |
 | 2026-11-08 | Consulta real pela API do Render: servico em Oregon; banco expira 06/12/2026; playlist com 1 conexao e 8 em uso |
 | 2026-11-08 | Backend pronto para o pooler do Supabase: limpa `channel_binding`/`pgbouncer` e desliga caches de prepared statements |
+| 2026-11-08 | `CORS_ORIGINS` passa a aceitar virgula ou JSON (corrige boot com a URL do GitHub Pages) |
+| 2026-11-08 | Envio de e-mail pela API HTTPS do Brevo, com Resend como alternativa e fallback dev |
+| 2026-11-08 | Workflow noturno de backup cifrado (`pg_dump` + GPG) em artefato de 90 dias |
