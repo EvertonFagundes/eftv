@@ -215,6 +215,8 @@ e folgado, entao nao vale criar outra conta. Recomendacoes:
   autenticado no Brevo, um endereco desse dominio ja sai verificado;
 - criar uma **API key separada** (SMTP & API > API Keys), para revogar sem
   afetar o ControlFin;
+- **cuidado com o tipo de chave**: a chave SMTP (`xsmtpsib-...`) nao funciona
+  na API v3; use a API key (`xkeysib-...`), que fica na aba *API Keys*;
 - lembrar que a reputacao de envio e compartilhada: muitas rejeicoes em um
   projeto podem respingar no outro.
 

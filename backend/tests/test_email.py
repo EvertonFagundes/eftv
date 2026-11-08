@@ -130,3 +130,17 @@ async def test_send_via_brevo_returns_false_on_rejection(monkeypatch):
     service = _service()
     service.brevo_api_key = "brevo-key"
     assert await service._send_via_brevo("cliente@example.com", "Assunto", "texto") is False
+
+
+@pytest.mark.asyncio
+async def test_send_rejects_smtp_key_without_calling_api(monkeypatch):
+    service = _service()
+    service.provider = "brevo"
+    service.brevo_api_key = "xsmtpsib-chave-errada"
+
+    async def should_not_be_called(*args, **kwargs):
+        raise AssertionError("a API nao deveria ser chamada com chave SMTP")
+
+    monkeypatch.setattr(service, "_send_via_brevo", should_not_be_called)
+
+    assert await service._send("cliente@example.com", "Assunto", "texto") is False

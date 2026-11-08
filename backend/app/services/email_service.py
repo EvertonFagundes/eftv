@@ -116,6 +116,14 @@ class EmailService:
                     to_email,
                 )
                 return False
+            if self.brevo_api_key.startswith("xsmtpsib-"):
+                # Chave SMTP nao serve na API v3, e o Render free bloqueia SMTP.
+                logger.error(
+                    "BREVO_API_KEY e uma chave SMTP (xsmtpsib-...). Crie uma API key "
+                    "v3 em SMTP & API > API Keys (xkeysib-...); email para %s nao enviado",
+                    to_email,
+                )
+                return False
             return await self._send_via_brevo(to_email, subject, text_body, html_body)
 
         if self.provider == "resend":
