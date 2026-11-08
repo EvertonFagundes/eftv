@@ -94,3 +94,26 @@ def test_connect_args_can_be_forced():
     }
     pooler = "postgresql+asyncpg://u:p@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
     assert build_connect_args(pooler, use_pooler=False) == {}
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (
+            "https://evertonfagundes.github.io",
+            ["https://evertonfagundes.github.io"],
+        ),
+        (
+            "http://localhost:3000, http://localhost:5173 , ",
+            ["http://localhost:3000", "http://localhost:5173"],
+        ),
+        (
+            '["http://localhost:3000","https://app.eftv.com.br"]',
+            ["http://localhost:3000", "https://app.eftv.com.br"],
+        ),
+        ("", []),
+    ],
+)
+def test_cors_origins_accepts_csv_and_json(raw, expected):
+    settings = Settings(SECRET_KEY="x" * 40, CORS_ORIGINS=raw)
+    assert settings.cors_origins == expected

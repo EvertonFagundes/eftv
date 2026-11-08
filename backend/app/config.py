@@ -1,4 +1,5 @@
 # config.py - Configurações da aplicação (pydantic-settings)
+import json
 from functools import lru_cache
 from urllib.parse import urlparse
 
@@ -61,14 +62,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     BCRYPT_ROUNDS: int = 12
 
-    # CORS
-    CORS_ORIGINS: list[str] = Field(
-        default_factory=lambda: [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "https://app.eftv.com.br",
-        ]
-    )
+    # CORS (lista separada por virgula ou JSON, ver cors_origins)
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://app.eftv.com.br"
 
     # Rate limiting
     RATE_LIMIT_REQUESTS: int = 100
@@ -150,6 +145,28 @@ class Settings(BaseSettings):
             kept.append(pair)
 
         return f"{base}?{'&'.join(kept)}" if kept else base
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Origens liberadas no CORS.
+
+        Aceita JSON (formato antigo) e lista separada por virgula, que e o
+        formato pratico de colar no painel do Render.
+        """
+        raw = self.CORS_ORIGINS.strip()
+        if not raw:
+            return []
+
+        if raw.startswith("["):
+            try:
+                values = json.loads(raw)
+            except json.JSONDecodeError:
+                pass
+            else:
+                if isinstance(values, list):
+                    return [str(item).strip() for item in values if str(item).strip()]
+
+        return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 @lru_cache
