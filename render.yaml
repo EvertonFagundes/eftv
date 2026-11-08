@@ -12,7 +12,7 @@ services:
   - type: web
     name: eftv-api
     runtime: docker
-    region: ohio
+    region: oregon
     plan: 0.5c-512mb
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
@@ -57,6 +57,6 @@ databases:
   - name: eftv-db
     databaseName: eftv
     user: eftv
-    region: ohio
+    region: oregon
     plan: 0.1c-256mb
     postgresMajorVersion: "16"

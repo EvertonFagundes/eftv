@@ -21,7 +21,7 @@ services:
   - type: web
     name: eftv-api
     runtime: docker
-    region: ohio
+    region: oregon
     plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
@@ -65,6 +65,6 @@ databases:
   - name: eftv-db
     databaseName: eftv
     user: eftv
-    region: ohio
+    region: oregon
     plan: free
     postgresMajorVersion: "16"

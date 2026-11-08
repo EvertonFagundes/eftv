@@ -1,7 +1,7 @@
 # Plano de producao com custo zero
 
 Registro das decisoes para colocar usuarios reais no EFTV sem gastar nada por
-mes, e do que precisa ser feito em cada etapa. Atualizado em 2026-11-07.
+mes, e do que precisa ser feito em cada etapa. Atualizado em 2026-11-08.
 
 > Regra que guia tudo: **nada que apague dados por tempo**. Cota mensal que
 > suspende e aceitavel (volta no mes seguinte); banco que expira em 30 dias e
@@ -9,6 +9,10 @@ mes, e do que precisa ser feito em cada etapa. Atualizado em 2026-11-07.
 
 Ao retomar o trabalho, leia este arquivo, veja a proxima etapa desmarcada e
 siga a ordem. As decisoes registradas aqui so mudam com justificativa escrita.
+
+> **Prazo:** o Postgres free do Render (`eftv-db`, criado em 06/11/2026)
+> expira em **06/12/2026**. Depois disso fica inacessivel e e apagado em 14
+> dias. A etapa 1 precisa terminar antes dessa data.
 
 ## 1. Stack alvo
 
@@ -27,9 +31,10 @@ Custo total enquanto estiver dentro das cotas: **R$ 0**.
 
 ## 2. Decisoes tomadas
 
-1. **Sair do Postgres free do Render.** Ele expira 30 dias apos a criacao,
-   fica inacessivel e e apagado depois de 14 dias de carencia. Isso apaga
-   usuarios, assinaturas, vinculos de aparelho e sessoes.
+1. **Sair do Postgres free do Render.** O banco atual foi criado em
+   06/11/2026 e expira em **06/12/2026**: fica inacessivel e e apagado depois
+   de 14 dias de carencia. Isso apaga usuarios, assinaturas, vinculos de
+   aparelho e sessoes.
 2. **Supabase e nao Neon.** O Neon free tem 100 CU-horas por projeto/mes. Com
    trafego continuo o compute fica acordado e a cota estoura, suspendendo o
    banco ate o dia 1. O Supabase free nao tem essa cota: so pausa apos 7 dias
@@ -67,6 +72,8 @@ Custo total enquanto estiver dentro das cotas: **R$ 0**.
 | Supabase: sem backup | Um erro pode apagar tudo | `pg_dump` diario criptografado (etapa 3) |
 | Brevo: 300/dia | Cadastros param no limite | Suficiente para centenas de cadastros |
 | GitHub: cron desativado | Keepalive para sozinho | cron-job.org nao depende de commit |
+| Provedor: **1 conexao** | So um usuario assiste por vez | Contratar plano com 5 conexoes ou uma linha por usuario |
+| Provedor: 8 conexoes ativas | Conta de 1 conexao ja saturada | Trocar a senha, derrubar sessoes e monitorar |
 
 ## 4. Capacidade esperada
 
@@ -81,6 +88,19 @@ O gargalo de infraestrutura so aparece perto de ~200 ativos. Medir mesmo
 assim: tempo de resposta de `/health`, `/auth/login` e `/channels`, e o consumo
 em *Billing > Included usage* no Render.
 
+O gargalo real, hoje, **nao e a hospedagem: e a conta da playlist**. O painel
+do provedor informa `max_connections = 1` e `active_cons = 8`. Ou seja: o plano
+permite uma conexao simultanea e ja existem oito em uso. Com 5 usuarios
+assistindo ao mesmo tempo, dois problemas aparecem antes de qualquer cota do
+Render:
+
+1. o provedor bloqueia o excedente (erro no player);
+2. se as credenciais estiverem vazadas, terceiros consomem a conexao e
+   derrubam seus usuarios.
+
+Antes de abrir para os 5, resolver isso: plano do provedor com pelo menos 5
+conexoes (ou uma linha por usuario) e senha nova.
+
 ## 5. Etapas
 
 ### Etapa 0 - ja feita
@@ -88,11 +108,23 @@ em *Billing > Included usage* no Render.
 - [x] API publica em `https://eftv.onrender.com`
 - [x] Ping de `/health` a cada 10 min pelo GitHub Actions
 - [x] Documentacao de deploy atualizada
+- [x] Consulta da configuracao real pela API do Render (servico em Oregon;
+      `eftv-db` expira em 06/12/2026)
+
+### Etapa 0.5 - alinhar a conta da playlist
+
+- [ ] Confirmar com o provedor quantas conexoes simultaneas o plano permite
+      (o painel diz **1**).
+- [ ] Trocar a senha e derrubar as sessoes ativas (o painel mostra **8 em uso**).
+- [ ] Decidir o modelo: plano com 5 conexoes ou uma conta por assinante.
+- [ ] Atualizar `IPTV_PLAYLIST_URL` no Render e no `.env` local.
 
 ### Etapa 1 - migrar o banco para o Supabase
 
-- [ ] Criar projeto no Supabase, regiao **East US (North Virginia)**: o Render
-      esta em Ohio, entao e a regiao mais proxima disponivel.
+- [ ] Concluir **antes de 06/12/2026** (expiracao do banco atual).
+- [ ] Criar projeto no Supabase, regiao **West US (North California)**: o
+      Render esta em Oregon (confirmado na API), entao e a regiao mais proxima
+      disponivel.
 - [ ] Copiar a connection string do **pooler** (IPv4, porta 6543) e nao a
       conexao direta (IPv6).
 - [ ] Ajustar o backend (ver secao 6).
@@ -179,6 +211,20 @@ status, vencimento, conexoes em uso e o maximo permitido. Se o servidor nao
 tiver `player_api.php`, resta o teste pratico: abrir dois streams ao mesmo
 tempo e ver o codigo de erro (403/458/509 costuma ser limite atingido).
 
+Consulta feita em 08/11/2026, usando a URL que esta **no Render** (a do `.env`
+local estava desatualizada e dava 404):
+
+| Campo | Valor |
+| --- | --- |
+| Status | Active (nao e trial) |
+| Vencimento da conta | 06/03/2027 |
+| Conexoes permitidas | **1** |
+| Conexoes em uso | **8** |
+| Servidor | IP fixo, protocolo http, fuso America/Sao_Paulo |
+
+O Render e a **fonte da verdade** da URL da playlist. O `.env` local foi
+sincronizado com ele em 08/11/2026 e nao deve ser copiado para o repositorio.
+
 Enquanto o numero for desconhecido, a regra de produto e **1 stream por
 conta**: `MAX_DEVICES_PER_SUBSCRIPTION=1` ja e o padrao. Isso evita surpresa
 com o provedor e mantem o custo por usuario previsivel.
@@ -227,8 +273,8 @@ com o provedor e mantem o custo por usuario previsivel.
 - Base inicial: **no maximo 5 usuarios**.
 - Modelo: **trial gratis de 7 dias** e, se gostar, assinatura **mensal**. So
   existe plano mensal; nada de trimestral ou anual.
-- Limite de conexoes da playlist: desconhecido; sera descoberto com o script
-  da secao 6.
+- Limite de conexoes da playlist: **1 simultanea** (consulta em 08/11/2026),
+  com 8 conexoes ativas no momento da verificacao.
 
 ## 10. Modelo comercial
 
@@ -248,9 +294,12 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 ## 11. Pendencias
 
 - Definir o preco do plano mensal.
-- Confirmar a URL atual da playlist: a que esta no `backend/.env` local
-  responde **404**; ou expirou, ou foi rotacionada, ou mudou de dominio.
-- Descobrir o limite de conexoes do provedor quando a URL voltar a responder.
+- Resolver a conta da playlist: **1 conexao** para 5 usuarios nao fecha;
+  definir plano com 5 conexoes (ou uma conta por assinante).
+- Trocar a senha da playlist e derrubar as 8 conexoes ativas.
+- Configurar no Render as variaveis que hoje so existem com default:
+  `CORS_ORIGINS`, `MAX_DEVICES_PER_SUBSCRIPTION`, e-mail (Brevo) e
+  `IPTV_PLAYLIST_USER_AGENT`.
 - Vale registrar um dominio proprio depois da primeira receita.
 
 ## 12. Historico
@@ -259,3 +308,4 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 | --- | --- |
 | 2026-11-07 | Criacao do plano; stack R$ 0 definida; etapas 1 a 6 |
 | 2026-11-07 | Base de 5 usuarios, trial de 7 dias e plano mensal unico; script de consulta da playlist |
+| 2026-11-08 | Consulta real pela API do Render: servico em Oregon; banco expira 06/12/2026; playlist com 1 conexao e 8 em uso |
