@@ -217,6 +217,12 @@ e folgado, entao nao vale criar outra conta. Recomendacoes:
   afetar o ControlFin;
 - **cuidado com o tipo de chave**: a chave SMTP (`xsmtpsib-...`) nao funciona
   na API v3; use a API key (`xkeysib-...`), que fica na aba *API Keys*;
+- **bloqueio por IP**: se a conta tiver *Settings > Security > Authorized IPs*
+  com bloqueio ativo (o Brevo ativa sozinho depois de 30 dias sem IP novo), o
+  Render recebe HTTP 401 mesmo com a chave certa. Copie as faixas de saida em
+  *Render > servico > Connect > Outbound* e cadastre em *Authorized IPs*; nao
+  e preciso desativar o bloqueio. Servicos free usam faixas fixas compartilhadas
+  por regiao, exceto workspaces de Oregon criados antes de 23/01/2022;
 - lembrar que a reputacao de envio e compartilhada: muitas rejeicoes em um
   projeto podem respingar no outro.
 
@@ -344,6 +350,7 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 - Configurar no Render as variaveis que hoje so existem com default:
   `CORS_ORIGINS`, `FRONTEND_URL`, `EMAIL_PROVIDER`/`BREVO_API_KEY`/`EMAIL_FROM`,
   `MAX_DEVICES_PER_SUBSCRIPTION` e `IPTV_PLAYLIST_USER_AGENT`.
+- Cadastrar as faixas de saida do Render nas *Authorized IPs* do Brevo.
 - Definir `DATABASE_URL` e `BACKUP_PASSPHRASE` nos secrets do GitHub.
 - Vale registrar um dominio proprio depois da primeira receita.
 
