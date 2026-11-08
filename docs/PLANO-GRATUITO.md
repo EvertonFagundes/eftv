@@ -121,6 +121,12 @@ usuarios. O que continua valendo:
 - [ ] Criar projeto no Supabase, regiao **West US (North California)**: o
       Render esta em Oregon (confirmado na API), entao e a regiao mais proxima
       disponivel.
+- [ ] Nao e preciso criar organizacao nova: um projeto novo pode entrar na
+      organizacao Free existente (o plano Free permite 2 projetos ativos por
+      conta, somando todas as organizacoes em que voce e Owner/Admin).
+      Excecao: se a organizacao existente for paga (Pro), o projeto novo
+      tambem sera pago — nesse caso crie uma organizacao Free separada.
+      Projetos pausados nao contam no limite.
 - [ ] Copiar a connection string do **pooler** (IPv4, porta 6543) e nao a
       conexao direta (IPv6).
 - [x] Ajustar o backend para o pooler (ver secao 6).
