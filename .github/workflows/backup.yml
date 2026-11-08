@@ -40,7 +40,7 @@ jobs:
           file="eftv-$(date -u +%Y%m%d-%H%M%S).dump.gpg"
 
           docker run --rm --env PGURL="$pg_url" postgres:17-alpine \
-            pg_dump --format=custom --no-owner --no-acl "$PGURL" \
+            pg_dump --format=custom --no-owner --no-acl --schema=public "$PGURL" \
             | gpg --batch --yes --passphrase "$BACKUP_PASSPHRASE" \
                 --symmetric --cipher-algo AES256 -o "$file"
 

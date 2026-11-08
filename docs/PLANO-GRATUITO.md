@@ -186,7 +186,10 @@ continua com o significado estrito de assinatura paga, para os campos da API.
       (`.github/workflows/backup.yml`, artefato de 90 dias).
 - [ ] Segredo `BACKUP_PASSPHRASE` no GitHub; nunca subir dump sem cifra
       (o repositorio e publico).
-- [ ] Testar o restore em banco local antes de confiar no backup.
+- [x] Testar o restore em banco local antes de confiar no backup: dump
+      cifrado restaurado em `postgres:17-alpine` com os dados e o Alembic.
+      O dump passou a usar `--schema=public` por causa dos schemas internos
+      do Supabase.
 
 ### Etapa 4 - ping redundante
 
@@ -296,12 +299,23 @@ fila de reenvio; mesmo assim, o normal e nunca chegar perto disso.
 `pg_dump -Fc` num container `postgres:17-alpine` e cifra com GPG simetrico
 (AES256) usando `BACKUP_PASSPHRASE`. O arquivo vira artefato por 90 dias.
 
-Segredos necessarios no GitHub: `DATABASE_URL` (URL libpq, com
-`postgresql://` e `sslmode=require`) e `BACKUP_PASSPHRASE`. Sem eles o job nao
-falha: apenas avisa que falta configuracao. Para restaurar:
+O dump usa `--schema=public`. Sem isso ele inclui os schemas internos do
+Supabase (`vault`, `auth`, `storage`), que nao existem num Postgres comum e
+fazem o restore falhar. Nossas tabelas sao todas em `public`.
+
+Teste de restore feito em 08/11/2026 com `postgres:17-alpine`: o dump cifrado
+de 29 KB restaurou 3 usuarios, 1 plano, 2 assinaturas, os vinculos de aparelho
+e a versao do Alembic. Aparece o aviso `schema "public" already exists`, que e
+esperado e inofensivo.
+
+Segredos necessarios no GitHub (Settings > Secrets and variables > Actions):
+`DATABASE_URL` (URL libpq do **session pooler**, porta 5432, com
+`?sslmode=require`) e `BACKUP_PASSPHRASE` (senha longa, guardada tambem num
+gerenciador de senhas). Sem eles o job nao falha: apenas avisa que falta
+configuracao. Para restaurar:
 
 ```bash
-gpg --decrypt eftv-AAAA.dump.gpg | pg_restore -d postgresql://...
+gpg --decrypt eftv-AAAA.dump.gpg | pg_restore --no-owner --no-acl -d postgresql://...
 ```
 
 ### Descobrir o limite de conexoes da playlist
@@ -467,3 +481,4 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | Schema criado no Supabase (Ohio) e dados copiados do Render: 3 usuarios, 1 plano, 2 assinaturas, 6 aparelhos |
 | 2026-11-08 | Pooler do Supabase exige statement anonimo (nome vazio), alem dos caches desligados; login e playlist validados na porta 6543 |
 | 2026-11-08 | Producao no Supabase: `DATABASE_URL` trocada no Render e login, assinatura, playlist e vinculo de aparelho validados |
+| 2026-11-08 | Backup restrito ao schema `public` e restore cifrado testado em Postgres 17 local |
