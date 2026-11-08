@@ -423,18 +423,28 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 
 ## 11. Pendencias
 
-- Definir o preco do plano mensal.
-- Criar o projeto no Supabase (West US / North California) e guardar a
-  connection string do **pooler, porta 6543** para a etapa 1.
+- Definir o preco do plano mensal e criar o plano comercial (o plano atual
+  "Dono do App" tem preco 0 e mostra 10 aparelhos, embora o teto efetivo seja
+  1).
+- Adicionar `DATABASE_URL` (session pooler, porta 5432) e
+  `BACKUP_PASSPHRASE` nos secrets do GitHub e rodar o backup manualmente.
+- Criar o monitor no cron-job.org: `GET /health` a cada 5 min com alerta.
+- Remover o IPv6 temporario das *Authorized IPs* do Brevo.
 - Provedor confirmou que libera mais conexoes simultaneas que o painel indica;
   o limite de 1 nao e bloqueio (informado em 08/11/2026).
 - Monitorar `active_cons`: se subir sem uso proprio, trocar a senha da playlist.
-- Configurar no Render as variaveis que hoje so existem com default:
-  `CORS_ORIGINS`, `FRONTEND_URL`, `EMAIL_PROVIDER`/`BREVO_API_KEY`/`EMAIL_FROM`,
-  `MAX_DEVICES_PER_SUBSCRIPTION` e `IPTV_PLAYLIST_USER_AGENT`.
-- Cadastrar as faixas de saida do Render nas *Authorized IPs* do Brevo.
-- Definir `DATABASE_URL` e `BACKUP_PASSPHRASE` nos secrets do GitHub.
+- Conferir no Render as variaveis que hoje so existem com default:
+  `CORS_ORIGINS`, `MAX_DEVICES_PER_SUBSCRIPTION` e
+  `IPTV_PLAYLIST_USER_AGENT`.
+- Assinar e publicar o APK em Releases.
 - Vale registrar um dominio proprio depois da primeira receita.
+
+### Onde ficam os segredos
+
+As senhas de producao (banco, `DATABASE_URL` da aplicacao e do backup e a
+frase do GPG) ficam em `~/.config/eftv/secrets.env`, com permissao `600` e
+**fora do repositorio**. Nenhum valor de senha entra no Git. O arquivo
+`.env` do backend tambem e ignorado pelo Git.
 
 ### Valores para colar no Render
 
@@ -447,8 +457,8 @@ EMAIL_FROM=EFTV <remetente verificado no Brevo>
 ```
 
 O `EMAIL_FROM` precisa ser um remetente verificado no Brevo; sem dominio
-proprio, verifique um e-mail seu. A `DATABASE_URL` sera trocada pela do
-Supabase quando a etapa 1 terminar.
+proprio, verifique um e-mail seu. A `DATABASE_URL` ja aponta para o Supabase.
+O valor de cada segredo esta em `~/.config/eftv/secrets.env`, fora do repo.
 
 **`FRONTEND_URL` e obrigatoria em producao.** Sem ela, o link de confirmacao
 sai como `http://localhost:3000/verify-email.html` e o usuario nao consegue
