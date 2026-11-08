@@ -34,6 +34,9 @@ Ele **nao** serve para cliente pagante por tres motivos objetivos:
 | Postgres expira em 30 dias | Perda de usuarios, assinaturas e vinculos de aparelho |
 | Sem Shell e sem pre-deploy | Nao da para rodar migracao/seed pelo dashboard |
 
+Para colocar usuarios reais com custo zero (banco no Supabase, e-mail na Brevo,
+backup e ordem das etapas), veja [`PLANO-GRATUITO.md`](PLANO-GRATUITO.md).
+
 Se o objetivo for so testar agora, use o [`render.free.yaml`](../render.free.yaml):
 ele cria os mesmos servicos no plano free e roda `alembic upgrade head` junto
 com a inicializacao (o free nao tem pre-deploy command).

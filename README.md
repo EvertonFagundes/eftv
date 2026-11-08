@@ -149,6 +149,9 @@ npm run preview                        # Preview build
 - **Render PostgreSQL** (recomendado) ou **Neon**
 - Execute `alembic upgrade head` após primeiro deploy
 
+> Para operar com usuários reais sem custo mensal (Supabase free + Brevo +
+> backup + etapas de go-live), siga [`docs/PLANO-GRATUITO.md`](docs/PLANO-GRATUITO.md).
+
 ### DNS (Cloudflare)
 | Tipo | Nome | Conteúdo | Proxy |
 |------|------|----------|-------|
