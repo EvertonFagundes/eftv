@@ -125,18 +125,19 @@ npm run preview                        # Preview build
 1. Conecte repo GitHub no Render
 2. New Web Service → Docker
 3. Variáveis de ambiente (Settings → Environment):
-   - `DATABASE_URL` (PostgreSQL gerenciado do Render/Neon)
+   - `DATABASE_URL` (Postgres do Supabase, pooler na porta 6543)
    - `SECRET_KEY` (gere: `openssl rand -hex 32`)
-   - `MERCADOPAGO_ACCESS_TOKEN` (produção)
-   - `MERCADOPAGO_PUBLIC_KEY`
-   - `MERCADOPAGO_WEBHOOK_SECRET`
-   - `MERCADOPAGO_SANDBOX=false`
-   - `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`
-   - `RESEND_API_KEY`
-   - `FRONTEND_URL=https://app.eftv.com.br`
-   - `CORS_ORIGINS=["https://app.eftv.com.br"]`
+   - `IPTV_PLAYLIST_URL` (playlist licenciada; nunca no repositório)
+   - `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY` e `EMAIL_FROM`
+     (o remetente precisa estar verificado no Brevo)
+   - `FRONTEND_URL=https://evertonfagundes.github.io/eftv`
+   - `CORS_ORIGINS=https://evertonfagundes.github.io`
+     (aceita uma URL, lista separada por vírgula ou JSON)
    - `ENVIRONMENT=production`
    - `DEBUG=false`
+   - `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_PUBLIC_KEY`,
+     `MERCADOPAGO_WEBHOOK_SECRET` e `MERCADOPAGO_SANDBOX=false`
+     (somente quando o pagamento for ativado)
 
 ### Frontend → Cloudflare Pages
 1. Connect repository → `frontend` folder
@@ -146,8 +147,10 @@ npm run preview                        # Preview build
    - `VITE_API_URL=https://api.eftv.com.br`
 
 ### Banco de Dados
-- **Render PostgreSQL** (recomendado) ou **Neon**
+- **Supabase free** (sem cota de horas; ver [`docs/PLANO-GRATUITO.md`](docs/PLANO-GRATUITO.md))
 - Execute `alembic upgrade head` após primeiro deploy
+- Backup noturno cifrado em `.github/workflows/backup.yml`
+  (segredos `DATABASE_URL` e `BACKUP_PASSPHRASE`)
 
 > Para operar com usuários reais sem custo mensal (Supabase free + Brevo +
 > backup + etapas de go-live), siga [`docs/PLANO-GRATUITO.md`](docs/PLANO-GRATUITO.md).
@@ -197,11 +200,15 @@ npm run preview                        # Preview build
 |----------|-------------|-----------|
 | `SECRET_KEY` | ✅ | Chave JWT (32+ chars, `openssl rand -hex 32`) |
 | `DATABASE_URL` | ✅ | PostgreSQL async connection string |
-| `MERCADOPAGO_ACCESS_TOKEN` | ✅ | Token de acesso MP (produção/sandbox) |
-| `MERCADOPAGO_WEBHOOK_SECRET` | ✅ | Validação HMAC webhooks |
+| `IPTV_PLAYLIST_URL` | ✅ | Playlist licenciada entregue só pelo backend |
+| `MERCADOPAGO_ACCESS_TOKEN` | Quando ativar pagamento | Token de acesso MP (produção/sandbox) |
+| `MERCADOPAGO_WEBHOOK_SECRET` | Quando ativar pagamento | Validação HMAC webhooks |
 | `CLOUDFLARE_ACCOUNT_ID` | Para streaming | Account ID do Cloudflare Stream |
 | `CLOUDFLARE_API_TOKEN` | Para streaming | API Token com permissão Stream |
-| `RESEND_API_KEY` | Para emails | API Key do Resend |
+| `EMAIL_PROVIDER` | ✅ | `auto`, `brevo`, `resend` ou `dev` |
+| `BREVO_API_KEY` | Para emails | API Key do Brevo |
+| `EMAIL_FROM` | Para emails | Remetente verificado no provedor |
+| `CORS_ORIGINS` | ✅ | URL(s) do frontend (vírgula ou JSON) |
 | `FRONTEND_URL` | ✅ | URL do frontend (para CORS, links emails) |
 
 ## 📝 Licença
