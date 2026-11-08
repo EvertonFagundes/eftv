@@ -130,7 +130,15 @@ usuarios. O que continua valendo:
 - [ ] Copiar a connection string do **pooler** (IPv4, porta 6543) e nao a
       conexao direta (IPv6).
 - [x] Ajustar o backend para o pooler (ver secao 6).
-- [ ] Rodar `alembic upgrade head` e o seed.
+- [x] Projeto Supabase criado e schema aplicado com `alembic upgrade head`
+      (Postgres 17.11, tres migracoes). O projeto ficou em **East US 2
+      (Ohio)**, e nao em North California como previsto: a distancia extra
+      para o Render em Oregon custa dezenas de milissegundos por consulta,
+      irrelevante para 5 usuarios. Trocar de regiao exigiria recriar o
+      projeto, entao ficou assim.
+- [ ] Copiar os dados do Postgres atual do Render (ou recriar as contas).
+      Catalogo esta vazio (`/channels` e `/categories` em 0), entao o que
+      importa sao usuarios, assinaturas e vinculos de aparelho.
 - [ ] Trocar `DATABASE_URL` no Render e validar login/catalogo.
 - [ ] So depois de validar, apagar o Postgres free do Render.
 
