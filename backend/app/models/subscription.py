@@ -82,6 +82,32 @@ class Subscription(Base):
         )
 
     @property
+    def has_access(self) -> bool:
+        """Indica se o assinante pode assistir agora.
+
+        Cobre o plano pago e o trial gratuito: o trial tem status ``trial``,
+        entao ``is_active`` sozinho bloquearia justamente quem acabou de se
+        cadastrar. O fim do periodo e o limite comum aos dois.
+        """
+        now = datetime.now(UTC)
+        period_end = self.current_period_end
+        if period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=UTC)
+        if period_end <= now:
+            return False
+
+        if self.status == "trial":
+            trial_end = self.trial_end
+            if trial_end is not None and trial_end.tzinfo is None:
+                trial_end = trial_end.replace(tzinfo=UTC)
+            return trial_end is None or trial_end > now
+
+        if self.status != "active":
+            return False
+
+        return self.cancelled_at is None or self.cancelled_at > now
+
+    @property
     def is_trial(self) -> bool:
         if not self.trial_end:
             return False

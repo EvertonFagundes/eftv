@@ -152,9 +152,14 @@ com `status=trial`, periodo de `2026-11-08T18:39:21Z` a
 registrada no repositorio (ele e publico); quem precisar dela pede ao
 responsavel.
 
-Observacao: `is_active` retorna `false` para o trial por desenho — o campo so
-cobre `status="active"`, enquanto o controle de acesso aceita `active` e
-`trial`. Nao e bug.
+O teste revelou um bug junto com a validacao: o trial era criado, mas o
+`get_current_active_subscription` aceitava `status in ("active", "trial")` na
+consulta e logo depois exigia `subscription.is_active`, que so cobre
+`status="active"`. Resultado: o usuario confirmava o e-mail, o trial aparecia
+ativo e o player respondia `403 subscription_expired`. Corrigido com a
+propriedade `Subscription.has_access`, que cobre plano pago e trial (com o fim
+do periodo como limite comum) e e usada pelo controle de acesso. `is_active`
+continua com o significado estrito de assinatura paga, para os campos da API.
 
 ### Etapa 3 - backup
 
@@ -422,3 +427,4 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | Pagina `verify-email.html` no GitHub Pages; link do e-mail deixa de cair em 404 |
 | 2026-11-08 | CORS do GitHub Pages validado no Render (preflight 200) apos normalizar a origem |
 | 2026-11-08 | Etapa 2 concluida: cadastro externo, e-mail pelo Brevo, link novo e trial de 7 dias validados de ponta a ponta |
+| 2026-11-08 | Corrigido: trial era barrado no player (`subscription_expired`); acesso agora usa `Subscription.has_access` |

@@ -142,7 +142,7 @@ async def get_current_active_subscription(
             },
         )
 
-    if not subscription.is_active:
+    if not subscription.has_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
