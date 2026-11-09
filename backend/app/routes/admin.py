@@ -10,11 +10,11 @@ from app.database import get_db
 from app.models.category import Category
 from app.models.channel import Channel
 from app.models.device import SubscriptionDevice
-from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.security.dependencies import get_current_user, require_admin
 from app.services.devices import revoke_all_devices
+from app.services.plans import get_or_create_plan
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -40,25 +40,8 @@ async def claim_ownership(
         current_user.is_admin = True
         current_user.is_active = True
 
-        # Garante plano default
-        plan_result = await db.execute(
-            select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.sort_order.asc())
-        )
-        plan = plan_result.scalar_one_or_none()
-        if plan is None:
-            plan = Plan(
-                name="Dono do App",
-                description="Plano default para o proprietário da instância EFTV",
-                price_cents=0,
-                currency="BRL",
-                interval="month",
-                max_simultaneous_streams=5,
-                max_devices=10,
-                features={"hd": True, "full_hd": True, "4k": False},
-                sort_order=0,
-            )
-            db.add(plan)
-            await db.flush()
+        # Garante o plano comercial (trial e assinatura usam o mesmo)
+        plan = await get_or_create_plan(db)
 
         # Ativa ou cria subscription
         sub_result = await db.execute(
@@ -290,25 +273,8 @@ async def make_user_owner(
         user.is_admin = True
         user.is_active = True
 
-        # Garante plano default
-        plan_result = await db.execute(
-            select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.sort_order.asc())
-        )
-        plan = plan_result.scalar_one_or_none()
-        if plan is None:
-            plan = Plan(
-                name="Dono do App",
-                description="Plano default para o proprietário da instância EFTV",
-                price_cents=0,
-                currency="BRL",
-                interval="month",
-                max_simultaneous_streams=5,
-                max_devices=10,
-                features={"hd": True, "full_hd": True, "4k": False},
-                sort_order=0,
-            )
-            db.add(plan)
-            await db.flush()
+        # Garante o plano comercial (trial e assinatura usam o mesmo)
+        plan = await get_or_create_plan(db)
 
         # Ativa ou cria subscription
         sub_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))

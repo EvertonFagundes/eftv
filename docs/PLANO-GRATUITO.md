@@ -212,7 +212,7 @@ Migrar quando a receita pagar a infra, nao antes:
 - Render Starter (~US$ 7) = sem hibernar e sem cota de horas;
 - banco do Render Basic (~US$ 6) ou Supabase Pro (~US$ 25), conforme o caso.
 
-Com 5 assinantes de R$ 25, sao R$ 125/mes, que ja cobrem a infra paga
+Com 5 assinantes de R$ 19,90, sao R$ 99,50/mes, que ja cobrem a infra paga
 (~R$ 75) com folga.
 
 ## 6. Detalhes tecnicos da migracao do banco
@@ -407,6 +407,7 @@ plano mensal (nome, preco e limites) entra junto com o Mercado Pago.
   existe plano mensal; nada de trimestral ou anual.
 - Conexoes da playlist: painel informa 1 simultanea, mas o provedor confirmou
   que libera mais; os 8 ativos no momento da consulta nao sao bloqueio.
+- Preco da mensalidade: **R$ 19,90** (definido em 2026-11-09).
 
 ## 10. Modelo comercial
 
@@ -416,8 +417,10 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 
 - **Plano unico: mensal.** Menos tela, menos suporte e menos regra de
   renovacao do que ter trimestral/anual agora.
-- **Preco a definir.** Referencia: R$ 25/mes faz 5 assinantes pagarem a infra
-  paga com folga.
+- **Preco: R$ 19,90/mes** (definido em 09/11/2026). Fica em
+  `app/services/plans.py` e na migration `004`; o trial usa o mesmo plano,
+  mudando apenas o status da assinatura. Com 5 assinantes, sao R$ 99,50/mes,
+  o que ja cobre a infra paga.
 - **Mercado Pago**: sem mensalidade, so taxa por venda (PIX costuma ser mais
   barato que cartao). E o unico custo variavel do negocio.
 - **Renovacao**: sem plano anual, toda cobranca e mensal; se o pagamento
@@ -425,9 +428,6 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 
 ## 11. Pendencias
 
-- Definir o preco do plano mensal e criar o plano comercial (o plano atual
-  "Dono do App" tem preco 0 e mostra 10 aparelhos, embora o teto efetivo seja
-  1).
 - Criar o monitor no cron-job.org: `GET /health` a cada 5 min com alerta.
 - Remover o IPv6 temporario das *Authorized IPs* do Brevo.
 - Provedor confirmou que libera mais conexoes simultaneas que o painel indica;
@@ -493,3 +493,4 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | Producao no Supabase: `DATABASE_URL` trocada no Render e login, assinatura, playlist e vinculo de aparelho validados |
 | 2026-11-08 | Backup restrito ao schema `public` e restore cifrado testado em Postgres 17 local |
 | 2026-11-08 | Etapa 3 concluida: secrets configurados e primeira execucao real do backup gerou o artefato cifrado |
+| 2026-11-09 | Preco definido em R$ 19,90/mes; plano unico "Mensal" com 1 aparelho e 1 stream, criado por `app/services/plans.py` e migration `004` |

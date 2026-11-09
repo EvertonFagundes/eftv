@@ -55,10 +55,10 @@ async def seed(email: str, password: str, days: int, is_admin: bool) -> None:
             plan = Plan(
                 name="Mensal",
                 description="Acesso completo ao catalogo",
-                price_cents=2990,
+                price_cents=1990,
                 interval="month",
                 max_simultaneous_streams=1,
-                max_devices=2,
+                max_devices=1,
                 features={"hd": True, "full_hd": True},
                 is_active=True,
             )

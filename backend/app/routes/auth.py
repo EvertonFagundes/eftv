@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.auth import (
@@ -34,33 +33,11 @@ from app.services.auth_service import (
     verify_password,
 )
 from app.services.email_service import EmailService
+from app.services.plans import get_or_create_plan
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
 email_service = EmailService()
-
-
-async def _get_or_create_default_plan(db: AsyncSession) -> Plan:
-    """Garante que exista um plano default gratuito (trial de 7 dias)."""
-    plan_result = await db.execute(
-        select(Plan).where(Plan.is_active == True).order_by(Plan.sort_order.asc())  # noqa: E712
-    )
-    plan = plan_result.scalar_one_or_none()
-    if plan is None:
-        plan = Plan(
-            name="Dono do App",
-            description="Plano default para o proprietario da instância EFTV",
-            price_cents=0,
-            currency="BRL",
-            interval="month",
-            max_simultaneous_streams=5,
-            max_devices=10,
-            features={"hd": True, "full_hd": True, "4k": False},
-            sort_order=0,
-        )
-        db.add(plan)
-        await db.flush()
-    return plan
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
@@ -188,7 +165,7 @@ async def verify_email(
 
     if not existing_sub or existing_sub.status not in ["active", "trial"]:
         # Ativa trial gratuito de 7 dias
-        plan = await _get_or_create_default_plan(db)
+        plan = await get_or_create_plan(db)
         now = datetime.now(UTC)
         trial_end = now + timedelta(days=settings.FREE_TRIAL_DAYS)
         subscription = Subscription(
