@@ -161,9 +161,10 @@ async def verify_email(
         .where(Subscription.user_id == user.id)
         .order_by(Subscription.created_at.desc())
     )
-    existing_sub = existing_sub_result.scalar_one_or_none()
+    existing_subs = existing_sub_result.scalars().all()
+    has_trial_or_active = any(sub.status in ("active", "trial") for sub in existing_subs)
 
-    if not existing_sub or existing_sub.status not in ["active", "trial"]:
+    if not has_trial_or_active:
         # Ativa trial gratuito de 7 dias
         plan = await get_or_create_plan(db)
         now = datetime.now(UTC)

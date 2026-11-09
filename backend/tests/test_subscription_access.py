@@ -33,6 +33,12 @@ class FakeResult:
     def scalar_one_or_none(self) -> Subscription | None:
         return self.subscription
 
+    def scalars(self):
+        return self
+
+    def all(self):
+        return [] if self.subscription is None else [self.subscription]
+
 
 class FakeSession:
     def __init__(self, subscription: Subscription | None) -> None:
@@ -110,3 +116,26 @@ async def test_dependency_rejects_expired_trial():
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail["code"] == "subscription_expired"
+
+
+@pytest.mark.asyncio
+async def test_dependency_picks_valid_subscription_among_several():
+    expired_trial = make_subscription(status="trial", days=-1, trial_days=-1)
+    paid = make_subscription(status="active", trial_days=None)
+
+    class MultiResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [expired_trial, paid]
+
+    class MultiSession:
+        async def execute(self, *args, **kwargs):
+            return MultiResult()
+
+    user = SimpleNamespace(id="user-id", email_verified=True)
+
+    result = await get_current_active_subscription(user=user, db=MultiSession())
+
+    assert result is paid

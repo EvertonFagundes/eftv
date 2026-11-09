@@ -131,23 +131,22 @@ async def get_current_active_subscription(
         .where(Subscription.status.in_(["active", "trial"]))
         .order_by(Subscription.created_at.desc())
     )
-    subscription = result.scalar_one_or_none()
+    # Pode haver mais de uma linha (trial antigo + assinatura paga). A mais
+    # recente com acesso vale; nao usar scalar_one_or_none, que levantaria
+    # MultipleResultsFound e derrubaria o player.
+    subscriptions = result.scalars().all()
+    subscription = next((sub for sub in subscriptions if sub.has_access), None)
 
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
-                "code": "no_active_subscription",
-                "message": "Nenhuma assinatura ativa encontrada",
-            },
-        )
-
-    if not subscription.has_access:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "subscription_expired",
-                "message": "Assinatura expirada ou cancelada",
+                "code": "subscription_expired" if subscriptions else "no_active_subscription",
+                "message": (
+                    "Assinatura expirada ou cancelada"
+                    if subscriptions
+                    else "Nenhuma assinatura ativa encontrada"
+                ),
             },
         )
 

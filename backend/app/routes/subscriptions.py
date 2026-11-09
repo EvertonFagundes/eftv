@@ -1,5 +1,5 @@
 # routes/subscriptions.py - Rotas de assinaturas e webhooks
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -112,6 +112,27 @@ async def create_checkout(
     if not plan or not plan.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
 
+    # Um usuario pode ter o trial antigo e a assinatura paga ao mesmo tempo.
+    # Nao abre outro checkout para quem ja tem assinatura paga valida.
+    existing_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .order_by(Subscription.created_at.desc())
+    )
+    existing_subscriptions = existing_result.scalars().all()
+    paid_active = next(
+        (sub for sub in existing_subscriptions if sub.status == "active" and sub.has_access),
+        None,
+    )
+    if paid_active is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "already_active",
+                "message": "Sua assinatura já está ativa.",
+            },
+        )
+
     # Cria preferência no Mercado Pago
     preference = await create_checkout_preference(
         user=user,
@@ -123,23 +144,32 @@ async def create_checkout(
         back_urls=data.back_urls,
     )
 
-    # Salva subscription pendente
-    subscription = Subscription(
-        user_id=user.id,
-        plan_id=plan.id,
-        status="pending",
-        mercadopago_subscription_id=preference["id"],
-        current_period_start=datetime.now(UTC),
-        current_period_end=datetime.now(UTC),
-    )
-    db.add(subscription)
+    # Reaproveita um checkout pendente em vez de acumular linhas.
+    now = datetime.now(UTC)
+    subscription = next((sub for sub in existing_subscriptions if sub.status == "pending"), None)
+    if subscription is not None:
+        subscription.plan_id = plan.id
+        subscription.mercadopago_subscription_id = preference["id"]
+        subscription.current_period_start = now
+        subscription.current_period_end = now
+    else:
+        subscription = Subscription(
+            user_id=user.id,
+            plan_id=plan.id,
+            status="pending",
+            mercadopago_subscription_id=preference["id"],
+            current_period_start=now,
+            current_period_end=now,
+        )
+        db.add(subscription)
     await db.commit()
 
     return CheckoutResponse(
         preference_id=preference["id"],
         init_point=preference["init_point"],
         sandbox_init_point=preference.get("sandbox_init_point"),
-        expires_at=datetime.now(UTC),  # TODO: calcular expiração real
+        # O preapproval pendente nao informa validade; 24h e um teto pratico.
+        expires_at=now + timedelta(days=1),
     )
 
 
