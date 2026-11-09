@@ -57,8 +57,17 @@ def validate_webhook_signature(headers, data_id: str | None) -> bool:
     if not ts or not received:
         return False
 
-    request_id = headers.get("x-request-id") or ""
-    manifest = f"id:{data_id if data_id is not None else ''};request-id:{request_id};ts:{ts};"
+    request_id = headers.get("x-request-id")
+    # O template do Mercado Pago omite as partes ausentes, mas sempre termina
+    # cada chave com ";". Assim: "id:...;request-id:...;ts:...;".
+    manifest_parts = []
+    if data_id:
+        manifest_parts.append(f"id:{data_id}")
+    if request_id:
+        manifest_parts.append(f"request-id:{request_id}")
+    manifest_parts.append(f"ts:{ts}")
+    manifest = ";".join(manifest_parts) + ";"
+
     expected = hmac.new(
         secret.encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256
     ).hexdigest()

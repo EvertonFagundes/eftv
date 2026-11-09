@@ -90,6 +90,16 @@ def test_signature_rejects_missing_header(monkeypatch):
     assert mercadopago.validate_webhook_signature({}, "123") is False
 
 
+def test_signature_omits_absent_request_id(monkeypatch):
+    monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", "segredo")
+    ts = "1700000000"
+    manifest = f"id:123;ts:{ts};"
+    digest = hmac.new(b"segredo", manifest.encode(), hashlib.sha256).hexdigest()
+    headers = {"x-signature": f"ts={ts},v1={digest}"}
+
+    assert mercadopago.validate_webhook_signature(headers, "123") is True
+
+
 def test_signature_is_skipped_without_secret(monkeypatch):
     monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", None)
 
