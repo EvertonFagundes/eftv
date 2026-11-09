@@ -426,9 +426,29 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
 - **Renovacao**: sem plano anual, toda cobranca e mensal; se o pagamento
   falhar, o job expira a assinatura no ciclo seguinte.
 
+### Integracao com o Mercado Pago
+
+- O checkout cria uma `preapproval` **sem plano associado** e com
+  `status: "pending"`: o backend envia `payer_email`, `external_reference`,
+  `back_url` e o `auto_recurring` (1 mes, R$ 19,90, BRL) direto da tabela de
+  planos. O cliente paga no checkout hospedado (`init_point`).
+- O retorno vai para `checkout.html` na raiz do GitHub Pages. O
+  `/preapproval` so aceita uma `back_url`, sem status na URL.
+- O webhook e configurado no painel da aplicacao no Mercado Pago apontando
+  para `POST /subscriptions/webhook/mercadopago`; nao vai no payload.
+- O webhook valida o header `x-signature` (HMAC-SHA256 com
+  `MERCADOPAGO_WEBHOOK_SECRET`) e trata os eventos reais
+  `subscription_preapproval` e `subscription_authorized_payment`.
+- Sem `MERCADOPAGO_WEBHOOK_SECRET` a validacao e ignorada; em producao o
+  segredo deve estar configurado no Render e no painel do Mercado Pago.
+
 ## 11. Pendencias
 
 - Criar o monitor no cron-job.org: `GET /health` a cada 5 min com alerta.
+- Mercado Pago: obter o access token de teste, criar o plano `preapproval`
+  (R$ 19,90/mes) e guardar `mercadopago_plan_id`; configurar
+  `MERCADOPAGO_ACCESS_TOKEN` e `MERCADOPAGO_WEBHOOK_SECRET` no Render e
+  validar o webhook no sandbox.
 - Remover o IPv6 temporario das *Authorized IPs* do Brevo.
 - Provedor confirmou que libera mais conexoes simultaneas que o painel indica;
   o limite de 1 nao e bloqueio (informado em 08/11/2026).
@@ -494,3 +514,4 @@ abrir. O valor correto nao tem barra final:
 | 2026-11-08 | Backup restrito ao schema `public` e restore cifrado testado em Postgres 17 local |
 | 2026-11-08 | Etapa 3 concluida: secrets configurados e primeira execucao real do backup gerou o artefato cifrado |
 | 2026-11-09 | Preco definido em R$ 19,90/mes; plano unico "Mensal" com 1 aparelho e 1 stream, criado por `app/services/plans.py` e migration `004` |
+| 2026-11-09 | Webhook do Mercado Pago valida `x-signature`, trata eventos reais de preapproval/cobranca e retorna para `checkout.html` |

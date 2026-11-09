@@ -1,6 +1,10 @@
 # services/mercadopago.py - Integração Mercado Pago
+import hashlib
+import hmac
+import logging
 from datetime import UTC, datetime
 from typing import cast
+from uuid import UUID
 
 import httpx
 from sqlalchemy import select
@@ -16,6 +20,50 @@ if settings.MERCADOPAGO_SANDBOX:
     MERCADOPAGO_BASE_URL = (
         "https://api.mercadopago.com"  # Sandbox usa mesma URL, headers diferentes
     )
+
+logger = logging.getLogger(__name__)
+
+# Estados da preapproval no Mercado Pago que liberam o acesso.
+_ACTIVE_PREAPPROVAL_STATUSES = {"authorized"}
+
+
+def validate_webhook_signature(headers, data_id: str | None) -> bool:
+    """Valida o header ``x-signature`` enviado pelo Mercado Pago.
+
+    O Mercado Pago assina ``id:<data.id>;request-id:<x-request-id>;ts:<ts>;``
+    com HMAC-SHA256 usando o segredo configurado no painel. Sem o segredo
+    configurado a validacao e ignorada (ambiente de desenvolvimento).
+
+    Retorna ``False`` quando o segredo existe e a assinatura nao confere.
+    """
+    secret = settings.MERCADOPAGO_WEBHOOK_SECRET
+    if not secret:
+        logger.warning(
+            "MERCADOPAGO_WEBHOOK_SECRET nao configurado: webhook aceito sem validar assinatura"
+        )
+        return True
+
+    signature = headers.get("x-signature")
+    if not signature:
+        return False
+
+    parts = {}
+    for chunk in signature.split(","):
+        key, _, value = chunk.partition("=")
+        parts[key.strip()] = value.strip()
+
+    ts = parts.get("ts")
+    received = parts.get("v1")
+    if not ts or not received:
+        return False
+
+    request_id = headers.get("x-request-id") or ""
+    manifest = f"id:{data_id if data_id is not None else ''};request-id:{request_id};ts:{ts};"
+    expected = hmac.new(
+        secret.encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(expected, received)
 
 
 def _get_headers(idempotency_key: str | None = None) -> dict:
@@ -44,54 +92,40 @@ async def create_checkout_preference(
     if not settings.MERCADOPAGO_ACCESS_TOKEN:
         raise RuntimeError("MERCADOPAGO_ACCESS_TOKEN não configurado")
 
-    # Dados do pagador
-    payer: dict[str, object] = {"email": payer_email}
-    if payer_name:
-        payer["name"] = payer_name.split()[0]
-        payer["surname"] = " ".join(payer_name.split()[1:]) if len(payer_name.split()) > 1 else ""
-    if payer_phone:
-        # Formato: {"area_code": "11", "number": "999999999"}
-        phone_clean = (
-            payer_phone.replace("(", "").replace(")", "").replace("-", "").replace(" ", "")
-        )
-        if len(phone_clean) >= 10:
-            payer["phone"] = {"area_code": phone_clean[:2], "number": phone_clean[2:]}
-    if payer_cpf:
-        payer["identification"] = {"type": "CPF", "number": payer_cpf}
-
-    # URLs de retorno
-    default_back_urls: dict[str, str] = {
-        "success": f"{settings.FRONTEND_URL}/account?checkout=success",
-        "failure": f"{settings.FRONTEND_URL}/account?checkout=failure",
-        "pending": f"{settings.FRONTEND_URL}/account?checkout=pending",
-    }
+    # O endpoint /preapproval aceita apenas os campos da assinatura. Campos do
+    # Checkout Pro (back_urls, auto_return, notification_url, payer) nao
+    # existem aqui: o webhook e configurado no painel da aplicacao no Mercado
+    # Pago e o retorno e uma unica back_url.
+    frontend = settings.FRONTEND_URL.rstrip("/")
+    back_url = f"{frontend}/checkout.html"
     if back_urls:
-        default_back_urls.update(back_urls)
+        back_url = back_urls.get("success", back_url)
 
-    # Preference data para preapproval (assinatura recorrente)
-    preference_data = {
-        "preapproval_plan_id": plan.mercadopago_plan_id,
-        "payer": payer,
-        "back_urls": default_back_urls,
-        "auto_return": "approved",
+    preapproval_data = {
+        "reason": f"EFTV - {plan.name}",
         "external_reference": str(user.id),
-        "notification_url": f"{settings.FRONTEND_URL.replace('app.', 'api.')}/subscriptions/webhook/mercadopago",
+        "payer_email": payer_email,
+        "auto_recurring": {
+            "frequency": 1,
+            "frequency_type": "months",
+            "transaction_amount": round(plan.price_cents / 100, 2),
+            "currency_id": plan.currency or "BRL",
+        },
+        "back_url": back_url,
+        # Sem cartao tokenizado no app: o cliente escolhe o meio de pagamento
+        # no checkout do Mercado Pago. O acesso so e liberado pelo webhook.
+        "status": "pending",
     }
-
-    # Remove None values
-    preference_data = {k: v for k, v in preference_data.items() if v is not None}
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             f"{MERCADOPAGO_BASE_URL}/preapproval",
-            json=preference_data,
+            json=preapproval_data,
             headers=_get_headers(),
         )
 
     if response.status_code >= 400:
-        raise RuntimeError(
-            f"Erro ao criar preferência MP: {response.status_code} - {response.text}"
-        )
+        raise RuntimeError(f"Erro ao criar assinatura MP: {response.status_code} - {response.text}")
 
     return cast(dict, response.json())
 
@@ -141,154 +175,184 @@ async def get_payment(payment_id: str) -> dict:
     return cast(dict, response.json())
 
 
-async def process_webhook(payload: dict, db) -> None:
+async def get_authorized_payment(authorized_payment_id: str) -> dict:
+    """Busca um pagamento autorizado (cobranca recorrente da assinatura)."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            f"{MERCADOPAGO_BASE_URL}/authorized_payments/{authorized_payment_id}",
+            headers=_get_headers(),
+        )
+
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Erro ao buscar pagamento autorizado: {response.status_code} - {response.text}"
+        )
+
+    return cast(dict, response.json())
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    """Converte as datas ISO do Mercado Pago em ``datetime`` com timezone."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+async def _find_subscription(
+    db, preapproval_id: str | None, external_reference: str | None = None
+) -> Subscription | None:
+    """Localiza a assinatura pelo id da preapproval ou pelo usuario."""
+    if preapproval_id:
+        result = await db.execute(
+            select(Subscription).where(Subscription.mercadopago_subscription_id == preapproval_id)
+        )
+        subscription = result.scalar_one_or_none()
+        if subscription is not None:
+            return cast(Subscription | None, subscription)
+
+    if external_reference:
+        try:
+            user_id = UUID(str(external_reference))
+        except ValueError:
+            return None
+        result = await db.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user_id)
+            .order_by(Subscription.created_at.desc())
+        )
+        subscription = result.scalars().first()
+        if subscription is not None and preapproval_id:
+            subscription.mercadopago_subscription_id = preapproval_id
+        return cast(Subscription | None, subscription)
+
+    return None
+
+
+async def process_webhook(payload: dict, db, data_id: str | None = None) -> None:
     """
     Processa webhook do Mercado Pago.
-    Tipos de evento:
-    - subscription_preapproval_payment_created: pagamento de assinatura criado
-    - subscription_preapproval_payment_rejected: pagamento rejeitado
-    - subscription_preapproval_cancelled: assinatura cancelada
-    - subscription_authorized_payment_rejected: pagamento autorizado rejeitado
-    - chargeback: chargeback
-    """
-    from sqlalchemy import select
 
-    event_type = payload.get("type")
-    data = payload.get("data", {})
-    resource_id = data.get("id")
+    Os eventos reais de assinatura enviados pelo Mercado Pago sao:
+    - ``subscription_preapproval``: criacao/atualizacao da assinatura;
+    - ``subscription_authorized_payment``: cobranca recorrente aprovada ou
+      rejeitada.
+    """
+    event_type = payload.get("type") or payload.get("topic")
+    data = payload.get("data") or {}
+    resource_id = data.get("id") or payload.get("id") or data_id
 
     if not resource_id:
+        logger.warning("Webhook do Mercado Pago sem id de recurso: %s", payload)
         return
 
-    # Idempotência: verifica se já processou este evento
-    existing = await db.execute(
-        select(Payment).where(Payment.mercadopago_payment_id == str(resource_id))
-    )
-    if existing.scalar_one_or_none():
-        return  # Já processado
+    resource_id = str(resource_id)
 
-    if event_type == "subscription_preapproval_payment_created":
-        await _handle_payment_approved(resource_id, db)
-    elif event_type == "subscription_preapproval_cancelled":
-        await _handle_subscription_cancelled(resource_id, db)
-    elif event_type in [
-        "subscription_preapproval_payment_rejected",
-        "subscription_authorized_payment_rejected",
-    ]:
-        await _handle_payment_rejected(resource_id, db)
-    elif event_type == "chargeback":
-        await _handle_chargeback(resource_id, db)
+    if event_type in ("subscription_preapproval", "preapproval"):
+        await _handle_preapproval(resource_id, db)
+    elif event_type in ("subscription_authorized_payment", "authorized_payment"):
+        await _handle_authorized_payment(resource_id, db)
+    else:
+        logger.info("Webhook do Mercado Pago ignorado: %s", event_type)
 
 
-async def _handle_payment_approved(payment_id: str, db) -> None:
-    """Processa pagamento aprovado - ativa/renova assinatura."""
-    payment_data = await get_payment(payment_id)
-    external_ref = payment_data.get("external_reference")
-    preapproval_id = payment_data.get("preapproval_id")
+async def _handle_preapproval(preapproval_id: str, db) -> None:
+    """Sincroniza status e periodo da assinatura com a preapproval."""
+    data = await get_preapproval(preapproval_id)
+    subscription = await _find_subscription(db, preapproval_id, data.get("external_reference"))
 
-    if not external_ref:
+    if subscription is None:
+        logger.warning("Preapproval %s sem assinatura correspondente", preapproval_id)
         return
 
-    # Busca subscription pelo preapproval_id
-    sub_result = await db.execute(
-        select(Subscription).where(Subscription.mercadopago_subscription_id == preapproval_id)
-    )
-    subscription = sub_result.scalar_one_or_none()
+    subscription.mercadopago_subscription_id = preapproval_id
+    preapproval_status = data.get("status")
 
-    if not subscription:
-        return
-
-    # Atualiza subscription
-    subscription.status = "active"
-    subscription.current_period_start = datetime.now(UTC)
-    # next_period_end vem do Mercado Pago
-    next_period = payment_data.get("date_of_expiration")
-    if next_period:
-        subscription.current_period_end = datetime.fromisoformat(next_period.replace("Z", "+00:00"))
-
-    # Registra payment
-    payment = Payment(
-        user_id=subscription.user_id,
-        subscription_id=subscription.id,
-        plan_id=subscription.plan_id,
-        mercadopago_payment_id=payment_id,
-        amount_cents=int(float(payment_data.get("transaction_amount", 0)) * 100),
-        currency=payment_data.get("currency_id", "BRL"),
-        status="approved",
-        payment_method=payment_data.get("payment_method_id"),
-        paid_at=datetime.now(UTC),
-        metadata=payment_data,
-    )
-    db.add(payment)
-
-
-async def _handle_subscription_cancelled(preapproval_id: str, db) -> None:
-    """Processa cancelamento de assinatura."""
-    sub_result = await db.execute(
-        select(Subscription).where(Subscription.mercadopago_subscription_id == preapproval_id)
-    )
-    subscription = sub_result.scalar_one_or_none()
-
-    if subscription:
+    if preapproval_status in _ACTIVE_PREAPPROVAL_STATUSES:
+        subscription.status = "active"
+        subscription.auto_renew = True
+        subscription.cancelled_at = None
+        subscription.cancel_at_period_end = False
+    elif preapproval_status == "pending":
+        # Nao rebaixa quem ja tem acesso (trial ou assinatura ativa).
+        if subscription.status not in ("active", "trial"):
+            subscription.status = "pending"
+    elif preapproval_status == "paused":
+        subscription.status = "past_due"
+    elif preapproval_status == "cancelled":
         subscription.status = "cancelled"
         subscription.cancelled_at = datetime.now(UTC)
         subscription.auto_renew = False
 
+    start = _parse_datetime(data.get("date_created"))
+    end = _parse_datetime(data.get("next_payment_date"))
+    if start is not None:
+        subscription.current_period_start = start
+    if end is not None:
+        subscription.current_period_end = end
 
-async def _handle_payment_rejected(payment_id: str, db) -> None:
-    """Processa pagamento rejeitado - marca subscription como past_due."""
-    payment_data = await get_payment(payment_id)
-    preapproval_id = payment_data.get("preapproval_id")
 
-    sub_result = await db.execute(
-        select(Subscription).where(Subscription.mercadopago_subscription_id == preapproval_id)
-    )
-    subscription = sub_result.scalar_one_or_none()
+async def _handle_authorized_payment(authorized_payment_id: str, db) -> None:
+    """Registra a cobranca recorrente e atualiza o acesso do assinante."""
+    data = await get_authorized_payment(authorized_payment_id)
+    preapproval_id = data.get("preapproval_id")
+    subscription = await _find_subscription(db, preapproval_id, data.get("external_reference"))
 
-    if subscription:
-        subscription.status = "past_due"
-
-    # Registra payment rejeitado
-    if subscription:
-        payment = Payment(
-            user_id=subscription.user_id,
-            subscription_id=subscription.id,
-            plan_id=subscription.plan_id,
-            mercadopago_payment_id=payment_id,
-            amount_cents=int(float(payment_data.get("transaction_amount", 0)) * 100),
-            currency=payment_data.get("currency_id", "BRL"),
-            status="rejected",
-            payment_method=payment_data.get("payment_method_id"),
-            metadata=payment_data,
+    if subscription is None:
+        logger.warning(
+            "Pagamento autorizado %s sem assinatura correspondente", authorized_payment_id
         )
-        db.add(payment)
+        return
 
+    payment_info = data.get("payment") or {}
+    mp_payment_id = str(payment_info.get("id") or authorized_payment_id)
+    payment_status = data.get("status")
 
-async def _handle_chargeback(payment_id: str, db) -> None:
-    """Processa chargeback - cancela assinatura e marca payment."""
-    payment_data = await get_payment(payment_id)
-    preapproval_id = payment_data.get("preapproval_id")
-
-    sub_result = await db.execute(
-        select(Subscription).where(Subscription.mercadopago_subscription_id == preapproval_id)
+    # Idempotencia: o Mercado Pago reenvia o mesmo evento se nao receber 200.
+    existing = await db.execute(
+        select(Payment).where(Payment.mercadopago_payment_id == mp_payment_id)
     )
-    subscription = sub_result.scalar_one_or_none()
+    if existing.scalar_one_or_none() is not None:
+        return
 
-    if subscription:
+    approved = payment_status in ("processed", "approved")
+    if approved:
+        status_label = "approved"
+    elif payment_status == "refunded":
+        status_label = "refunded"
+    else:
+        status_label = "rejected"
+
+    amount = data.get("transaction_amount")
+    if amount is None:
+        amount = payment_info.get("transaction_amount") or 0
+
+    payment = Payment(
+        user_id=subscription.user_id,
+        subscription_id=subscription.id,
+        plan_id=subscription.plan_id,
+        mercadopago_payment_id=mp_payment_id,
+        amount_cents=int(round(float(amount) * 100)),
+        currency=data.get("currency_id", "BRL"),
+        status=status_label,
+        payment_method=payment_info.get("payment_method_id"),
+        paid_at=datetime.now(UTC) if approved else None,
+        metadata=data,
+    )
+    db.add(payment)
+
+    if approved:
+        subscription.status = "active"
+        subscription.auto_renew = True
+        subscription.current_period_start = datetime.now(UTC)
+        end = _parse_datetime(data.get("next_payment_date"))
+        if end is not None:
+            subscription.current_period_end = end
+    elif status_label == "refunded":
         subscription.status = "cancelled"
         subscription.cancelled_at = datetime.now(UTC)
-
-    if subscription:
-        payment = Payment(
-            user_id=subscription.user_id,
-            subscription_id=subscription.id,
-            plan_id=subscription.plan_id,
-            mercadopago_payment_id=payment_id,
-            amount_cents=int(float(payment_data.get("transaction_amount", 0)) * 100),
-            currency=payment_data.get("currency_id", "BRL"),
-            status="refunded",
-            payment_method=payment_data.get("payment_method_id"),
-            paid_at=datetime.now(UTC),
-            metadata=payment_data,
-        )
-        db.add(payment)
+        subscription.auto_renew = False
+    else:
+        subscription.status = "past_due"

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Pagamento — EFTV</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #071426;
+      --card: #0d1f36;
+      --text: #eef3f9;
+      --muted: #9fb0c6;
+      --brand: #e50914;
+      --ok: #22c55e;
+      --warn: #eab308;
+      --fail: #f97316;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(900px 500px at 50% -10%, #12305a 0%, transparent 60%),
+        var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      width: 100%;
+      max-width: 460px;
+      padding: 36px 28px;
+      border: 1px solid #1d3654;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #10243d, var(--card));
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+      text-align: center;
+    }
+    .brand {
+      font-weight: 800;
+      font-size: 1.5rem;
+      letter-spacing: .04em;
+      margin-bottom: 22px;
+    }
+    .brand span { color: var(--brand); }
+    h1 { font-size: 1.35rem; margin: 0 0 10px; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    .icon {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 18px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .icon.ok { background: var(--ok); }
+    .icon.warn { background: var(--warn); color: #1f2937; }
+    .icon.fail { background: var(--fail); }
+    .button {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 12px 22px;
+      border-radius: 10px;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .button:hover { filter: brightness(1.08); }
+    .muted-link {
+      display: block;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand">EF<span>TV</span></div>
+
+    <section id="success" hidden>
+      <div class="icon ok" aria-hidden="true">✓</div>
+      <h1>Pagamento aprovado</h1>
+      <p>Sua assinatura <strong>Mensal</strong> está ativa.</p>
+      <p>Volte ao aplicativo EFTV e entre com sua conta para assistir.</p>
+      <a class="button" href="https://github.com/EvertonFagundes/eftv/releases/latest">Abrir o app</a>
+    </section>
+
+    <section id="pending" hidden>
+      <div class="icon warn" aria-hidden="true">…</div>
+      <h1>Pagamento em análise</h1>
+      <p>O Mercado Pago ainda está confirmando o pagamento.</p>
+      <p>Assim que for aprovado, o acesso é liberado automaticamente. Você pode fechar esta página.</p>
+      <a class="button" href="https://github.com/EvertonFagundes/eftv/releases/latest">Abrir o app</a>
+    </section>
+
+    <section id="failure" hidden>
+      <div class="icon fail" aria-hidden="true">!</div>
+      <h1>Não foi possível concluir</h1>
+      <p>O pagamento foi recusado ou cancelado.</p>
+      <p>Seu período grátis continua valendo até o fim. Para tentar de novo, abra o aplicativo e vá em <strong>Assinatura</strong>.</p>
+      <a class="button" href="https://github.com/EvertonFagundes/eftv/releases/latest">Voltar ao app</a>
+    </section>
+
+    <section id="return" hidden>
+      <div class="icon warn" aria-hidden="true">…</div>
+      <h1>Pagamento enviado</h1>
+      <p>O Mercado Pago está confirmando o pagamento.</p>
+      <p>Assim que for aprovado, o acesso é liberado automaticamente. Você já pode voltar ao aplicativo.</p>
+      <a class="button" href="https://github.com/EvertonFagundes/eftv/releases/latest">Voltar ao app</a>
+    </section>
+
+    <a class="muted-link" href="./">Ir para o site</a>
+  </main>
+
+  <script>
+    (function () {
+      var status = new URLSearchParams(window.location.search).get("status");
+      var sections = {
+        success: document.getElementById("success"),
+        pending: document.getElementById("pending"),
+        failure: document.getElementById("failure"),
+        return: document.getElementById("return")
+      };
+      // O /preapproval devolve para a mesma back_url, sem status na URL.
+      var target = sections[status] || sections.return;
+      target.hidden = false;
+    })();
+  </script>
+</body>
+</html>

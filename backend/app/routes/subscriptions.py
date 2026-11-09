@@ -12,7 +12,11 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.payment import CheckoutRequest, CheckoutResponse, SubscriptionResponse
 from app.security.dependencies import get_current_user
-from app.services.mercadopago import create_checkout_preference, process_webhook
+from app.services.mercadopago import (
+    create_checkout_preference,
+    process_webhook,
+    validate_webhook_signature,
+)
 
 router = APIRouter(prefix="/subscriptions", tags=["Assinaturas"])
 
@@ -146,16 +150,25 @@ async def mercadopago_webhook(
 ):
     """
     Webhook do Mercado Pago para eventos de assinatura/pagamento.
-    Processa: pagamentos aprovados, cancelamentos, chargebacks, etc.
+    Processa: assinatura autorizada/cancelada e cobranças recorrentes.
     """
     payload = await request.json()
 
-    # Valida assinatura do webhook (TODO: implementar validação HMAC)
-    # if not validate_webhook_signature(request.headers, payload):
-    #     raise HTTPException(status_code=400, detail="Assinatura inválida")
+    # O id do recurso pode vir na query (?data.id=...) ou no corpo.
+    data_id = request.query_params.get("data.id") or request.query_params.get("id")
+    if not data_id:
+        data = payload.get("data") or {}
+        data_id = data.get("id") or payload.get("id")
+    data_id = str(data_id) if data_id else None
 
-    # Processa webhook assincronamente (background task)
-    await process_webhook(payload, db)
+    # Valida o HMAC do header x-signature (quando o segredo esta configurado).
+    if not validate_webhook_signature(request.headers, data_id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Assinatura do webhook inválida",
+        )
+
+    await process_webhook(payload, db, data_id=data_id)
 
     return {"status": "ok"}
 
