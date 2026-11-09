@@ -259,6 +259,7 @@ async def test_checkout_creates_pending_preapproval_with_static_back_url(monkeyp
     monkeypatch.setattr(mercadopago.httpx, "AsyncClient", FakeClient)
     monkeypatch.setattr(settings, "MERCADOPAGO_ACCESS_TOKEN", "token")
     monkeypatch.setattr(settings, "FRONTEND_URL", "https://site.eftv.test")
+    monkeypatch.setattr(settings, "API_BASE_URL", "https://api.eftv.test")
 
     user = SimpleNamespace(id=uuid4())
     plan = SimpleNamespace(name="Mensal", price_cents=1990, currency="BRL")
@@ -274,6 +275,10 @@ async def test_checkout_creates_pending_preapproval_with_static_back_url(monkeyp
     assert payload["payer_email"] == "cliente@example.com"
     assert payload["status"] == "pending"
     assert payload["back_url"] == "https://site.eftv.test/checkout.html"
+    assert (
+        payload["notification_url"]
+        == "https://api.eftv.test/subscriptions/webhook/mercadopago?source_news=webhooks"
+    )
     assert payload["auto_recurring"] == {
         "frequency": 1,
         "frequency_type": "months",
@@ -282,5 +287,4 @@ async def test_checkout_creates_pending_preapproval_with_static_back_url(monkeyp
     }
     # Campos do Checkout Pro nao existem no /preapproval.
     assert "back_urls" not in payload
-    assert "notification_url" not in payload
     assert "payer" not in payload

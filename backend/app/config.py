@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"  # development, staging, production
+    # URL publica da API. O webhook de Assinaturas e configurado no proprio
+    # payload da preapproval (o painel nao oferece a secao Webhooks).
+    API_BASE_URL: str = "https://eftv.onrender.com"
 
     # Server
     HOST: str = "0.0.0.0"

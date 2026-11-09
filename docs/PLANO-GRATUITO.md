@@ -434,21 +434,23 @@ status `trial`). Depois dele, o job `check_expired_subscriptions` roda a cada
   planos. O cliente paga no checkout hospedado (`init_point`).
 - O retorno vai para `checkout.html` na raiz do GitHub Pages. O
   `/preapproval` so aceita uma `back_url`, sem status na URL.
-- O webhook e configurado no painel da aplicacao no Mercado Pago apontando
-  para `POST /subscriptions/webhook/mercadopago`; nao vai no payload.
+- No produto **Assinaturas** o painel nao oferece a secao Webhooks. A URL de
+  notificacao vai no proprio payload da `preapproval`:
+  `{API_BASE_URL}/subscriptions/webhook/mercadopago?source_news=webhooks`.
 - O webhook valida o header `x-signature` (HMAC-SHA256 com
-  `MERCADOPAGO_WEBHOOK_SECRET`) e trata os eventos reais
-  `subscription_preapproval` e `subscription_authorized_payment`.
-- Sem `MERCADOPAGO_WEBHOOK_SECRET` a validacao e ignorada; em producao o
-  segredo deve estar configurado no Render e no painel do Mercado Pago.
+  `MERCADOPAGO_WEBHOOK_SECRET`) quando a chave secreta estiver disponivel e
+  trata os eventos reais `subscription_preapproval` e
+  `subscription_authorized_payment`.
+- Sem `MERCADOPAGO_WEBHOOK_SECRET` a validacao HMAC e ignorada, mas o handler
+  sempre busca o recurso na API do Mercado Pago antes de liberar o acesso.
 
 ## 11. Pendencias
 
 - Criar o monitor no cron-job.org: `GET /health` a cada 5 min com alerta.
-- Mercado Pago: obter o access token de teste, criar o plano `preapproval`
-  (R$ 19,90/mes) e guardar `mercadopago_plan_id`; configurar
-  `MERCADOPAGO_ACCESS_TOKEN` e `MERCADOPAGO_WEBHOOK_SECRET` no Render e
-  validar o webhook no sandbox.
+- Mercado Pago: obter o access token de teste, criar um usuario de teste
+  comprador e validar o webhook no sandbox; configurar
+  `MERCADOPAGO_ACCESS_TOKEN` no Render (e `MERCADOPAGO_WEBHOOK_SECRET` se o
+  painel fornecer a chave secreta).
 - Remover o IPv6 temporario das *Authorized IPs* do Brevo.
 - Provedor confirmou que libera mais conexoes simultaneas que o painel indica;
   o limite de 1 nao e bloqueio (informado em 08/11/2026).

@@ -121,6 +121,13 @@ async def create_checkout_preference(
             "currency_id": plan.currency or "BRL",
         },
         "back_url": back_url,
+        # Em Assinaturas o painel nao oferece a secao Webhooks: a notificacao
+        # e registrada na criacao da assinatura. source_news=webhooks evita
+        # que o Mercado Pago use o formato IPN antigo.
+        "notification_url": (
+            f"{settings.API_BASE_URL.rstrip('/')}"
+            "/subscriptions/webhook/mercadopago?source_news=webhooks"
+        ),
         # Sem cartao tokenizado no app: o cliente escolhe o meio de pagamento
         # no checkout do Mercado Pago. O acesso so e liberado pelo webhook.
         "status": "pending",
