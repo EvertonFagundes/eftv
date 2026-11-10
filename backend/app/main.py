@@ -82,7 +82,17 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Health check
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "version": settings.APP_VERSION}
+    # Diagnostico seguro: nada de segredo, so a configuracao que afeta o
+    # checkout (a back_url precisa ser HTTPS e valida).
+    return {
+        "status": "ok",
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+        "frontend_url": settings.FRONTEND_URL,
+        "checkout_back_url": f"{settings.FRONTEND_URL.rstrip('/')}/checkout.html",
+        "api_base_url": settings.API_BASE_URL,
+        "mercadopago_configured": bool(settings.MERCADOPAGO_ACCESS_TOKEN),
+    }
 
 
 # API Routes
