@@ -141,6 +141,11 @@ async def create_checkout_preference(
         )
 
     if response.status_code >= 400:
+        logger.error(
+            "Mercado Pago recusou a preapproval: %s - %s",
+            response.status_code,
+            response.text,
+        )
         raise RuntimeError(f"Erro ao criar assinatura MP: {response.status_code} - {response.text}")
 
     return cast(dict, response.json())
