@@ -1,4 +1,4 @@
-# Dados locais: contÃªm URLs, usuÃ¡rios, senhas e tokens das playlists.
+# Dados locais: contêm URLs, usuários, senhas e tokens das playlists.
 data/*.json
 !data/.gitkeep
 
@@ -16,7 +16,7 @@ venv/
 coverage.xml
 htmlcov/
 
-# Logs e arquivos temporÃ¡rios
+# Logs e arquivos temporários
 *.log
 *.tmp
 .DS_Store
@@ -25,3 +25,7 @@ htmlcov/
 # Frontend (Node)
 frontend/node_modules/
 frontend/dist/
+
+# Banco de dados local
+backend/eftv.db
+backend/entrypoint.sh.txt
