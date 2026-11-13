@@ -94,6 +94,8 @@
     <string name="device_blocked_title">Assinatura em uso</string>
     <string name="device_blocked_default">Esta assinatura já está vinculada ao limite de aparelhos. Desvincule um aparelho para continuar.</string>
     <string name="device_blocked_hint">Desvincule um aparelho para liberar o acesso.</string>
+    <string name="device_revoke_all">Liberar aparelhos</string>
+    <string name="device_revoke_all_done">Aparelhos liberados. Entrando de novo...</string>
     <string name="close">Fechar</string>
 
     <string name="server_channel_name">Servidor local</string>

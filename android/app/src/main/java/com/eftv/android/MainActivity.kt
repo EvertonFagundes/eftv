@@ -982,9 +982,43 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.device_blocked_title)
             .setMessage(detail)
             .setPositiveButton(R.string.retry) { _, _ -> recreate() }
+            .setNeutralButton(R.string.device_revoke_all) { _, _ -> revokeAllDevicesAndRetry() }
             .setNegativeButton(R.string.logout) { _, _ -> logout() }
             .setCancelable(false)
             .show()
+    }
+
+    /**
+     * Libera as vagas de aparelho da conta e tenta entrar de novo.
+     *
+     * Quem trocou de celular ou reinstalou o app fica com o aparelho antigo
+     * vinculado e ve "Assinatura em uso". Assim o proprio usuario resolve,
+     * sem depender de suporte.
+     */
+    private fun revokeAllDevicesAndRetry() {
+        val token = session.accessToken()
+        if (token.isNullOrBlank()) {
+            goToLogin()
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) { api.revokeAllDevices(token) }
+                Toast.makeText(
+                    this@MainActivity,
+                    R.string.device_revoke_all_done,
+                    Toast.LENGTH_LONG,
+                ).show()
+                recreate()
+            } catch (e: Exception) {
+                Timber.w(e, "Falha ao liberar aparelhos")
+                Toast.makeText(
+                    this@MainActivity,
+                    e.message ?: getString(R.string.device_load_error),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
     }
 
     private fun showDeviceDialog() {

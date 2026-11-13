@@ -166,6 +166,12 @@ class EftvApi(
         return json.optString("message", "")
     }
 
+    /** Libera todos os aparelhos da conta (util apos trocar/reinstalar o app). */
+    suspend fun revokeAllDevices(accessToken: String): String {
+        val json = request("POST", "/player/device/revoke-all", accessToken = accessToken)
+        return json.optString("message", "")
+    }
+
     private fun tokenPair(json: JSONObject) = TokenPair(
         accessToken = json.getString("access_token"),
         refreshToken = json.optString("refresh_token", ""),

@@ -14,6 +14,7 @@ from app.services.devices import (
     active_devices,
     bind_device,
     device_limit,
+    revoke_all_devices,
     revoke_device,
 )
 
@@ -155,3 +156,20 @@ async def revoke_current_device(
             detail="Este aparelho nao esta vinculado a assinatura",
         )
     return MessageResponse(message="Aparelho desvinculado com sucesso")
+
+
+@router.post("/device/revoke-all", response_model=MessageResponse)
+async def revoke_all_my_devices(
+    subscription: Subscription = Depends(get_current_active_subscription),
+    db: AsyncSession = Depends(get_db),
+):
+    """Desvincula todos os aparelhos da assinatura do proprio usuario.
+
+    Serve para quem trocou/reinstalou o aparelho e ficou sem vaga: o app
+    mostra "Assinatura em uso" e o usuario mesmo libera os aparelhos antigos,
+    sem precisar de suporte.
+    """
+    removed = await revoke_all_devices(db, [subscription.id])
+    return MessageResponse(
+        message=f"{removed} aparelho(s) desvinculado(s). O proximo acesso vincula este."
+    )
