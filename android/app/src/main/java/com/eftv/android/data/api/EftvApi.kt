@@ -94,6 +94,23 @@ class EftvApi(
         return json.optString("message", "")
     }
 
+    /** Pede o codigo de recuperacao de senha enviado por email. */
+    suspend fun forgotPassword(email: String): String {
+        val body = JSONObject().put("email", email.trim())
+        val json = request("POST", "/auth/forgot-password", body = body)
+        return json.optString("message", "")
+    }
+
+    /** Troca a senha usando o codigo recebido por email. */
+    suspend fun resetPassword(email: String, code: String, newPassword: String): String {
+        val body = JSONObject()
+            .put("email", email.trim())
+            .put("code", code.trim())
+            .put("new_password", newPassword)
+        val json = request("POST", "/auth/reset-password", body = body)
+        return json.optString("message", "")
+    }
+
     suspend fun me(accessToken: String): Profile {
         val json = request("GET", "/auth/me", accessToken = accessToken)
         return Profile(

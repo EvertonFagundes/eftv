@@ -149,4 +149,18 @@
     <string name="series_season_specials">Especiais</string>
     <string name="series_episode_label">Episódio %d</string>
     <string name="series_empty">Nenhum episódio encontrado.</string>
+    <string name="forgot_password_title">Recuperar senha</string>
+    <string name="forgot_password_intro">Enviaremos um código de 6 dígitos para o e-mail da sua conta. Use o código para criar uma nova senha.</string>
+    <string name="forgot_password_email_hint">E-mail da conta</string>
+    <string name="forgot_password_send_code">Enviar código</string>
+    <string name="forgot_password_sending">Enviando...</string>
+    <string name="forgot_password_code_hint">Código recebido por e-mail</string>
+    <string name="forgot_password_new_hint">Nova senha</string>
+    <string name="forgot_password_confirm">Redefinir senha</string>
+    <string name="forgot_password_cancel">Cancelar</string>
+    <string name="forgot_password_code_sent">Se este e-mail estiver cadastrado, enviamos um código. Confira a caixa de entrada e o spam.</string>
+    <string name="forgot_password_fill_fields">Informe o e-mail, o código e a nova senha.</string>
+    <string name="forgot_password_short">A nova senha precisa ter pelo menos 8 caracteres.</string>
+    <string name="forgot_password_success">Senha alterada. Entre com a nova senha.</string>
+    <string name="forgot_password_network">Não foi possível agora. Tente novamente.</string>
 </resources>

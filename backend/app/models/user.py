@@ -41,6 +41,13 @@ class User(Base):
     email_verification_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Codigo de recuperacao de senha (enviado por email)
+    password_reset_token: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    password_reset_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
@@ -84,3 +91,20 @@ class User(Base):
         if not hmac.compare_digest(self.email_verification_token, token):
             return False
         return datetime.now(UTC) < self.email_verification_expires_at
+
+    def generate_password_reset_code(self) -> str:
+        """Gera um codigo numerico de 6 digitos valido por 30 minutos."""
+
+        code = f"{secrets.randbelow(900000) + 100000}"
+        self.password_reset_token = code
+        self.password_reset_expires_at = datetime.now(UTC) + timedelta(minutes=30)
+        return code
+
+    def is_password_reset_code_valid(self, code: str) -> bool:
+        """Verifica se o codigo de recuperacao corresponde e nao expirou."""
+
+        if not self.password_reset_token or not self.password_reset_expires_at:
+            return False
+        if not hmac.compare_digest(self.password_reset_token, code.strip()):
+            return False
+        return datetime.now(UTC) < self.password_reset_expires_at

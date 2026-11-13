@@ -115,6 +115,25 @@ async def init_db() -> None:
             )
         )
         if exists.first() is not None:
+            # Rollout da recuperacao de senha: sempre garante as colunas.
+            await conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "password_reset_token VARCHAR(255)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "password_reset_expires_at TIMESTAMPTZ"
+                )
+            )
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_users_password_reset_token "
+                    "ON users (password_reset_token)"
+                )
+            )
             return
 
         # Rollout do recurso de verificacao de email: cria as colunas e marca

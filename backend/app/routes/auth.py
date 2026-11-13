@@ -13,9 +13,11 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.auth import (
     EmailVerificationResponse,
+    ForgotPasswordRequest,
     MessageResponse,
     RefreshTokenRequest,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     Token,
     UserLogin,
     UserRegister,
@@ -235,6 +237,65 @@ async def resend_verification(
     return MessageResponse(
         message="Se o email estiver cadastrado e nao verificado, um novo link sera enviado."
     )
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Envia um codigo de recuperacao de senha para o email informado.
+
+    Responde sempre com a mesma mensagem para nao revelar quais emails
+    estao cadastrados.
+    """
+    await rate_limit_dependency(request)
+
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+
+    if user is not None:
+        code = user.generate_password_reset_code()
+        await db.commit()
+        # Nao bloqueia a resposta se o provedor de email falhar.
+        with contextlib.suppress(Exception):
+            await email_service.send_password_reset_email(
+                to_email=user.email,
+                code=code,
+                full_name=user.full_name,
+            )
+
+    return MessageResponse(
+        message="Se este email estiver cadastrado, enviaremos um codigo de recuperacao."
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    data: ResetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Troca a senha usando o codigo recebido por email."""
+    await rate_limit_dependency(request)
+
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+
+    if user is None or not user.is_password_reset_code_valid(data.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Codigo invalido ou expirado. Pedir um novo codigo.",
+        )
+
+    user.password_hash = hash_password(data.new_password)
+    user.password_reset_token = None
+    user.password_reset_expires_at = None
+    user.is_active = True
+    await db.commit()
+
+    return MessageResponse(message="Senha alterada com sucesso. Entre com a nova senha.")
 
 
 @router.post("/login", response_model=Token)

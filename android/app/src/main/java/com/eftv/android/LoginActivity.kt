@@ -5,11 +5,15 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.eftv.android.data.SessionStore
 import com.eftv.android.data.api.EftvApi
 import com.eftv.android.databinding.ActivityLoginBinding
+import com.eftv.android.databinding.DialogPasswordResetBinding
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -63,6 +67,7 @@ class LoginActivity : AppCompatActivity() {
 
         binding.loginButton.setOnClickListener { signInOrRegister() }
         binding.registerButton.setOnClickListener { toggleRegisterMode() }
+        binding.forgotPassword.setOnClickListener { showForgotPasswordDialog() }
         binding.passwordInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 signInOrRegister()
@@ -94,12 +99,129 @@ class LoginActivity : AppCompatActivity() {
             binding.loginButton.text = getString(R.string.register_create_account)
             binding.fullNameLayout.visibility = View.VISIBLE
             binding.passwordInput.imeOptions = EditorInfo.IME_ACTION_NEXT
+            binding.forgotPassword.visibility = View.GONE
         } else {
             binding.registerButton.text = getString(R.string.register_create_account)
             binding.loginButton.text = getString(R.string.login_enter)
             binding.fullNameLayout.visibility = View.GONE
             binding.passwordInput.imeOptions = EditorInfo.IME_ACTION_DONE
+            binding.forgotPassword.visibility = View.VISIBLE
         }
+    }
+
+    /**
+     * Recuperacao de senha: envia um codigo de 6 digitos para o email da
+     * conta e permite cadastrar uma nova senha. Funciona para qualquer
+     * usuario do app, sem depender de suporte manual.
+     */
+    private fun showForgotPasswordDialog() {
+        val dialogBinding = DialogPasswordResetBinding.inflate(layoutInflater)
+        dialogBinding.resetEmailInput.setText(binding.emailInput.text?.toString().orEmpty().trim())
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.forgot_password_title)
+            .setView(dialogBinding.root)
+            .setPositiveButton(R.string.forgot_password_confirm, null)
+            .setNegativeButton(R.string.forgot_password_cancel, null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                submitPasswordReset(dialogBinding, dialog)
+            }
+        }
+
+        dialogBinding.resetSendCodeButton.setOnClickListener { button ->
+            val email = dialogBinding.resetEmailInput.text?.toString().orEmpty().trim()
+            if (email.isBlank()) {
+                setResetStatus(dialogBinding, getString(R.string.login_fill_fields), isError = true)
+                return@setOnClickListener
+            }
+            button.isEnabled = false
+            setResetStatus(dialogBinding, getString(R.string.forgot_password_sending), isError = false)
+            lifecycleScope.launch {
+                try {
+                    api.forgotPassword(email)
+                    setResetStatus(
+                        dialogBinding,
+                        getString(R.string.forgot_password_code_sent),
+                        isError = false,
+                    )
+                } catch (e: Exception) {
+                    Timber.e(e, "Falha ao pedir codigo de recuperacao")
+                    setResetStatus(
+                        dialogBinding,
+                        getString(R.string.forgot_password_network),
+                        isError = true,
+                    )
+                } finally {
+                    button.isEnabled = true
+                }
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun submitPasswordReset(
+        dialogBinding: DialogPasswordResetBinding,
+        dialog: AlertDialog,
+    ) {
+        val email = dialogBinding.resetEmailInput.text?.toString().orEmpty().trim()
+        val code = dialogBinding.resetCodeInput.text?.toString().orEmpty().trim()
+        val newPassword = dialogBinding.resetPasswordInput.text?.toString().orEmpty()
+
+        if (email.isBlank() || code.isBlank() || newPassword.isBlank()) {
+            setResetStatus(dialogBinding, getString(R.string.forgot_password_fill_fields), isError = true)
+            return
+        }
+        if (newPassword.length < 8) {
+            setResetStatus(dialogBinding, getString(R.string.forgot_password_short), isError = true)
+            return
+        }
+
+        setResetStatus(dialogBinding, getString(R.string.forgot_password_sending), isError = false)
+        lifecycleScope.launch {
+            try {
+                api.resetPassword(email, code, newPassword)
+                dialog.dismiss()
+                binding.emailInput.setText(email)
+                binding.passwordInput.setText("")
+                Toast.makeText(
+                    this@LoginActivity,
+                    R.string.forgot_password_success,
+                    Toast.LENGTH_LONG,
+                ).show()
+            } catch (e: EftvApi.ApiException) {
+                setResetStatus(
+                    dialogBinding,
+                    e.detail.ifBlank { getString(R.string.forgot_password_network) },
+                    isError = true,
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Falha ao redefinir senha")
+                setResetStatus(
+                    dialogBinding,
+                    getString(R.string.forgot_password_network),
+                    isError = true,
+                )
+            }
+        }
+    }
+
+    private fun setResetStatus(
+        dialogBinding: DialogPasswordResetBinding,
+        message: String,
+        isError: Boolean,
+    ) {
+        dialogBinding.resetStatus.text = message
+        dialogBinding.resetStatus.setTextColor(
+            androidx.core.content.ContextCompat.getColor(
+                this,
+                if (isError) R.color.error else R.color.on_surface_variant,
+            )
+        )
+        dialogBinding.resetStatus.visibility = View.VISIBLE
     }
 
     private fun signInOrRegister() {

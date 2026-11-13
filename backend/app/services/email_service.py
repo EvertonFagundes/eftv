@@ -94,6 +94,30 @@ class EmailService:
 
         return await self._send(to_email, subject, text_body, html_body)
 
+    async def send_password_reset_email(
+        self,
+        to_email: str,
+        code: str,
+        full_name: str | None = None,
+    ) -> bool:
+        """Envia o codigo de recuperacao de senha (valido por 30 minutos)."""
+
+        subject = "Codigo para redefinir sua senha - EFTV"
+        text_body = (
+            f"Ola{', ' + full_name if full_name else ''}!\n"
+            f"Seu codigo para redefinir a senha do EFTV e: {code}\n"
+            "Ele expira em 30 minutos.\n"
+            "Se voce nao pediu para redefinir a senha, ignore este email."
+        )
+        html_body = (
+            f"<p>Ola{', ' + full_name if full_name else ''}!</p>"
+            "<p>Seu codigo para redefinir a senha do EFTV e:</p>"
+            f"<p style=\"font-size:28px;font-weight:bold;letter-spacing:6px\">{code}</p>"
+            "<p>Ele expira em 30 minutos.</p>"
+            "<p>Se voce nao pediu para redefinir a senha, ignore este email.</p>"
+        )
+        return await self._send(to_email, subject, text_body, html_body)
+
     async def send_welcome_email(
         self,
         to_email: str,
