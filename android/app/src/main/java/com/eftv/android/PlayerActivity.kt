@@ -27,6 +27,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.ChannelKind
+import com.eftv.android.data.LocalServer
+import com.eftv.android.data.AppScope
 import com.eftv.android.databinding.ActivityPlayerBinding
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.Dispatchers
@@ -335,9 +337,17 @@ class PlayerActivity : AppCompatActivity() {
         })
 
         binding.playerView.player = exoPlayer
+        // Em dados moveis a operadora pode nao resolver o DNS do provedor.
+        // O proxy do servidor embutido resolve via DNS over HTTPS e repassa o
+        // stream, entao o canal abre em qualquer rede. Vale para todos os
+        // aparelhos: o servidor sobe junto com o app.
+        val mediaUrl = LocalServer.playbackUrl(streamUrl)
+        if (mediaUrl != streamUrl) {
+            Timber.i("Reproduzindo via proxy local: %s", streamUrl)
+        }
         exoPlayer.setMediaItem(
             MediaItem.Builder()
-                .setUri(streamUrl)
+                .setUri(mediaUrl)
                 .setMediaMetadata(metadata)
                 .setLiveConfiguration(
                     MediaItem.LiveConfiguration.Builder()
@@ -396,18 +406,26 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    /** Salva de forma sincrona ao sair, antes de destruir o player. */
+    /**
+     * Salva o progresso de forma assincrona, em thread de fundo.
+     *
+     * Antes era gravado na thread principal: com o catalogo grande (centenas
+     * de MB) essa escrita travava a interface e o Android mostrava "app nao
+     * esta respondendo" quando o usuario fechava o filme.
+     */
     private fun saveCurrentProgress() {
         val current = player ?: return
         if (channelKind == ChannelKind.LIVE) return
         val duration = current.duration
         if (duration <= 0) return
-        runCatching {
-            catalog.saveProgress(
-                streamUrl,
-                current.currentPosition.coerceAtLeast(0),
-                duration,
-            )
+        val position = current.currentPosition.coerceAtLeast(0)
+        val url = streamUrl
+        // Escopo do aplicativo: a gravacao termina mesmo depois que a
+        // Activity e destruida.
+        AppScope.io.launch {
+            runCatching {
+                catalog.saveProgress(url, position, duration)
+            }
         }
     }
 

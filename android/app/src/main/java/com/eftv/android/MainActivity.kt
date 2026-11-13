@@ -108,6 +108,14 @@ class MainActivity : AppCompatActivity() {
         setupSearch()
         setupRefresh()
 
+        // O servidor embutido (proxy de streams com DNS over HTTPS) sobe junto
+        // com o app. Assim que ele responder, o player passa a abrir os canais
+        // pelo proxy — necessario em operadoras que bloqueiam o DNS do
+        // provedor nos dados moveis. Vale para todos os aparelhos.
+        lifecycleScope.launch {
+            LocalServer.waitUntilReady(timeoutMs = 30_000)
+        }
+
         startCatalog()
     }
 

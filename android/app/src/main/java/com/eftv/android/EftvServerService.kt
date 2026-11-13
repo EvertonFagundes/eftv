@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -22,6 +24,7 @@ import kotlin.concurrent.thread
 class EftvServerService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -29,6 +32,7 @@ class EftvServerService : Service() {
         super.onCreate()
         createChannel()
         acquireWakeLock()
+        startNetworkMonitoring()
         startInForeground("Iniciando servidor local...")
         thread(name = "eftv-server-boot", isDaemon = true) {
             try {
@@ -45,6 +49,7 @@ class EftvServerService : Service() {
                     )
                 Timber.i("Servidor EFTV: %s", result.toString())
                 val ok = result.callAttr("get", "ok").toBoolean()
+                if (ok) com.eftv.android.data.LocalServer.markReady()
                 val text = if (ok) {
                     getString(R.string.server_notification_text, PORT)
                 } else {
@@ -61,6 +66,7 @@ class EftvServerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
+        stopNetworkMonitoring()
         try {
             if (Python.isStarted()) {
                 Python.getInstance().getModule("eftv_runner").callAttr("stop_server")
@@ -70,6 +76,92 @@ class EftvServerService : Service() {
         }
         releaseWakeLock()
         super.onDestroy()
+    }
+
+    /**
+     * Fica de olho na rede do aparelho.
+     *
+     * Quando o usuario sai do Wi-Fi e entra nos dados moveis (ou o contrario),
+     * o socket do servidor Python pode ficar preso na interface antiga. Se o
+     * servidor parar de responder, reiniciamos para ele voltar a atender.
+     */
+    private fun startNetworkMonitoring() {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                super.onAvailable(network)
+                Timber.i("Rede disponivel: %s", network)
+                verificarServidorAposMudancaDeRede()
+            }
+
+            override fun onLost(network: Network) {
+                super.onLost(network)
+                Timber.i("Rede perdida: %s", network)
+            }
+        }
+        networkCallback = callback
+        cm.registerDefaultNetworkCallback(callback)
+    }
+
+    private fun stopNetworkMonitoring() {
+        val callback = networkCallback ?: return
+        networkCallback = null
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        runCatching { cm.unregisterNetworkCallback(callback) }
+    }
+
+    /** Espera a rede assentar e reinicia o servidor se ele nao responder. */
+    private fun verificarServidorAposMudancaDeRede() {
+        thread(name = "eftv-server-netcheck", isDaemon = true) {
+            // A rede costuma levar alguns segundos para ficar realmente valida.
+            repeat(6) {
+                Thread.sleep(2_000)
+                if (servidorRespondendo()) {
+                    Timber.i("Servidor EFTV respondeu apos mudanca de rede")
+                    return@thread
+                }
+                Timber.w("Servidor EFTV nao respondeu; reiniciando")
+                reiniciarServidor()
+                return@thread
+            }
+        }
+    }
+
+    private fun servidorRespondendo(): Boolean = try {
+        val conn = java.net.URL("http://127.0.0.1:$PORT/api/status")
+            .openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 3_000
+        conn.readTimeout = 5_000
+        conn.requestMethod = "GET"
+        val ok = conn.responseCode == 200
+        conn.disconnect()
+        ok
+    } catch (_: Exception) {
+        false
+    }
+
+    /** Derruba e sobe o servidor Python de novo. */
+    private fun reiniciarServidor() {
+        try {
+            if (Python.isStarted()) {
+                Python.getInstance().getModule("eftv_runner").callAttr("stop_server")
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Falha ao parar servidor para reinicio")
+        }
+        try {
+            val www = File(filesDir, "eftv-www")
+            val data = File(filesDir, "eftv-data").apply { mkdirs() }
+            val result = Python.getInstance()
+                .getModule("eftv_runner")
+                .callAttr("start_server", www.absolutePath, data.absolutePath, HOST, PORT)
+            Timber.i("Servidor EFTV reiniciado: %s", result.toString())
+            if (result.callAttr("get", "ok").toBoolean()) {
+                com.eftv.android.data.LocalServer.markReady()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Falha ao reiniciar servidor EFTV")
+        }
     }
 
     private fun acquireWakeLock() {

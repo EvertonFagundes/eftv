@@ -21,6 +21,31 @@ object LocalServer {
     const val PORT = 8124
     const val BASE_URL = "http://127.0.0.1:$PORT"
 
+    /** Fica true quando o servidor embutido respondeu ao menos uma vez. */
+    @Volatile
+    private var serverReady = false
+
+    fun markReady() {
+        serverReady = true
+    }
+
+    /**
+     * Devolve a URL que o player deve abrir.
+     *
+     * Em dados moveis varias operadoras nao resolvem (ou bloqueiam) o DNS dos
+     * provedores de IPTV. O proxy do servidor embutido resolve o nome via DNS
+     * over HTTPS e repassa o stream, entao o video continua funcionando.
+     * Se o servidor local ainda nao subiu, devolve a URL original.
+     */
+    fun playbackUrl(target: String): String {
+        val url = target.trim()
+        if (!serverReady) return url
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return url
+        if (url.startsWith(BASE_URL)) return url
+        val encoded = java.net.URLEncoder.encode(url, "UTF-8")
+        return "$BASE_URL/api/proxy?url=$encoded"
+    }
+
     /** Playlist M3U gerada pelo servidor, com os streams ja no proxy local. */
     fun playlistSource(): PlaylistSource = PlaylistSource(
         url = "$BASE_URL/api/playlist.m3u",
@@ -30,37 +55,53 @@ object LocalServer {
     )
 
     /** Espera o servidor embutido responder (ele sobe junto com o app). */
-    suspend fun waitUntilReady(timeoutMs: Long = 20_000): Boolean =
+    suspend fun waitUntilReady(timeoutMs: Long = 30_000): Boolean =
         withContext(Dispatchers.IO) {
             val deadline = System.currentTimeMillis() + timeoutMs
             while (System.currentTimeMillis() < deadline) {
-                if (isReady()) return@withContext true
-                delay(300)
+                if (isReadyWithRetry()) return@withContext true
+                delay(500)
             }
             false
         }
 
     fun isReady(): Boolean = try {
         val conn = URL("$BASE_URL/api/status").openConnection() as HttpURLConnection
-        conn.connectTimeout = 1_200
-        conn.readTimeout = 1_200
+        conn.connectTimeout = 3_000
+        conn.readTimeout = 5_000
         conn.requestMethod = "GET"
         val ok = conn.responseCode == 200
         conn.disconnect()
+        if (ok) serverReady = true
         ok
     } catch (_: Exception) {
         false
     }
 
+    /**
+     * Tenta varias vezes antes de desistir. Util quando o aparelho acaba de
+     * trocar de rede (Wi-Fi para dados moveis): o socket do servidor local
+     * pode demorar alguns segundos para voltar a responder.
+     */
+    suspend fun isReadyWithRetry(attempts: Int = 3, delayMs: Long = 700): Boolean =
+        withContext(Dispatchers.IO) {
+            for (i in 1..attempts) {
+                if (isReady()) return@withContext true
+                if (i < attempts) delay(delayMs)
+            }
+            false
+        }
+
     /** Quantidade de playlists salvas no servidor embutido. */
     suspend fun playlistCount(): Int = withContext(Dispatchers.IO) {
         try {
             val conn = URL("$BASE_URL/api/status").openConnection() as HttpURLConnection
-            conn.connectTimeout = 2_000
-            conn.readTimeout = 3_000
+            conn.connectTimeout = 5_000
+            conn.readTimeout = 8_000
             conn.requestMethod = "GET"
             try {
                 if (conn.responseCode != 200) return@withContext 0
+                serverReady = true
                 val text = conn.inputStream.bufferedReader().use { it.readText() }
                 JSONObject(text).optInt("playlists", 0)
             } finally {
