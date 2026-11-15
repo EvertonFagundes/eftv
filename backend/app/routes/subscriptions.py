@@ -1,4 +1,5 @@
 # routes/subscriptions.py - Rotas de assinaturas e webhooks
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -26,6 +27,8 @@ from app.services.mercadopago import (
 from app.services.plans import get_or_create_plan
 
 router = APIRouter(prefix="/subscriptions", tags=["Assinaturas"])
+
+logger = logging.getLogger(__name__)
 
 
 @router.get("", response_model=list[SubscriptionResponse])
@@ -199,15 +202,29 @@ async def create_checkout(
         )
 
     # Cria preferência no Mercado Pago
-    preference = await create_checkout_preference(
-        user=user,
-        plan=plan,
-        payer_email=data.payer_email or user.email,
-        payer_name=data.payer_name or user.full_name,
-        payer_phone=data.payer_phone or user.phone,
-        payer_cpf=data.payer_cpf,
-        back_urls=data.back_urls,
-    )
+    try:
+        preference = await create_checkout_preference(
+            user=user,
+            plan=plan,
+            payer_email=data.payer_email or user.email,
+            payer_name=data.payer_name or user.full_name,
+            payer_phone=data.payer_phone or user.phone,
+            payer_cpf=data.payer_cpf,
+            back_urls=data.back_urls,
+        )
+    except RuntimeError as exc:
+        # Antes o cliente via "erro interno" e o suporte nao sabia o motivo.
+        # A mensagem do Mercado Pago e de validacao, nao tem segredo, e evita
+        # ida e volta para descobrir o que recusou a assinatura.
+        logger.error("Mercado Pago recusou o checkout: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "checkout_failed",
+                "message": "Nao foi possivel iniciar o pagamento agora. "
+                f"Detalhe tecnico: {str(exc)[:280]}",
+            },
+        ) from exc
 
     # Reaproveita um checkout pendente em vez de acumular linhas.
     now = datetime.now(UTC)
