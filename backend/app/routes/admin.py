@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.category import Category
 from app.models.channel import Channel
@@ -316,3 +317,71 @@ async def make_user_owner(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno: {str(exc)}",
         ) from exc
+
+
+@router.post("/diagnostico/preapproval")
+async def diagnostico_preapproval(_: User = Depends(require_admin)):
+    """Diagnostico TEMPORARIO do preapproval do Mercado Pago.
+
+    Testa variantes do payload e devolve a resposta bruta de cada uma. Nada e
+    cobrado (a assinatura nasce pendente) e cada preapproval criada e
+    cancelada na sequencia. Remover depois de resolver o checkout.
+    """
+    import httpx
+
+    from app.services.mercadopago import (
+        MERCADOPAGO_BASE_URL,
+        _get_headers,
+        cancel_preapproval,
+    )
+
+    frontend = settings.FRONTEND_URL.rstrip("/")
+    auto_recurring = {
+        "frequency": 1,
+        "frequency_type": "months",
+        "transaction_amount": 19.9,
+        "currency_id": "BRL",
+    }
+    notification = (
+        f"{settings.API_BASE_URL.rstrip('/')}"
+        "/subscriptions/webhook/mercadopago?source_news=webhooks"
+    )
+    base = {
+        "reason": "EFTV - Mensal",
+        "external_reference": "diagnostico",
+        "auto_recurring": auto_recurring,
+        "back_url": f"{frontend}/checkout.html",
+    }
+    variants = {
+        "completo": {**base, "notification_url": notification, "status": "pending"},
+        "sem_status": {**base, "notification_url": notification},
+        "minimo": dict(base),
+        "com_payer": {**base, "payer_email": "evertonfagundes1510@gmail.com"},
+    }
+
+    results = []
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for name, payload in variants.items():
+            response = await client.post(
+                f"{MERCADOPAGO_BASE_URL}/preapproval",
+                json=payload,
+                headers=_get_headers(),
+            )
+            item = {
+                "variante": name,
+                "http": response.status_code,
+                "resposta": response.text[:400],
+            }
+            if response.status_code < 400:
+                data = response.json()
+                preapproval_id = data.get("id")
+                item["id"] = preapproval_id
+                if preapproval_id:
+                    try:
+                        await cancel_preapproval(preapproval_id)
+                        item["cancelado"] = True
+                    except Exception as exc:  # noqa: BLE001
+                        item["cancelado"] = False
+                        item["erro_cancelamento"] = str(exc)[:200]
+            results.append(item)
+    return {"results": results}
