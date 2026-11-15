@@ -16,6 +16,10 @@
         android:title="Abrir interface web"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_subscription"
+        android:title="@string/subscription_title"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_device"
         android:icon="@drawable/ic_devices"
         android:title="@string/device_title"

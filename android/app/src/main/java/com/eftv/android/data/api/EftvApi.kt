@@ -58,6 +58,31 @@ class EftvApi(
         val devices: List<DeviceBinding>,
     )
 
+    /** Resumo da assinatura exibido em "Minha assinatura". */
+    data class SubscriptionOverview(
+        val subscriptionId: String?,
+        val planId: String,
+        val planName: String,
+        val planDescription: String?,
+        val priceCents: Int,
+        val currency: String,
+        val interval: String,
+        val maxDevices: Int,
+        val maxStreams: Int,
+        val status: String,
+        val daysRemaining: Int,
+        val currentPeriodEnd: String?,
+        val trialEnd: String?,
+        val cancelAtPeriodEnd: Boolean,
+        val autoRenew: Boolean,
+        val hasAccess: Boolean,
+    )
+
+    data class CheckoutSession(
+        val preferenceId: String,
+        val initPoint: String,
+    )
+
     class ApiException(
         val statusCode: Int,
         val detail: String,
@@ -170,6 +195,48 @@ class EftvApi(
     suspend fun revokeAllDevices(accessToken: String): String {
         val json = request("POST", "/player/device/revoke-all", accessToken = accessToken)
         return json.optString("message", "")
+    }
+
+    /** Plano + assinatura do usuario em uma unica chamada. */
+    suspend fun subscriptionOverview(accessToken: String): SubscriptionOverview {
+        val json = request("GET", "/subscriptions/current", accessToken = accessToken)
+        return SubscriptionOverview(
+            subscriptionId = json.optString("subscription_id").takeIf { it.isNotBlank() },
+            planId = json.optString("plan_id"),
+            planName = json.optString("plan_name"),
+            planDescription = json.optString("plan_description").takeIf { it.isNotBlank() },
+            priceCents = json.optInt("price_cents", 0),
+            currency = json.optString("currency", "BRL"),
+            interval = json.optString("interval", "month"),
+            maxDevices = json.optInt("max_devices", 1),
+            maxStreams = json.optInt("max_streams", 1),
+            status = json.optString("status", "none"),
+            daysRemaining = json.optInt("days_remaining", 0),
+            currentPeriodEnd = json.optString("current_period_end").takeIf { it.isNotBlank() },
+            trialEnd = json.optString("trial_end").takeIf { it.isNotBlank() },
+            cancelAtPeriodEnd = json.optBoolean("cancel_at_period_end", false),
+            autoRenew = json.optBoolean("auto_renew", false),
+            hasAccess = json.optBoolean("has_access", false),
+        )
+    }
+
+    /** Cria a assinatura recorrente no Mercado Pago e devolve a URL de pagamento. */
+    suspend fun createCheckout(accessToken: String, planId: String): CheckoutSession {
+        val body = JSONObject().put("plan_id", planId)
+        val json = request("POST", "/subscriptions/checkout", accessToken = accessToken, body = body)
+        val initPoint = json.optString("init_point")
+        if (initPoint.isBlank()) {
+            throw ApiException(500, "O servidor nao devolveu a URL de pagamento")
+        }
+        return CheckoutSession(
+            preferenceId = json.optString("preference_id"),
+            initPoint = initPoint,
+        )
+    }
+
+    /** Cancela a renovacao; o acesso continua ate o fim do periodo pago. */
+    suspend fun cancelSubscription(accessToken: String, subscriptionId: String) {
+        request("POST", "/subscriptions/$subscriptionId/cancel", accessToken = accessToken)
     }
 
     private fun tokenPair(json: JSONObject) = TokenPair(

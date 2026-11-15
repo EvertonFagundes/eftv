@@ -73,6 +73,9 @@ class MainActivity : AppCompatActivity() {
 
     /** Aparelho barrado pelo servidor: nao mostra nem usa o catalogo local. */
     private var deviceBlocked = false
+
+    /** Assinatura inativa: ao voltar para o app, tenta carregar de novo. */
+    private var subscriptionBlocked = false
     private var searchQuery: String = ""
     private var hasCatalog = false
 
@@ -121,6 +124,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+
+        // Voltou da tela de assinatura: se pagou, o catalogo precisa carregar
+        // sem o usuario reiniciar o app.
+        if (subscriptionBlocked && !localMode && session.hasSession()) {
+            subscriptionBlocked = false
+            startCatalog()
+            return
+        }
+
         if (!::repository.isInitialized || !hasCatalog) return
 
         val enabled = SettingsActivity.isAdultContentEnabled(this)
@@ -165,6 +177,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.toolbar.inflateMenu(R.menu.menu_main)
         binding.toolbar.menu.findItem(R.id.action_open_web)?.isVisible = localMode
+        binding.toolbar.menu.findItem(R.id.action_subscription)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_device)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_logout)?.isVisible = !localMode
 
@@ -182,6 +195,11 @@ class MainActivity : AppCompatActivity() {
 
                 R.id.action_settings -> {
                     startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                    true
+                }
+
+                R.id.action_subscription -> {
+                    openSubscription()
                     true
                 }
 
@@ -364,6 +382,12 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: DeviceBlockedException) {
                     showDeviceBlocked(e.message.orEmpty())
                     return@launch
+                } catch (e: SubscriptionExpiredException) {
+                    showSubscriptionInactive(e.message.orEmpty())
+                    return@launch
+                } catch (e: CatalogErrorException) {
+                    showCatalogError(e.message.orEmpty())
+                    return@launch
                 }
             }
             repository = PlaylistRepository(this@MainActivity, source)
@@ -390,13 +414,9 @@ class MainActivity : AppCompatActivity() {
                             api.playlist(session.accessToken().orEmpty()).toSource()
                         } catch (retry: EftvApi.ApiException) {
                             if (retry.isDeviceBlock()) throw DeviceBlockedException(retry.detail)
-                            Toast.makeText(
-                                this@MainActivity,
-                                R.string.subscription_inactive,
-                                Toast.LENGTH_LONG,
-                            ).show()
-                            // Produção: não cai para local — trata como erro de assinatura
-                            throw DeviceBlockedException(retry.detail)
+                            // Assinatura inativa: o usuario vai direto para a
+                            // tela de pagamento, em vez de ver "aparelho".
+                            throw SubscriptionExpiredException(retry.detail)
                         }
                     } else {
                         session.clear()
@@ -409,29 +429,27 @@ class MainActivity : AppCompatActivity() {
                     if (e.isDeviceBlock()) {
                         throw DeviceBlockedException(e.detail)
                     }
-                    Toast.makeText(
-                        this@MainActivity,
-                        R.string.subscription_inactive,
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    // Produção: assinatura inativa = erro, não demo
-                    throw DeviceBlockedException(e.detail)
+                    // Assinatura vencida ou e-mail nao confirmado.
+                    throw SubscriptionExpiredException(e.detail)
                 }
 
                 503 -> {
-                    // Produção: 503 = erro de servidor, não fallback demo
                     Timber.w("Servidor sem playlist configurada (503)")
-                    throw DeviceBlockedException("Servidor indisponível. Tente novamente mais tarde.")
+                    throw CatalogErrorException(
+                        getString(R.string.server_unavailable)
+                    )
                 }
 
                 else -> {
                     Timber.w("Erro HTTP %d ao buscar playlist", e.statusCode)
-                    throw DeviceBlockedException("Erro ao carregar playlist (HTTP ${e.statusCode})")
+                    throw CatalogErrorException(
+                        getString(R.string.catalog_http_error, e.statusCode)
+                    )
                 }
             }
         } catch (e: Exception) {
             Timber.e(e, "Falha inesperada ao resolver source")
-            throw DeviceBlockedException("Erro de conexão. Verifique sua internet.")
+            throw CatalogErrorException(getString(R.string.catalog_network_error))
         }
     }
 
@@ -605,6 +623,8 @@ class MainActivity : AppCompatActivity() {
     private suspend fun applyCatalog(metadata: CatalogStore.Metadata) {
         hasCatalog = metadata.total > 0
         catalogMetadata = metadata
+        deviceBlocked = false
+        subscriptionBlocked = false
 
         val groups = withContext(Dispatchers.IO) {
             repository.catalogStore.groups(selectedKind)
@@ -1021,13 +1041,63 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Assinatura inativa/vencida: leva o cliente direto ao pagamento.
+     *
+     * Antes o app mostrava "Assinatura em uso", que e um erro de aparelho.
+     * Quem esta no fim do trial precisa ver o preco e o botao de assinar.
+     */
+    private fun showSubscriptionInactive(message: String) {
+        val detail = message.ifBlank { getString(R.string.subscription_inactive_message) }
+        deviceBlocked = true
+        subscriptionBlocked = true
+        channelAdapter.reset(0)
+        binding.channelList.visibility = View.GONE
+        binding.toolbar.subtitle = buildSubtitle()
+        showMessage(
+            message = getString(R.string.subscription_inactive_hint),
+            showProgress = false,
+            showRetry = false,
+            iconRes = R.drawable.ic_tv,
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.subscription_inactive_title)
+            .setMessage(detail)
+            .setPositiveButton(R.string.subscription_subscribe_now) { _, _ -> openSubscription() }
+            .setNegativeButton(R.string.logout) { _, _ -> logout() }
+            .setCancelable(false)
+            .show()
+    }
+
+    /** Falha de servidor/rede que nao e assinatura nem aparelho. */
+    private fun showCatalogError(message: String) {
+        channelAdapter.reset(0)
+        binding.channelList.visibility = View.GONE
+        showMessage(
+            message = message.ifBlank { getString(R.string.load_error) },
+            showProgress = false,
+            showRetry = false,
+            iconRes = R.drawable.ic_tv,
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.catalog_error_title)
+            .setMessage(message.ifBlank { getString(R.string.load_error) })
+            .setPositiveButton(R.string.retry) { _, _ -> startCatalog() }
+            .setNegativeButton(R.string.close) { _, _ -> finish() }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun openSubscription() {
+        startActivity(Intent(this@MainActivity, SubscriptionActivity::class.java))
+    }
+
     private fun showDeviceDialog() {
         val token = session.accessToken()
         if (token.isNullOrBlank()) {
             goToLogin()
             return
         }
-
         lifecycleScope.launch {
             val access = try {
                 withContext(Dispatchers.IO) { api.deviceAccess(token) }
@@ -1104,4 +1174,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private class DeviceBlockedException(message: String) : Exception(message)
+
+    /** Assinatura vencida/inativa: oferece o pagamento em vez de "assinatura em uso". */
+    private class SubscriptionExpiredException(message: String) : Exception(message)
+
+    /** Falha de servidor/rede ao carregar o catalogo (nao e bloqueio). */
+    private class CatalogErrorException(message: String) : Exception(message)
 }

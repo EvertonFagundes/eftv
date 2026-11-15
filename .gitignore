@@ -1,4 +1,4 @@
-# Dados locais: contêm URLs, usuários, senhas e tokens das playlists.
+# Dados locais: contï¿½m URLs, usuï¿½rios, senhas e tokens das playlists.
 data/*.json
 !data/.gitkeep
 
@@ -16,7 +16,7 @@ venv/
 coverage.xml
 htmlcov/
 
-# Logs e arquivos temporários
+# Logs e arquivos temporï¿½rios
 *.log
 *.tmp
 .DS_Store
@@ -29,3 +29,8 @@ frontend/dist/
 # Banco de dados local
 backend/eftv.db
 backend/entrypoint.sh.txt
+
+# Assinatura de release: chave privada e senhas NUNCA vao para o Git
+android/keystore.properties
+*.jks
+*.keystore

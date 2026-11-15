@@ -20,6 +20,19 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+// Assinatura de release. O arquivo android/keystore.properties e a chave .jks
+// ficam fora do Git (veja .gitignore). Sem eles o build de release continua
+// funcionando, mas gera APK nao assinado - use isso so para testes locais.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+val releaseKeystoreFile: java.io.File? = keystoreProperties.getProperty("storeFile")
+    ?.takeIf { it.isNotBlank() }
+    ?.let { rootProject.file(it) }
+    ?.takeIf { it.exists() }
+
 // Modo local: o catalogo vem do servidor embutido (127.0.0.1:8124), sem
 // login e sem backend na nuvem.
 val localMode: Boolean =
@@ -91,11 +104,18 @@ androidComponents {
 }
 
 // URL do backend central. Pode ser trocada no build:
-//   ./gradlew assembleDebug -PEFTV_API_URL=https://api.eftv.com.br
+//   ./gradlew assembleRelease -PEFTV_API_URL=https://api.eftv.com.br
 // Tambem pode ficar em local.properties (ignorado pelo Git).
 val configuredApiUrl: String =
     ((project.findProperty("EFTV_API_URL") as String?)
         ?: localProperties.getProperty("EFTV_API_URL", "")).trim()
+
+// APK distribuido para clientes: nunca aponta para 127.0.0.1 nem para a LAN.
+// Uma URL local em local.properties so vale para debug.
+val productionApiUrl = "https://eftv.onrender.com"
+val releaseApiUrl: String = configuredApiUrl.takeIf {
+    it.startsWith("https://") && !it.contains("127.0.0.1") && !it.contains("localhost")
+} ?: productionApiUrl
 
 android {
     namespace = "com.eftv.android"
@@ -105,8 +125,8 @@ android {
         applicationId = "com.eftv.android"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         // Debug no emulador usa 127.0.0.1; num celular, configure local.properties
         // com EFTV_API_URL=http://IP-DO-PC:8000
@@ -122,17 +142,33 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseKeystoreFile != null) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
 
+            // Assinatura propria: permite atualizar o app sem desinstalar.
+            if (releaseKeystoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+
             // APK distribuido nao pode apontar para 127.0.0.1 nem para a LAN.
-            buildConfigField(
-                "String",
-                "API_BASE_URL",
-                "\"${configuredApiUrl.ifBlank { "https://api.eftv.com.br" }}\"",
-            )
+            buildConfigField("String", "API_BASE_URL", "\"$releaseApiUrl\"")
+
+            // Distribuicao sempre no modo backend: login, assinatura e catalogo
+            // vem do servidor, nunca do banco local do aparelho.
+            buildConfigField("boolean", "LOCAL_MODE", "false")
         }
     }
 

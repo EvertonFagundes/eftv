@@ -98,6 +98,47 @@
     <string name="device_revoke_all_done">Aparelhos liberados. Entrando de novo...</string>
     <string name="close">Fechar</string>
 
+    <!-- Minha assinatura -->
+    <string name="subscription_title">Minha assinatura</string>
+    <string name="subscription_price_caption">por mês · cobrança recorrente</string>
+    <string name="subscription_benefits">%1$d aparelhos · %2$d tela por vez\nHD e Full HD incluídos</string>
+    <string name="subscription_subscribe_now">Assinar agora</string>
+    <string name="subscription_continue_payment">Continuar pagamento</string>
+    <string name="subscription_refresh">Atualizar status</string>
+    <string name="subscription_devices">Gerenciar aparelhos</string>
+    <string name="subscription_footnote">Pagamento processado pelo Mercado Pago. Você pode cancelar quando quiser e continua assistindo até o fim do período pago.</string>
+    <string name="subscription_status_active">Assinatura ativa</string>
+    <string name="subscription_status_trial">Período de teste</string>
+    <string name="subscription_status_pending">Pagamento em análise</string>
+    <string name="subscription_status_inactive">Assinatura inativa</string>
+    <string name="subscription_active_detail">%1$s · renova em %2$s</string>
+    <string name="subscription_trial_detail">Teste grátis · %1$s · termina em %2$s</string>
+    <string name="subscription_cancelled_detail">Cancelada · acesso até %1$s</string>
+    <string name="subscription_pending_detail">Estamos aguardando a confirmação do Mercado Pago. Toque em Atualizar status.</string>
+    <string name="subscription_inactive_detail">Assine o plano mensal para liberar o catálogo completo.</string>
+    <string name="subscription_cancel">Cancelar assinatura</string>
+    <string name="subscription_cancel_title">Cancelar assinatura</string>
+    <string name="subscription_cancel_message">A cobrança automática será interrompida. Você continua assistindo até o fim do período já pago.</string>
+    <string name="subscription_cancel_confirm">Cancelar assinatura</string>
+    <string name="subscription_cancel_done">Assinatura cancelada. O acesso continua até o fim do período.</string>
+    <string name="subscription_cancel_error">Não foi possível cancelar agora. Tente novamente.</string>
+    <string name="subscription_checkout_title">Pagamento aberto</string>
+    <string name="subscription_checkout_message">Conclua o pagamento no navegador. Depois volte ao app: o status é atualizado automaticamente.</string>
+    <string name="subscription_checkout_error">Não foi possível abrir o pagamento agora. Tente novamente.</string>
+    <string name="subscription_load_error">Não foi possível carregar sua assinatura agora.</string>
+    <string name="subscription_already_active">Sua assinatura já está ativa.</string>
+    <string name="subscription_inactive_title">Assinatura inativa</string>
+    <string name="subscription_inactive_message">Sua assinatura não está ativa. Assine o plano mensal para voltar a assistir.</string>
+    <string name="subscription_inactive_hint">Assine para liberar os canais.</string>
+    <string name="catalog_error_title">Não foi possível carregar</string>
+    <string name="server_unavailable">Servidor indisponível. Tente novamente mais tarde.</string>
+    <string name="catalog_http_error">Erro ao carregar os canais (HTTP %1$d).</string>
+    <string name="catalog_network_error">Erro de conexão. Verifique sua internet.</string>
+    <plurals name="subscription_days_remaining">
+        <item quantity="one">%d dia restante</item>
+        <item quantity="other">%d dias restantes</item>
+    </plurals>
+
     <string name="server_channel_name">Servidor local</string>
     <string name="server_notification_title">EFTV</string>
     <string name="server_notification_text">Servidor local na porta %1$d</string>

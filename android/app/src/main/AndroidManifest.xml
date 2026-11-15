@@ -51,7 +51,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="eftv" android:host="verify-email" />
             </intent-filter>
+
+            <!-- Volta do checkout do Mercado Pago para o app (eftv://open) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="eftv" android:host="open" />
+            </intent-filter>
         </activity>
+
+        <activity
+            android:name=".SubscriptionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.EFTV.NoActionBar" />
 
         <activity
             android:name=".EmailVerificationActivity"
