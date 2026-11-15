@@ -7,7 +7,7 @@ from typing import cast
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.config import settings
 from app.models.payment import Payment
@@ -85,6 +85,52 @@ def _get_headers(idempotency_key: str | None = None) -> dict:
     return headers
 
 
+async def get_or_create_subscription_plan(db, plan: Plan) -> str:
+    """Devolve o id do plano de assinatura no Mercado Pago, criando se preciso.
+
+    O fluxo por plano (``preapproval_plan``) gera um link de checkout onde o
+    proprio Mercado Pago coleta o cartao do cliente. E o caminho recomendado
+    quando o app nao tokeniza cartao e evita a exigencia de ``payer_email``
+    conhecido na criacao da assinatura.
+    """
+    existing = getattr(plan, "mercadopago_plan_id", None)
+    if existing:
+        return str(existing)
+
+    if not settings.MERCADOPAGO_ACCESS_TOKEN:
+        raise RuntimeError("MERCADOPAGO_ACCESS_TOKEN não configurado")
+
+    payload = {
+        "reason": f"EFTV - {plan.name}",
+        "auto_recurring": {
+            "frequency": 1,
+            "frequency_type": "months",
+            "transaction_amount": round(plan.price_cents / 100, 2),
+            "currency_id": plan.currency or "BRL",
+        },
+        "back_url": f"{settings.FRONTEND_URL.rstrip('/')}/checkout.html",
+        "payment_methods_allowed": {"payment_types": [{"id": "credit_card"}]},
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{MERCADOPAGO_BASE_URL}/preapproval_plan",
+            json=payload,
+            headers=_get_headers(),
+        )
+
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Erro ao criar plano MP: {response.status_code} - {response.text}"
+        )
+
+    data = response.json()
+    plan.mercadopago_plan_id = data.get("id")
+    await db.flush()
+    logger.info("Plano de assinatura criado no Mercado Pago: %s", plan.mercadopago_plan_id)
+    return str(plan.mercadopago_plan_id)
+
+
 async def create_checkout_preference(
     user: User,
     plan: Plan,
@@ -93,10 +139,14 @@ async def create_checkout_preference(
     payer_phone: str | None = None,
     payer_cpf: str | None = None,
     back_urls: dict | None = None,
+    db=None,
 ) -> dict:
     """
-    Cria preferência de checkout no Mercado Pago para assinatura (preapproval).
-    Retorna dict com id, init_point, sandbox_init_point.
+    Cria a assinatura no Mercado Pago e devolve o link de checkout.
+
+    Primeiro tenta a preapproval direta (identifica o usuario por
+    ``external_reference``). Se o Mercado Pago recusar, cai no fluxo por
+    plano, que gera um link de assinatura reutilizavel.
     """
     if not settings.MERCADOPAGO_ACCESS_TOKEN:
         raise RuntimeError("MERCADOPAGO_ACCESS_TOKEN não configurado")
@@ -144,30 +194,63 @@ async def create_checkout_preference(
     response = await post_preapproval(preapproval_data)
 
     # O Mercado Pago devolve "User bad request" quando o ``payer_email`` nao
-    # pertence a uma conta Mercado Pago (comum em conta de teste e em cliente
-    # que ainda nao tem conta). Sem o campo, o proprio checkout pede o e-mail
-    # do pagador e a assinatura e criada normalmente.
+    # pertence a uma conta Mercado Pago (comum em cliente que ainda nao tem
+    # conta). Sem o campo, o proprio checkout pede o e-mail do pagador.
     if response.status_code >= 400 and preapproval_data.get("payer_email"):
         fallback = {k: v for k, v in preapproval_data.items() if k != "payer_email"}
         retry = await post_preapproval(fallback)
         if retry.status_code < 400:
             logger.info("Preapproval criada sem payer_email; o checkout pede o e-mail")
-            return cast(dict, retry.json())
+            data = dict(retry.json())
+            data["preapproval_id"] = data.get("id")
+            data["mode"] = "preapproval"
+            return data
         logger.warning(
             "Tentativa sem payer_email tambem falhou: %s - %s",
             retry.status_code,
             retry.text,
         )
 
-    if response.status_code >= 400:
-        logger.error(
-            "Mercado Pago recusou a preapproval: %s - %s",
-            response.status_code,
-            response.text,
-        )
-        raise RuntimeError(f"Erro ao criar assinatura MP: {response.status_code} - {response.text}")
+    if response.status_code < 400:
+        data = dict(response.json())
+        data["preapproval_id"] = data.get("id")
+        data["mode"] = "preapproval"
+        return data
 
-    return cast(dict, response.json())
+    logger.warning(
+        "Mercado Pago recusou a preapproval direta (%s - %s); usando plano",
+        response.status_code,
+        response.text,
+    )
+
+    # Fallback: link de assinatura do plano. O pagador e identificado pelo
+    # ``external_reference`` anexado ao init_point (e, se o Mercado Pago nao
+    # repassar, pelo e-mail do pagador no webhook).
+    if db is None:
+        raise RuntimeError(
+            f"Erro ao criar assinatura MP: {response.status_code} - {response.text}"
+        )
+
+    try:
+        plan_id = await get_or_create_subscription_plan(db, plan)
+    except RuntimeError as exc:
+        raise RuntimeError(
+            f"Erro ao criar assinatura MP: {response.status_code} - {response.text}. "
+            f"{exc}"
+        ) from exc
+
+    init_point = (
+        "https://www.mercadopago.com.br/subscriptions/checkout"
+        f"?preapproval_plan_id={plan_id}"
+        f"&external_reference={user.id}"
+    )
+    return {
+        "id": plan_id,
+        "preapproval_id": None,
+        "init_point": init_point,
+        "sandbox_init_point": None,
+        "mode": "plan",
+    }
 
 
 async def get_preapproval(preapproval_id: str) -> dict:
@@ -242,9 +325,12 @@ def _parse_datetime(value: str | None) -> datetime | None:
 
 
 async def _find_subscription(
-    db, preapproval_id: str | None, external_reference: str | None = None
+    db,
+    preapproval_id: str | None,
+    external_reference: str | None = None,
+    payer_email: str | None = None,
 ) -> Subscription | None:
-    """Localiza a assinatura pelo id da preapproval ou pelo usuario."""
+    """Localiza a assinatura pelo id da preapproval, usuario ou e-mail."""
     if preapproval_id:
         result = await db.execute(
             select(Subscription).where(Subscription.mercadopago_subscription_id == preapproval_id)
@@ -257,16 +343,39 @@ async def _find_subscription(
         try:
             user_id = UUID(str(external_reference))
         except ValueError:
-            return None
-        result = await db.execute(
-            select(Subscription)
-            .where(Subscription.user_id == user_id)
-            .order_by(Subscription.created_at.desc())
+            user_id = None
+        if user_id is not None:
+            result = await db.execute(
+                select(Subscription)
+                .where(Subscription.user_id == user_id)
+                .order_by(Subscription.created_at.desc())
+            )
+            subscription = result.scalars().first()
+            if subscription is not None:
+                if preapproval_id:
+                    subscription.mercadopago_subscription_id = preapproval_id
+                return cast(Subscription | None, subscription)
+
+    # Fluxo por plano: o Mercado Pago pode nao repassar o external_reference,
+    # entao o e-mail do pagador e a unica ligacao com a conta do app.
+    if payer_email:
+        from app.models.user import User
+
+        user_result = await db.execute(
+            select(User).where(func.lower(User.email) == payer_email.lower())
         )
-        subscription = result.scalars().first()
-        if subscription is not None and preapproval_id:
-            subscription.mercadopago_subscription_id = preapproval_id
-        return cast(Subscription | None, subscription)
+        user = user_result.scalar_one_or_none()
+        if user is not None:
+            result = await db.execute(
+                select(Subscription)
+                .where(Subscription.user_id == user.id)
+                .order_by(Subscription.created_at.desc())
+            )
+            subscription = result.scalars().first()
+            if subscription is not None:
+                if preapproval_id:
+                    subscription.mercadopago_subscription_id = preapproval_id
+                return cast(Subscription | None, subscription)
 
     return None
 
@@ -298,6 +407,48 @@ async def process_webhook(payload: dict, db, data_id: str | None = None) -> None
         logger.info("Webhook do Mercado Pago ignorado: %s", event_type)
 
 
+async def search_preapprovals(**params) -> list[dict]:
+    """Consulta assinaturas no Mercado Pago (por referencia, e-mail ou status)."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            f"{MERCADOPAGO_BASE_URL}/preapproval/search",
+            params={"limit": 10, **params},
+            headers=_get_headers(),
+        )
+
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Erro ao buscar assinaturas MP: {response.status_code} - {response.text}"
+        )
+
+    return list(response.json().get("results") or [])
+
+
+async def find_preapproval_for_user(db, user_id: UUID) -> dict | None:
+    """Acha a assinatura criada pelo link de plano de um usuario.
+
+    O link de checkout do plano leva o ``external_reference`` do app. Se o
+    Mercado Pago nao repassar esse campo, o e-mail do pagador e a segunda
+    tentativa.
+    """
+    results = await search_preapprovals(external_reference=str(user_id))
+
+    if not results:
+        user_result = await db.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one_or_none()
+        if user is not None and user.email:
+            results = await search_preapprovals(payer_email=user.email)
+
+    if not results:
+        return None
+
+    # Prioriza a assinatura que libera acesso; senao a mais recente.
+    ativas = [item for item in results if item.get("status") == "authorized"]
+    escolhidas = ativas or results
+    escolhidas.sort(key=lambda item: str(item.get("date_created") or ""), reverse=True)
+    return dict(escolhidas[0])
+
+
 async def sync_preapproval(subscription_id: UUID) -> bool:
     """Sincroniza uma assinatura pendente direto com o Mercado Pago.
 
@@ -315,11 +466,21 @@ async def sync_preapproval(subscription_id: UUID) -> bool:
     async with get_db_context() as db:
         result = await db.execute(select(Subscription).where(Subscription.id == subscription_id))
         subscription = result.scalar_one_or_none()
-        if subscription is None or not subscription.mercadopago_subscription_id:
+        if subscription is None:
             return False
 
         try:
-            await _handle_preapproval(subscription.mercadopago_subscription_id, db)
+            if subscription.mercadopago_subscription_id:
+                await _handle_preapproval(subscription.mercadopago_subscription_id, db)
+            else:
+                # Checkout por plano: a assinatura so existe no Mercado Pago
+                # depois que o cliente paga. Procura pela referencia do app.
+                preapproval = await find_preapproval_for_user(
+                    user_id=subscription.user_id
+                )
+                if preapproval is None:
+                    return False
+                await _handle_preapproval(str(preapproval["id"]), db)
             await db.commit()
             return True
         except Exception:
@@ -334,7 +495,12 @@ async def sync_preapproval(subscription_id: UUID) -> bool:
 async def _handle_preapproval(preapproval_id: str, db) -> None:
     """Sincroniza status e periodo da assinatura com a preapproval."""
     data = await get_preapproval(preapproval_id)
-    subscription = await _find_subscription(db, preapproval_id, data.get("external_reference"))
+    subscription = await _find_subscription(
+        db,
+        preapproval_id,
+        data.get("external_reference"),
+        data.get("payer_email"),
+    )
 
     if subscription is None:
         logger.warning("Preapproval %s sem assinatura correspondente", preapproval_id)

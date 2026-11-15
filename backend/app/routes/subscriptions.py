@@ -99,7 +99,9 @@ async def current_subscription(
             plan = subscription_plan
 
         # Pendente: o pagamento pode ter sido aprovado sem o webhook chegar.
-        if subscription.status == "pending" and subscription.mercadopago_subscription_id:
+        # No checkout por plano a assinatura chega sem id local, entao a
+        # sincronizacao tambem roda sem `mercadopago_subscription_id`.
+        if subscription.status == "pending":
             if await sync_preapproval(subscription.id):
                 await db.refresh(subscription)
 
@@ -201,7 +203,7 @@ async def create_checkout(
             },
         )
 
-    # Cria preferência no Mercado Pago
+    # Cria a assinatura no Mercado Pago
     try:
         preference = await create_checkout_preference(
             user=user,
@@ -211,6 +213,7 @@ async def create_checkout(
             payer_phone=data.payer_phone or user.phone,
             payer_cpf=data.payer_cpf,
             back_urls=data.back_urls,
+            db=db,
         )
     except RuntimeError as exc:
         # Antes o cliente via "erro interno" e o suporte nao sabia o motivo.
@@ -228,10 +231,11 @@ async def create_checkout(
 
     # Reaproveita um checkout pendente em vez de acumular linhas.
     now = datetime.now(UTC)
+    preapproval_id = preference.get("preapproval_id")
     subscription = next((sub for sub in existing_subscriptions if sub.status == "pending"), None)
     if subscription is not None:
         subscription.plan_id = plan.id
-        subscription.mercadopago_subscription_id = preference["id"]
+        subscription.mercadopago_subscription_id = preapproval_id
         subscription.current_period_start = now
         subscription.current_period_end = now
     else:
@@ -239,7 +243,7 @@ async def create_checkout(
             user_id=user.id,
             plan_id=plan.id,
             status="pending",
-            mercadopago_subscription_id=preference["id"],
+            mercadopago_subscription_id=preapproval_id,
             current_period_start=now,
             current_period_end=now,
         )
