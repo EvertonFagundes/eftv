@@ -321,11 +321,12 @@ async def make_user_owner(
 
 @router.post("/diagnostico/preapproval")
 async def diagnostico_preapproval(_: User = Depends(require_admin)):
-    """Diagnostico TEMPORARIO do preapproval do Mercado Pago.
+    """Diagnostico TEMPORARIO do checkout do Mercado Pago.
 
-    Testa variantes do payload e devolve a resposta bruta de cada uma. Nada e
-    cobrado (a assinatura nasce pendente) e cada preapproval criada e
-    cancelada na sequencia. Remover depois de resolver o checkout.
+    Descobre se a conta coletora e de teste/producao e testa o fluxo por
+    plano (preapproval_plan), que e o caminho recomendado quando o app nao
+    tokeniza cartao. Nada e cobrado: o plano apenas gera um link de assinatura.
+    Remover depois de resolver o checkout.
     """
     import httpx
 
@@ -346,42 +347,93 @@ async def diagnostico_preapproval(_: User = Depends(require_admin)):
         f"{settings.API_BASE_URL.rstrip('/')}"
         "/subscriptions/webhook/mercadopago?source_news=webhooks"
     )
-    base = {
-        "reason": "EFTV - Mensal",
-        "external_reference": "diagnostico",
-        "auto_recurring": auto_recurring,
-        "back_url": f"{frontend}/checkout.html",
-    }
-    variants = {
-        "completo": {**base, "notification_url": notification, "status": "pending"},
-        "sem_status": {**base, "notification_url": notification},
-        "minimo": dict(base),
-        "com_payer": {**base, "payer_email": "evertonfagundes1510@gmail.com"},
-    }
 
-    results = []
+    out: dict = {}
     async with httpx.AsyncClient(timeout=30.0) as client:
-        for name, payload in variants.items():
-            response = await client.post(
-                f"{MERCADOPAGO_BASE_URL}/preapproval",
-                json=payload,
-                headers=_get_headers(),
-            )
-            item = {
-                "variante": name,
-                "http": response.status_code,
-                "resposta": response.text[:400],
+        # 1) Quem e a conta coletora? Se for de teste, so aceita pagador de
+        # teste - e por isso o checkout com cliente real falha.
+        me = await client.get(
+            f"{MERCADOPAGO_BASE_URL}/users/me", headers=_get_headers()
+        )
+        if me.status_code >= 400:
+            out["conta"] = {"http": me.status_code, "resposta": me.text[:300]}
+        else:
+            data = me.json()
+            email = str(data.get("email") or "")
+            out["conta"] = {
+                "id": data.get("id"),
+                "site_id": data.get("site_id"),
+                "country_id": data.get("country_id"),
+                "nickname": data.get("nickname"),
+                "user_type": data.get("user_type"),
+                "tags": data.get("tags"),
+                "email_dominio": email.split("@")[-1] if "@" in email else "",
+                "email_e_teste": email.endswith("@testuser.com"),
             }
-            if response.status_code < 400:
-                data = response.json()
-                preapproval_id = data.get("id")
-                item["id"] = preapproval_id
-                if preapproval_id:
-                    try:
-                        await cancel_preapproval(preapproval_id)
-                        item["cancelado"] = True
-                    except Exception as exc:  # noqa: BLE001
-                        item["cancelado"] = False
-                        item["erro_cancelamento"] = str(exc)[:200]
-            results.append(item)
-    return {"results": results}
+
+        # 2) Planos existentes (para reaproveitar em vez de criar outro).
+        search = await client.get(
+            f"{MERCADOPAGO_BASE_URL}/preapproval_plan/search",
+            headers=_get_headers(),
+            params={"limit": 5},
+        )
+        out["planos"] = {
+            "http": search.status_code,
+            "resposta": search.text[:500],
+        }
+
+        # 3) Cria o plano de assinatura (mensal, R$ 19,90).
+        plan_payload = {
+            "reason": "EFTV - Mensal",
+            "auto_recurring": auto_recurring,
+            "back_url": f"{frontend}/checkout.html",
+            "payment_methods_allowed": {
+                "payment_types": [{"id": "credit_card"}],
+            },
+        }
+        plan = await client.post(
+            f"{MERCADOPAGO_BASE_URL}/preapproval_plan",
+            json=plan_payload,
+            headers=_get_headers(),
+        )
+        plan_item: dict = {"http": plan.status_code, "resposta": plan.text[:500]}
+        if plan.status_code < 400:
+            pdata = plan.json()
+            plan_item["id"] = pdata.get("id")
+            plan_item["init_point"] = pdata.get("init_point")
+            plan_item["status"] = pdata.get("status")
+            plan_item["sandbox_init_point"] = pdata.get("sandbox_init_point")
+        out["criar_plano"] = plan_item
+
+        # 4) Assinatura direta com payer_email real (mensagem anterior pedia
+        # e-mail de conta MP real). A preapproval nasce pendente e e cancelada.
+        pre_payload = {
+            "reason": "EFTV - Mensal",
+            "external_reference": "diagnostico-real",
+            "payer_email": "evertonfagundes1510@gmail.com",
+            "auto_recurring": auto_recurring,
+            "back_url": f"{frontend}/checkout.html",
+            "notification_url": notification,
+            "status": "pending",
+        }
+        pre = await client.post(
+            f"{MERCADOPAGO_BASE_URL}/preapproval",
+            json=pre_payload,
+            headers=_get_headers(),
+        )
+        pre_item: dict = {"http": pre.status_code, "resposta": pre.text[:500]}
+        if pre.status_code < 400:
+            pdata = pre.json()
+            pre_item["id"] = pdata.get("id")
+            pre_item["init_point"] = pdata.get("init_point")
+            pre_item["status"] = pdata.get("status")
+            if pdata.get("id"):
+                try:
+                    await cancel_preapproval(pdata["id"])
+                    pre_item["cancelado"] = True
+                except Exception as exc:  # noqa: BLE001
+                    pre_item["cancelado"] = False
+                    pre_item["erro_cancelamento"] = str(exc)[:200]
+        out["preapproval_payer_real"] = pre_item
+
+    return out
