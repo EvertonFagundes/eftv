@@ -10,13 +10,20 @@ from app.database import get_db
 from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.schemas.payment import CheckoutRequest, CheckoutResponse, SubscriptionResponse
+from app.schemas.payment import (
+    CheckoutRequest,
+    CheckoutResponse,
+    SubscriptionOverview,
+    SubscriptionResponse,
+)
 from app.security.dependencies import get_current_user
 from app.services.mercadopago import (
     create_checkout_preference,
     process_webhook,
+    sync_preapproval,
     validate_webhook_signature,
 )
+from app.services.plans import get_or_create_plan
 
 router = APIRouter(prefix="/subscriptions", tags=["Assinaturas"])
 
@@ -55,6 +62,64 @@ async def list_my_subscriptions(
             )
         )
     return response
+
+
+@router.get("/current", response_model=SubscriptionOverview)
+async def current_subscription(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resumo da assinatura do usuário para a tela "Minha assinatura".
+
+    Antes de responder, tenta sincronizar um checkout pendente direto no
+    Mercado Pago. Assim o botão "Atualizar status" do app resolve mesmo se o
+    webhook atrasar ou falhar, sem depender de suporte.
+    """
+    plan = await get_or_create_plan(db)
+
+    result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .order_by(Subscription.created_at.desc())
+    )
+    subscriptions = list(result.scalars().all())
+
+    subscription = next(
+        (sub for sub in subscriptions if sub.has_access),
+        subscriptions[0] if subscriptions else None,
+    )
+
+    if subscription is not None:
+        plan_result = await db.execute(select(Plan).where(Plan.id == subscription.plan_id))
+        subscription_plan = plan_result.scalar_one_or_none()
+        if subscription_plan is not None:
+            plan = subscription_plan
+
+        # Pendente: o pagamento pode ter sido aprovado sem o webhook chegar.
+        if subscription.status == "pending" and subscription.mercadopago_subscription_id:
+            if await sync_preapproval(subscription.id):
+                await db.refresh(subscription)
+
+    return SubscriptionOverview(
+        subscription_id=subscription.id if subscription is not None else None,
+        plan_id=plan.id,
+        plan_name=plan.name,
+        plan_description=plan.description,
+        price_cents=plan.price_cents,
+        currency=plan.currency,
+        interval=plan.interval,
+        max_devices=plan.max_devices,
+        max_streams=plan.max_simultaneous_streams,
+        status=subscription.status if subscription is not None else "none",
+        days_remaining=subscription.days_remaining if subscription is not None else 0,
+        current_period_end=subscription.current_period_end if subscription is not None else None,
+        trial_end=subscription.trial_end if subscription is not None else None,
+        cancel_at_period_end=(
+            subscription.cancel_at_period_end if subscription is not None else False
+        ),
+        auto_renew=subscription.auto_renew if subscription is not None else False,
+        has_access=subscription.has_access if subscription is not None else False,
+    )
 
 
 @router.get("/{subscription_id}", response_model=SubscriptionResponse)

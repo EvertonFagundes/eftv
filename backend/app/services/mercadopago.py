@@ -279,6 +279,39 @@ async def process_webhook(payload: dict, db, data_id: str | None = None) -> None
         logger.info("Webhook do Mercado Pago ignorado: %s", event_type)
 
 
+async def sync_preapproval(subscription_id: UUID) -> bool:
+    """Sincroniza uma assinatura pendente direto com o Mercado Pago.
+
+    Usado pelo botao "Atualizar status" do app: se o webhook atrasar ou falhar,
+    o cliente paga e continua bloqueado. Aqui o status e buscado na fonte.
+
+    Roda em uma sessao propria para que uma falha de rede ou do Mercado Pago
+    nao derrube (nem suje) a sessao do request que chamou.
+    """
+    from app.database import get_db_context
+
+    if not settings.MERCADOPAGO_ACCESS_TOKEN:
+        return False
+
+    async with get_db_context() as db:
+        result = await db.execute(select(Subscription).where(Subscription.id == subscription_id))
+        subscription = result.scalar_one_or_none()
+        if subscription is None or not subscription.mercadopago_subscription_id:
+            return False
+
+        try:
+            await _handle_preapproval(subscription.mercadopago_subscription_id, db)
+            await db.commit()
+            return True
+        except Exception:
+            logger.warning(
+                "Nao foi possivel sincronizar a preapproval da assinatura %s",
+                subscription_id,
+                exc_info=True,
+            )
+            return False
+
+
 async def _handle_preapproval(preapproval_id: str, db) -> None:
     """Sincroniza status e periodo da assinatura com a preapproval."""
     data = await get_preapproval(preapproval_id)

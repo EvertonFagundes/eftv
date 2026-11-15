@@ -47,7 +47,9 @@ services:
       - key: OFFLINE_GRACE_MINUTES
         value: "720"
       - key: MAX_DEVICES_PER_SUBSCRIPTION
-        value: "1"
+        value: "2"
+      - key: FREE_TRIAL_DAYS
+        value: "7"
       - key: CORS_ORIGINS
         value: https://evertonfagundes.github.io
       - key: FRONTEND_URL

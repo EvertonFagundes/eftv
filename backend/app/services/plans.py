@@ -11,9 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Plan
 
 PLAN_NAME = "Mensal"
-PLAN_DESCRIPTION = "Acesso completo ao catalogo, 1 aparelho e 1 stream"
+PLAN_DESCRIPTION = "Acesso completo ao catalogo, 2 aparelhos e 1 stream"
 PLAN_PRICE_CENTS = 1990
-PLAN_MAX_DEVICES = 1
+# Dois aparelhos: da para assistir na TV e no celular, e quem troca de
+# celular nao precisa pedir suporte para liberar a vaga antiga.
+PLAN_MAX_DEVICES = 2
 PLAN_MAX_STREAMS = 1
 PLAN_FEATURES = {"hd": True, "full_hd": True, "4k": False}
 

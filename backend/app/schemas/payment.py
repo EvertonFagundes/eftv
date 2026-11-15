@@ -100,3 +100,29 @@ class SubscriptionResponse(BaseModel):
     days_remaining: int
     is_active: bool
     is_trial: bool
+
+
+class SubscriptionOverview(BaseModel):
+    """Resumo usado pela tela "Minha assinatura" do app.
+
+    Junta plano + assinatura em uma unica chamada: o app mostra status, dias
+    restantes, preco e o botao de assinar sem precisar de varias requisicoes.
+    """
+
+    subscription_id: UUID | None
+    plan_id: UUID
+    plan_name: str
+    plan_description: str | None
+    price_cents: int
+    currency: str
+    interval: str
+    max_devices: int
+    max_streams: int
+    # active | trial | pending | past_due | cancelled | expired | none
+    status: str
+    days_remaining: int
+    current_period_end: datetime | None
+    trial_end: datetime | None
+    cancel_at_period_end: bool
+    auto_renew: bool
+    has_access: bool

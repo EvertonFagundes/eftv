@@ -119,7 +119,7 @@ class Settings(BaseSettings):
     # Tolerancia offline: usa o catalogo salvo mesmo sem falar com o servidor
     OFFLINE_GRACE_MINUTES: int = 720
     # Limite de aparelhos quando o plano nao define um valor proprio
-    MAX_DEVICES_PER_SUBSCRIPTION: int = 1
+    MAX_DEVICES_PER_SUBSCRIPTION: int = 2
 
     # Email (Brevo em producao; Resend como alternativa)
     EMAIL_PROVIDER: str = "auto"  # auto, brevo, resend, dev

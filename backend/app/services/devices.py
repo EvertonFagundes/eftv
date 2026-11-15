@@ -41,8 +41,8 @@ def device_limit(subscription: Subscription) -> int:
     """Limite efetivo de aparelhos do plano.
 
     O plano diz o que o produto promete; ``MAX_DEVICES_PER_SUBSCRIPTION`` e o
-    teto operacional (1 por padrao). Assim um plano antigo ou criado por
-    engano com 10 aparelhos nao fura a regra de um aparelho por assinatura.
+    teto operacional (2 por padrao). Assim um plano antigo ou criado por
+    engano com 10 aparelhos nao fura a regra comercial.
     """
     cap = max(1, settings.MAX_DEVICES_PER_SUBSCRIPTION)
     plan = getattr(subscription, "plan", None)

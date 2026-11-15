@@ -92,6 +92,8 @@ async def health_check():
         "checkout_back_url": f"{settings.FRONTEND_URL.rstrip('/')}/checkout.html",
         "api_base_url": settings.API_BASE_URL,
         "mercadopago_configured": bool(settings.MERCADOPAGO_ACCESS_TOKEN),
+        # Diagnostico do limite comercial (nao e segredo): plano de 2 aparelhos.
+        "max_devices_per_subscription": settings.MAX_DEVICES_PER_SUBSCRIPTION,
     }
 
 

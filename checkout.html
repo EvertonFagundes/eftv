@@ -94,7 +94,7 @@
       <h1>Pagamento aprovado</h1>
       <p>Sua assinatura <strong>Mensal</strong> está ativa.</p>
       <p>Volte ao aplicativo EFTV e entre com sua conta para assistir.</p>
-      <a class="button" href="https://github.com/EvertonFagundes/eftv/releases/latest">Abrir o app</a>
+      <a class="button app-link" href="https://github.com/EvertonFagundes/eftv/releases/latest">Abrir o app</a>
     </section>
 
     <section id="pending" hidden>
@@ -102,7 +102,7 @@
       <h1>Pagamento em análise</h1>
       <p>O Mercado Pago ainda está confirmando o pagamento.</p>
       <p>Assim que for aprovado, o acesso é liberado automaticamente. Você pode fechar esta página.</p>
-      <a class="button" href="https://github.com/EvertonFagundes/eftv/releases/latest">Abrir o app</a>
+      <a class="button app-link" href="https://github.com/EvertonFagundes/eftv/releases/latest">Abrir o app</a>
     </section>
 
     <section id="failure" hidden>
@@ -110,7 +110,7 @@
       <h1>Não foi possível concluir</h1>
       <p>O pagamento foi recusado ou cancelado.</p>
       <p>Seu período grátis continua valendo até o fim. Para tentar de novo, abra o aplicativo e vá em <strong>Assinatura</strong>.</p>
-      <a class="button" href="https://github.com/EvertonFagundes/eftv/releases/latest">Voltar ao app</a>
+      <a class="button app-link" href="https://github.com/EvertonFagundes/eftv/releases/latest">Voltar ao app</a>
     </section>
 
     <section id="return" hidden>
@@ -118,7 +118,7 @@
       <h1>Pagamento enviado</h1>
       <p>O Mercado Pago está confirmando o pagamento.</p>
       <p>Assim que for aprovado, o acesso é liberado automaticamente. Você já pode voltar ao aplicativo.</p>
-      <a class="button" href="https://github.com/EvertonFagundes/eftv/releases/latest">Voltar ao app</a>
+      <a class="button app-link" href="https://github.com/EvertonFagundes/eftv/releases/latest">Voltar ao app</a>
     </section>
 
     <a class="muted-link" href="./">Ir para o site</a>
@@ -136,6 +136,26 @@
       // O /preapproval devolve para a mesma back_url, sem status na URL.
       var target = sections[status] || sections.return;
       target.hidden = false;
+    })();
+
+    // "Voltar ao app": abre o EFTV pela deep link eftv://open. Se o app nao
+    // estiver instalado, cai na pagina de download do APK.
+    (function () {
+      var links = document.querySelectorAll("a.app-link");
+      for (var i = 0; i < links.length; i++) {
+        links[i].addEventListener("click", function (event) {
+          var fallback = this.getAttribute("href");
+          event.preventDefault();
+          var left = false;
+          document.addEventListener("visibilitychange", function () {
+            if (document.hidden) left = true;
+          });
+          window.location.href = "eftv://open";
+          setTimeout(function () {
+            if (!left) window.location.href = fallback;
+          }, 1500);
+        });
+      }
     })();
   </script>
 </body>
