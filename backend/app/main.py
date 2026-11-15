@@ -80,6 +80,22 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # Health check
+def mercadopago_token_kind() -> str:
+    """Classifica o token do Mercado Pago sem expor o segredo.
+
+    O preapproval de teste (``TEST-...``) so aceita pagador que tambem seja
+    usuario de teste. Saber isso no /health evita horas de diagnostico.
+    """
+    token = settings.MERCADOPAGO_ACCESS_TOKEN or ""
+    if not token:
+        return "missing"
+    if token.startswith("TEST-"):
+        return "test"
+    if token.startswith("APP_USR-"):
+        return "production"
+    return "unknown"
+
+
 @app.get("/health")
 async def health_check():
     # Diagnostico seguro: nada de segredo, so a configuracao que afeta o
@@ -92,6 +108,8 @@ async def health_check():
         "checkout_back_url": f"{settings.FRONTEND_URL.rstrip('/')}/checkout.html",
         "api_base_url": settings.API_BASE_URL,
         "mercadopago_configured": bool(settings.MERCADOPAGO_ACCESS_TOKEN),
+        "mercadopago_token_kind": mercadopago_token_kind(),
+        "mercadopago_sandbox": settings.MERCADOPAGO_SANDBOX,
         # Diagnostico do limite comercial (nao e segredo): plano de 2 aparelhos.
         "max_devices_per_subscription": settings.MAX_DEVICES_PER_SUBSCRIPTION,
     }

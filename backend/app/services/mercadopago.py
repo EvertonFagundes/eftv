@@ -133,11 +133,30 @@ async def create_checkout_preference(
         "status": "pending",
     }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{MERCADOPAGO_BASE_URL}/preapproval",
-            json=preapproval_data,
-            headers=_get_headers(),
+    async def post_preapproval(payload: dict) -> httpx.Response:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            return await client.post(
+                f"{MERCADOPAGO_BASE_URL}/preapproval",
+                json=payload,
+                headers=_get_headers(),
+            )
+
+    response = await post_preapproval(preapproval_data)
+
+    # O Mercado Pago devolve "User bad request" quando o ``payer_email`` nao
+    # pertence a uma conta Mercado Pago (comum em conta de teste e em cliente
+    # que ainda nao tem conta). Sem o campo, o proprio checkout pede o e-mail
+    # do pagador e a assinatura e criada normalmente.
+    if response.status_code >= 400 and preapproval_data.get("payer_email"):
+        fallback = {k: v for k, v in preapproval_data.items() if k != "payer_email"}
+        retry = await post_preapproval(fallback)
+        if retry.status_code < 400:
+            logger.info("Preapproval criada sem payer_email; o checkout pede o e-mail")
+            return cast(dict, retry.json())
+        logger.warning(
+            "Tentativa sem payer_email tambem falhou: %s - %s",
+            retry.status_code,
+            retry.text,
         )
 
     if response.status_code >= 400:
