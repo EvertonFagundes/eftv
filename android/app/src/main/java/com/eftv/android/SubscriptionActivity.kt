@@ -382,7 +382,7 @@ class SubscriptionActivity : AppCompatActivity() {
     // Utilidades
     // ------------------------------------------------------------------
 
-    /** Formata a data ISO do backend (UTC) no padrao local do aparelho. */
+    /** Formata a data ISO do backend (UTC) no padrao brasileiro. */
     private fun formatDate(iso: String?): String? {
         if (iso.isNullOrBlank()) return null
         val match = Regex("""(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})""")
@@ -392,7 +392,8 @@ class SubscriptionActivity : AppCompatActivity() {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
             val date = parser.parse(match.value) ?: return null
-            DateFormat.getDateInstance(DateFormat.MEDIUM).format(date)
+            // O app e em portugues: nao herdar o idioma do aparelho ("Nov 6, 2027").
+            DateFormat.getDateInstance(DateFormat.MEDIUM, Locale("pt", "BR")).format(date)
         } catch (e: Exception) {
             null
         }

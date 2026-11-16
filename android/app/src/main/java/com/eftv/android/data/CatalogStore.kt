@@ -471,9 +471,13 @@ class CatalogStore private constructor(context: Context) {
         }
 
         if (excludeAdults) {
-            clauses.add(
-                "(LOWER(c.group_title) NOT LIKE '%adulto%' AND LOWER(c.group_title) NOT LIKE '%xxx%')"
-            )
+            // Mesma lista de palavras usada na categoria (ChannelKind.isAdultGroup),
+            // para o canal nao aparecer na lista mas sumir da categoria (e vice-versa).
+            val conditions = ChannelKind.ADULT_GROUP_KEYWORDS.joinToString(" AND ") {
+                "LOWER(IFNULL(c.group_title, '')) NOT LIKE ?"
+            }
+            clauses.add("($conditions)")
+            ChannelKind.ADULT_GROUP_KEYWORDS.forEach { args.add("%$it%") }
         }
 
         val query = rawQuery.normalizedForSearch()

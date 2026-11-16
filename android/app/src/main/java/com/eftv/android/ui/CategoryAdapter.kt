@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.eftv.android.R
 import com.eftv.android.SettingsActivity
+import com.eftv.android.data.ChannelKind
 import com.eftv.android.data.ChannelMode
 import com.eftv.android.databinding.ItemCategoryBinding
 import java.util.ArrayList
@@ -222,7 +223,7 @@ class CategoryAdapter(
         for (title in groups) {
             if (title.isNotBlank() && title !in fixedGroups) {
                 // Se for grupo adulto e o recurso estiver desabilitado, pula
-                if (title.equals("Adultos", ignoreCase = true) && !adultEnabled) continue
+                if (!adultEnabled && ChannelKind.isAdultGroup(title)) continue
                 items.add(Category(
                     label = title,
                     mode = ChannelMode.ALL,

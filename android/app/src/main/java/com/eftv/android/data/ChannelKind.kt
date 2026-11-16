@@ -79,10 +79,27 @@ enum class ChannelKind {
             return LIVE
         }
 
+        /**
+         * Grupos de conteudo adulto, em qualquer variacao de nome que as
+         * playlists costumam usar ("Adultos", "+18", "XXX", "Porno"...).
+         */
+        val ADULT_GROUP_KEYWORDS = listOf(
+            "adulto",
+            "adult",
+            "xxx",
+            "+18",
+            "18+",
+            "porn",
+            "erotic",
+            "sensual",
+            "sexy",
+            "sexo",
+        )
+
         /** Grupo de conteudo adulto, em qualquer variacao de nome. */
         fun isAdultGroup(group: String?): Boolean {
             val g = group.orEmpty().normalizedForSearch()
-            return g.contains("adulto") || g.contains("adult") || g.contains("xxx")
+            return ADULT_GROUP_KEYWORDS.any { g.contains(it) }
         }
     }
 }

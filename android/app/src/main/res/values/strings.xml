@@ -158,7 +158,7 @@
     <string name="settings_title">Configurações</string>
     <string name="settings_category_privacy">Privacidade e conteúdo</string>
     <string name="settings_adult_title">Mostrar conteúdo adulto</string>
-    <string name="settings_adult_summary">Exibe a categoria Adultos na lista de canais. Desativado por padrão.</string>
+    <string name="settings_adult_summary">Mostra os canais adultos da playlist na lista, quando existirem. Desativado por padrão.</string>
     <string name="settings_category_about">Sobre</string>
     <string name="settings_about_version">Versão do app</string>
 

@@ -556,7 +556,8 @@ class MainActivity : AppCompatActivity() {
 
         val hasContent = hasCatalog
         if (!hasContent) showLoading()
-        binding.swipeRefresh.isRefreshing = hasContent
+        // Atualizacao automatica nao mostra o indicador de "puxar para atualizar":
+        // ele ficava girando sobre a lista. O gesto do usuario cuida do proprio spinner.
 
         refreshJob = lifecycleScope.launch {
             try {

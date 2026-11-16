@@ -160,9 +160,8 @@ class ChannelAdapter(
                 crossfade(true)
             }
 
-            // A aba já indica que é ao vivo; fica só o ponto pulsante no logo.
-            binding.liveBadge.isVisible = true
-            startPulseAnimation(binding.liveBadge)
+            // A aba já indica que é ao vivo; sem selo sobre o logo para não cobrir a arte.
+            binding.liveBadge.isVisible = false
             binding.typeIndicator.isVisible = false
             binding.seriesBadge.isVisible = false
             binding.episodeCount.isVisible = false
