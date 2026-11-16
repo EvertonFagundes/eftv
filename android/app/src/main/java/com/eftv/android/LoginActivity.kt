@@ -3,11 +3,17 @@ package com.eftv.android
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.TextPaint
+import android.text.method.LinkMovementMethod
+import android.text.style.URLSpan
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.eftv.android.data.SessionStore
 import com.eftv.android.data.api.EftvApi
@@ -36,6 +42,24 @@ class LoginActivity : AppCompatActivity() {
     // Modo cadastro ativado/desativado
     private var isRegisterMode = false
 
+    /** Deixa o trecho do texto como link clicavel, na cor da marca. */
+    private fun styleLegalLink(legal: SpannableString, label: String, url: String) {
+        val start = legal.toString().indexOf(label, ignoreCase = true)
+        if (start < 0) return
+        legal.setSpan(
+            object : URLSpan(url) {
+                override fun updateDrawState(ds: TextPaint) {
+                    super.updateDrawState(ds)
+                    ds.isUnderlineText = false
+                    ds.color = ContextCompat.getColor(this@LoginActivity, R.color.primary)
+                }
+            },
+            start,
+            start + label.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
@@ -47,6 +71,13 @@ class LoginActivity : AppCompatActivity() {
             BuildConfig.VERSION_NAME,
             BuildConfig.API_BASE_URL,
         )
+
+        // Termos e politica: obrigatorio para loja e exigido pelo Mercado Pago.
+        binding.legalText.text = getString(R.string.login_legal)
+        binding.legalText.movementMethod = LinkMovementMethod.getInstance()
+        val legal = binding.legalText.text as SpannableString
+        styleLegalLink(legal, getString(R.string.settings_terms), SettingsActivity.URL_TERMOS)
+        styleLegalLink(legal, getString(R.string.settings_privacy), SettingsActivity.URL_PRIVACIDADE)
 
         // No modo local o servidor embutido e a fonte do catalogo: nao ha
         // login nem backend para esperar.

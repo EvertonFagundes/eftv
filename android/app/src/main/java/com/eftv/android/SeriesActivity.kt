@@ -116,6 +116,34 @@ class SeriesActivity : AppCompatActivity() {
             // Com uma unica temporada as abas nao ajudam.
             binding.seasonTabs.isVisible = seasons.size > 1
             showSeason(0)
+            resumeWhereYouLeftOff(unique)
+        }
+    }
+
+    /**
+     * Se o usuario ja comecou a ver a serie, abre na temporada e no episodio
+     * em que parou em vez de sempre comecar do primeiro.
+     */
+    private fun resumeWhereYouLeftOff(episodes: List<Channel>) {
+        val urls = episodes.map { it.url }
+        lifecycleScope.launch {
+            val progress = withContext(Dispatchers.IO) { catalog.progressFor(urls) }
+            val watched = episodes
+                .filter { (progress[it.url]?.positionMs ?: 0L) > 30_000L }
+                .maxByOrNull { progress[it.url]?.positionMs ?: 0L }
+                ?: return@launch
+
+            val seasonIndex = episodesBySeason.keys.indexOf(watched.season)
+            if (seasonIndex >= 0) {
+                if (binding.seasonTabs.isVisible) {
+                    binding.seasonTabs.getTabAt(seasonIndex)?.select()
+                } else {
+                    showSeason(seasonIndex)
+                }
+            }
+            val index = episodesBySeason[watched.season]
+                ?.indexOfFirst { it.url == watched.url } ?: -1
+            if (index >= 0) binding.episodeList.scrollToPosition(index)
         }
     }
 

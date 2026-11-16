@@ -1,6 +1,8 @@
 package com.eftv.android
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -45,6 +47,16 @@ class SettingsActivity : AppCompatActivity() {
 
             findPreference<Preference>("pref_version")?.summary = BuildConfig.VERSION_NAME
 
+            // Termos e politica: paginas publicadas no site oficial.
+            findPreference<Preference>("pref_terms")?.setOnPreferenceClickListener {
+                openUrl(SettingsActivity.URL_TERMOS)
+                true
+            }
+            findPreference<Preference>("pref_privacy")?.setOnPreferenceClickListener {
+                openUrl(SettingsActivity.URL_PRIVACIDADE)
+                true
+            }
+
             // O switch nao grava sozinho: a fonte da verdade e o arquivo que o
             // app le em isAdultContentEnabled(). Antes o PreferenceManager podia
             // usar outro arquivo e a opcao nunca tinha efeito no catalogo.
@@ -65,9 +77,16 @@ class SettingsActivity : AppCompatActivity() {
             hideAdultOptionIfEmpty()
         }
 
+        /** Abre uma pagina oficial no navegador. */
+        private fun openUrl(url: String) {
+            runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+        }
+
         private fun hideAdultOptionIfEmpty() {
             val adultPref = findPreference<Preference>(SettingsActivity.PREF_SHOW_ADULT) ?: return
-            val category = findPreference<Preference>(CATEGORY_PRIVACY) ?: return
+            val category = findPreference<Preference>(SettingsActivity.CATEGORY_PRIVACY) ?: return
             lifecycleScope.launch {
                 val hasAdult = withContext(Dispatchers.IO) {
                     runCatching {
@@ -89,6 +108,12 @@ class SettingsActivity : AppCompatActivity() {
 
         /** Chave da categoria que guarda a opcao de conteudo adulto. */
         private const val CATEGORY_PRIVACY = "category_privacy"
+
+        /** Paginas legais publicadas no site oficial. */
+        const val URL_TERMOS =
+            "https://evertonfagundes.github.io/eftv/termos.html"
+        const val URL_PRIVACIDADE =
+            "https://evertonfagundes.github.io/eftv/privacidade.html"
 
         /** Verifica se o conteudo adulto esta liberado. */
         @JvmStatic

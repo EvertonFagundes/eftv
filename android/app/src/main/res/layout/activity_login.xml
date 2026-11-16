@@ -237,10 +237,19 @@
             android:textColor="@color/on_surface_variant" />
 
         <TextView
+            android:id="@+id/legalText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+            android:textColor="@color/on_surface_variant" />
+
+        <TextView
             android:id="@+id/versionText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="8dp"
             android:gravity="center"
             android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
             android:textColor="@color/on_surface_variant" />

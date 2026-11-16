@@ -17,8 +17,19 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        android:key="category_about"
         android:title="@string/settings_category_about"
         app:iconSpaceReserved="false">
+
+        <Preference
+            android:key="pref_terms"
+            android:title="@string/settings_terms"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="pref_privacy"
+            android:title="@string/settings_privacy"
+            app:iconSpaceReserved="false" />
 
         <Preference
             android:key="pref_version"

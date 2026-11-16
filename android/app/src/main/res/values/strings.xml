@@ -55,6 +55,7 @@
     <string name="login_network_error">Não foi possível falar com o servidor. Verifique a conexão.</string>
     <string name="login_network_error_debug">Não foi possível falar com o servidor (%1$s). Verifique a conexão e se a API está no ar.</string>
     <string name="login_version">Versão %1$s · %2$s</string>
+    <string name="login_legal">Ao continuar você concorda com os Termos de Uso e a Política de Privacidade.</string>
     <string name="subscription_inactive">Sua assinatura está inativa. Mostrando a lista local.</string>
     <string name="logout">Sair da conta</string>
     <string name="login_remember">Lembrar-me</string>
@@ -164,6 +165,8 @@
     <string name="adult_no_channels">Sua playlist não tem canais adultos no momento.</string>
     <string name="settings_category_about">Sobre</string>
     <string name="settings_about_version">Versão do app</string>
+    <string name="settings_terms">Termos de uso</string>
+    <string name="settings_privacy">Política de privacidade</string>
 
     <!-- Tipos de conteudo -->
     <string name="kind_live">Ao Vivo</string>
