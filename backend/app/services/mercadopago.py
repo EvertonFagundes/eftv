@@ -2,7 +2,7 @@
 import hashlib
 import hmac
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import UUID
 
@@ -324,6 +324,27 @@ def _parse_datetime(value: str | None) -> datetime | None:
         return None
 
 
+def _next_period_end(start: datetime | None, auto_recurring: dict) -> datetime:
+    """Calcula o fim do periodo quando o Mercado Pago nao informa a data.
+
+    Base: ``start`` (ou agora) mais a frequencia da assinatura. Mensal vira
+    31 dias e anual 366, com uma folga para nao expirar na virada do mes.
+    """
+    base = start or datetime.now(UTC)
+    try:
+        frequency = int(auto_recurring.get("frequency") or 1)
+    except (TypeError, ValueError):
+        frequency = 1
+    frequency_type = str(auto_recurring.get("frequency_type") or "months")
+
+    if frequency_type == "days":
+        return base + timedelta(days=frequency)
+    if frequency_type == "years":
+        return base + timedelta(days=366 * frequency)
+    # months (padrao das assinaturas)
+    return base + timedelta(days=31 * frequency)
+
+
 async def _find_subscription(
     db,
     preapproval_id: str | None,
@@ -529,6 +550,11 @@ async def _handle_preapproval(preapproval_id: str, db) -> None:
     end = _parse_datetime(data.get("next_payment_date"))
     if start is not None:
         subscription.current_period_start = start
+    if end is None and preapproval_status in _ACTIVE_PREAPPROVAL_STATUSES:
+        # O fluxo por plano nem sempre devolve next_payment_date. Sem o fim do
+        # periodo a assinatura ficaria "ativa" e mesmo assim bloquearia o
+        # acesso, porque has_access compara com current_period_end.
+        end = _next_period_end(start, data.get("auto_recurring") or {})
     if end is not None:
         subscription.current_period_end = end
 
@@ -583,12 +609,17 @@ async def _handle_authorized_payment(authorized_payment_id: str, db) -> None:
     db.add(payment)
 
     if approved:
+        now = datetime.now(UTC)
         subscription.status = "active"
         subscription.auto_renew = True
-        subscription.current_period_start = datetime.now(UTC)
+        subscription.current_period_start = now
         end = _parse_datetime(data.get("next_payment_date"))
-        if end is not None:
-            subscription.current_period_end = end
+        if end is None:
+            end = _next_period_end(now, data.get("auto_recurring") or {})
+        # Renovacao nunca encurta um periodo que ja estava pago.
+        if subscription.current_period_end and subscription.current_period_end > end:
+            end = subscription.current_period_end
+        subscription.current_period_end = end
     elif status_label == "refunded":
         subscription.status = "cancelled"
         subscription.cancelled_at = datetime.now(UTC)
