@@ -201,14 +201,21 @@ class EftvApi(
         return json.optString("message", "")
     }
 
+    /**
+     * String opcional: `optString` do Android devolve a string "null" quando o
+     * JSON traz null, o que apareceria na tela como "cartao Null final null".
+     */
+    private fun JSONObject.optNullableString(key: String): String? =
+        if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
+
     /** Plano + assinatura do usuario em uma unica chamada. */
     suspend fun subscriptionOverview(accessToken: String): SubscriptionOverview {
         val json = request("GET", "/subscriptions/current", accessToken = accessToken)
         return SubscriptionOverview(
-            subscriptionId = json.optString("subscription_id").takeIf { it.isNotBlank() },
+            subscriptionId = json.optNullableString("subscription_id"),
             planId = json.optString("plan_id"),
             planName = json.optString("plan_name"),
-            planDescription = json.optString("plan_description").takeIf { it.isNotBlank() },
+            planDescription = json.optNullableString("plan_description"),
             priceCents = json.optInt("price_cents", 0),
             currency = json.optString("currency", "BRL"),
             interval = json.optString("interval", "month"),
@@ -216,13 +223,13 @@ class EftvApi(
             maxStreams = json.optInt("max_streams", 1),
             status = json.optString("status", "none"),
             daysRemaining = json.optInt("days_remaining", 0),
-            currentPeriodEnd = json.optString("current_period_end").takeIf { it.isNotBlank() },
-            trialEnd = json.optString("trial_end").takeIf { it.isNotBlank() },
+            currentPeriodEnd = json.optNullableString("current_period_end"),
+            trialEnd = json.optNullableString("trial_end"),
             cancelAtPeriodEnd = json.optBoolean("cancel_at_period_end", false),
             autoRenew = json.optBoolean("auto_renew", false),
             hasAccess = json.optBoolean("has_access", false),
-            paymentMethod = json.optString("payment_method").takeIf { it.isNotBlank() },
-            paymentLastFour = json.optString("payment_last_four").takeIf { it.isNotBlank() },
+            paymentMethod = json.optNullableString("payment_method"),
+            paymentLastFour = json.optNullableString("payment_last_four"),
         )
     }
 
