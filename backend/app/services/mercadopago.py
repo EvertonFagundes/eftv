@@ -64,6 +64,7 @@ async def get_account_info(force: bool = False) -> dict | None:
     email = str(data.get("email") or "")
     nickname = str(data.get("nickname") or "")
     info = {
+        "id": data.get("id"),
         "is_test_user": "test_user" in (data.get("tags") or [])
         or email.endswith("@testuser.com")
         or nickname.startswith("TESTUSER"),
@@ -132,6 +133,38 @@ def _get_headers(idempotency_key: str | None = None) -> dict:
     return headers
 
 
+async def _plan_belongs_to_account(plan_id: str) -> bool:
+    """Confere se o plano salvo ainda pertence a conta coletora atual.
+
+    Quando o token muda (teste -> producao), o plano antigo continua gravado
+    no banco mas pertence a outro coletor. Reaproveitar esse id geraria um
+    link de assinatura invalido para o cliente.
+    """
+    account = await get_account_info()
+    if account is None or not account.get("id"):
+        # Sem como comparar: mantem o plano em vez de recriar a cada checkout.
+        return True
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                f"{MERCADOPAGO_BASE_URL}/preapproval_plan/{plan_id}",
+                headers=_get_headers(),
+            )
+    except Exception:  # noqa: BLE001
+        return True
+
+    if response.status_code >= 400:
+        return False
+
+    try:
+        collector_id = response.json().get("collector_id")
+    except ValueError:
+        return True
+
+    return str(collector_id) == str(account["id"])
+
+
 async def get_or_create_subscription_plan(db, plan: Plan) -> str:
     """Devolve o id do plano de assinatura no Mercado Pago, criando se preciso.
 
@@ -141,8 +174,13 @@ async def get_or_create_subscription_plan(db, plan: Plan) -> str:
     conhecido na criacao da assinatura.
     """
     existing = getattr(plan, "mercadopago_plan_id", None)
-    if existing:
+    if existing and await _plan_belongs_to_account(str(existing)):
         return str(existing)
+    if existing:
+        logger.warning(
+            "Plano MP %s nao pertence a conta atual; criando um novo", existing
+        )
+        plan.mercadopago_plan_id = None
 
     if not settings.MERCADOPAGO_ACCESS_TOKEN:
         raise RuntimeError("MERCADOPAGO_ACCESS_TOKEN não configurado")
