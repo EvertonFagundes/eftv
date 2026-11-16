@@ -437,3 +437,35 @@ async def diagnostico_preapproval(_: User = Depends(require_admin)):
         out["preapproval_payer_real"] = pre_item
 
     return out
+
+
+@router.post("/diagnostico/test-user")
+async def diagnostico_test_user(_: User = Depends(require_admin)):
+    """Cria um pagador de TESTE no Mercado Pago. TEMPORARIO.
+
+    A conta coletora atual e de teste, entao o checkout so aceita pagador de
+    teste. Serve para validar o fluxo completo (pagamento -> webhook ->
+    liberacao de acesso). Remover junto com o outro diagnostico.
+    """
+    import httpx
+
+    from app.services.mercadopago import MERCADOPAGO_BASE_URL, _get_headers
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{MERCADOPAGO_BASE_URL}/users/test",
+            json={"site_id": "MLB"},
+            headers=_get_headers(),
+        )
+
+    if response.status_code >= 400:
+        return {"http": response.status_code, "resposta": response.text[:400]}
+
+    data = response.json()
+    return {
+        "id": data.get("id"),
+        "email": data.get("email"),
+        "password": data.get("password"),
+        "nickname": data.get("nickname"),
+        "site_id": data.get("site_id"),
+    }
