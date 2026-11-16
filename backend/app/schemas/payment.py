@@ -126,3 +126,6 @@ class SubscriptionOverview(BaseModel):
     cancel_at_period_end: bool
     auto_renew: bool
     has_access: bool
+    # Forma de pagamento usada na ultima cobranca aprovada (ex.: "visa").
+    payment_method: str | None = None
+    payment_last_four: str | None = None

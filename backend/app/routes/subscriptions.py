@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -30,6 +31,17 @@ from app.services.plans import get_or_create_plan
 router = APIRouter(prefix="/subscriptions", tags=["Assinaturas"])
 
 logger = logging.getLogger(__name__)
+
+
+def _card_last_four(payment: Payment) -> str | None:
+    """Ultimos 4 digitos do cartao, quando o Mercado Pago informa."""
+    meta = payment.extra_metadata or {}
+    payment_info = meta.get("payment") or {}
+    for source in (payment_info, meta):
+        last_four = source.get("last_four_digits") or source.get("card_last_four_digits")
+        if last_four:
+            return str(last_four)
+    return None
 
 
 @router.get("", response_model=list[SubscriptionResponse])
@@ -106,6 +118,25 @@ async def current_subscription(
             if await sync_preapproval(subscription.id):
                 await db.refresh(subscription)
 
+    # Ultima cobranca aprovada: mostra a forma de pagamento no app para o
+    # cliente nao precisar abrir suporte para saber o cartao usado.
+    payment_method = None
+    payment_last_four = None
+    if subscription is not None:
+        payment_result = await db.execute(
+            select(Payment)
+            .where(
+                Payment.subscription_id == subscription.id,
+                Payment.status == "approved",
+            )
+            .order_by(Payment.created_at.desc())
+            .limit(1),
+        )
+        last_payment = payment_result.scalar_one_or_none()
+        if last_payment is not None:
+            payment_method = last_payment.payment_method
+            payment_last_four = _card_last_four(last_payment)
+
     return SubscriptionOverview(
         subscription_id=subscription.id if subscription is not None else None,
         plan_id=plan.id,
@@ -125,6 +156,8 @@ async def current_subscription(
         ),
         auto_renew=subscription.auto_renew if subscription is not None else False,
         has_access=subscription.has_access if subscription is not None else False,
+        payment_method=payment_method,
+        payment_last_four=payment_last_four,
     )
 
 

@@ -64,6 +64,22 @@ class CatalogStore private constructor(context: Context) {
         return result
     }
 
+    /** Todos os grupos do catalogo, de qualquer tipo. */
+    fun allGroups(): List<String> {
+        val result = ArrayList<String>()
+        db.rawQuery(
+            "SELECT DISTINCT group_title FROM channels ORDER BY group_title COLLATE NOCASE",
+            null,
+        ).use { cursor ->
+            while (cursor.moveToNext()) result.add(cursor.getString(0))
+        }
+        return result
+    }
+
+    /** O catalogo tem algum grupo de conteudo adulto? */
+    fun hasAdultGroup(): Boolean =
+        allGroups().any { ChannelKind.isAdultGroup(it) }
+
     fun count(
         group: String?,
         query: String,
@@ -384,11 +400,12 @@ class CatalogStore private constructor(context: Context) {
                     insertChannel.bindString(2, channel.name)
                     insertChannel.bindString(3, channel.searchKey)
                     insertChannel.bindString(4, channel.group)
-                    insertChannel.bindString(5, channel.logo)
-                    insertChannel.bindString(6, channel.url)
-                    insertChannel.bindString(7, channel.kind.name)
-                    bindNullable(insertChannel, 8, channel.userAgent)
-                    bindNullable(insertChannel, 9, channel.referer)
+                    insertChannel.bindString(5, channel.group.normalizedForSearch())
+                    insertChannel.bindString(6, channel.logo)
+                    insertChannel.bindString(7, channel.url)
+                    insertChannel.bindString(8, channel.kind.name)
+                    bindNullable(insertChannel, 9, channel.userAgent)
+                    bindNullable(insertChannel, 10, channel.referer)
 
                     // Episodios: guarda serie, temporada e episodio para agrupar.
                     val info = if (channel.kind == ChannelKind.SERIES) {
@@ -396,10 +413,10 @@ class CatalogStore private constructor(context: Context) {
                     } else {
                         null
                     }
-                    insertChannel.bindString(10, info?.key.orEmpty())
-                    insertChannel.bindString(11, info?.title.orEmpty())
-                    insertChannel.bindLong(12, (info?.season ?: 0).toLong())
-                    insertChannel.bindLong(13, (info?.episode ?: 0).toLong())
+                    insertChannel.bindString(11, info?.key.orEmpty())
+                    insertChannel.bindString(12, info?.title.orEmpty())
+                    insertChannel.bindLong(13, (info?.season ?: 0).toLong())
+                    insertChannel.bindLong(14, (info?.episode ?: 0).toLong())
 
                     if (insertChannel.executeInsert() != -1L) {
                         total++
@@ -473,8 +490,9 @@ class CatalogStore private constructor(context: Context) {
         if (excludeAdults) {
             // Mesma lista de palavras usada na categoria (ChannelKind.isAdultGroup),
             // para o canal nao aparecer na lista mas sumir da categoria (e vice-versa).
+            // group_key ja vem minusculo e sem acento, igual a normalizacao do Kotlin.
             val conditions = ChannelKind.ADULT_GROUP_KEYWORDS.joinToString(" AND ") {
-                "LOWER(IFNULL(c.group_title, '')) NOT LIKE ?"
+                "c.group_key NOT LIKE ?"
             }
             clauses.add("($conditions)")
             ChannelKind.ADULT_GROUP_KEYWORDS.forEach { args.add("%$it%") }
@@ -482,7 +500,10 @@ class CatalogStore private constructor(context: Context) {
 
         val query = rawQuery.normalizedForSearch()
         if (query.isNotEmpty()) {
-            clauses.add("c.name_key LIKE ? ESCAPE '\\'")
+            // Busca no nome do canal e tambem no grupo ("esportes" traz o grupo
+            // Esportes inteiro). Ambas as colunas sao sem acento e minusculas.
+            clauses.add("(c.name_key LIKE ? ESCAPE '\\' OR c.group_key LIKE ? ESCAPE '\\')")
+            args.add("%${escapeLike(query)}%")
             args.add("%${escapeLike(query)}%")
         }
 
@@ -538,13 +559,44 @@ class CatalogStore private constructor(context: Context) {
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
             // v3: tipo do conteudo (ao vivo / filme / serie).
             // v4: serie, temporada e episodio (agrupamento de series).
-            // Nos dois casos o catalogo e baixado de novo, preservando
+            // v5: group_key (grupo sem acento, para a busca por categoria).
+            // Nos tres casos o catalogo e baixado de novo, preservando
             // favoritos, historico e progresso.
             if (oldVersion < 4) {
                 db.execSQL("DROP TABLE IF EXISTS channels")
                 db.execSQL("DROP TABLE IF EXISTS channel_groups")
                 db.execSQL("DROP TABLE IF EXISTS meta")
                 createSchema(db)
+            } else if (oldVersion < 5) {
+                // So a coluna nova: o catalogo existente continua valido.
+                db.execSQL(
+                    "ALTER TABLE channels ADD COLUMN group_key TEXT NOT NULL DEFAULT ''",
+                )
+                backfillGroupKey(db)
+            }
+        }
+
+        /**
+         * Preenche group_key a partir de group_title. Ha poucos grupos
+         * distintos entao atualizamos uma vez por grupo, nao por canal.
+         */
+        private fun backfillGroupKey(db: SQLiteDatabase) {
+            val groups = LinkedHashSet<String>()
+            db.rawQuery("SELECT DISTINCT group_title FROM channels", null).use { cursor ->
+                while (cursor.moveToNext()) groups.add(cursor.getString(0))
+            }
+            val update = db.compileStatement(
+                "UPDATE channels SET group_key = ? WHERE group_title = ?",
+            )
+            try {
+                for (title in groups) {
+                    update.clearBindings()
+                    update.bindString(1, title.normalizedForSearch())
+                    update.bindString(2, title)
+                    update.executeUpdateDelete()
+                }
+            } finally {
+                update.close()
             }
         }
 
@@ -567,6 +619,7 @@ class CatalogStore private constructor(context: Context) {
                     name TEXT NOT NULL,
                     name_key TEXT NOT NULL,
                     group_title TEXT NOT NULL,
+                    group_key TEXT NOT NULL DEFAULT '',
                     logo TEXT NOT NULL DEFAULT '',
                     url TEXT NOT NULL,
                     kind TEXT NOT NULL DEFAULT 'LIVE',
@@ -628,7 +681,7 @@ class CatalogStore private constructor(context: Context) {
 
         companion object {
             private const val DB_NAME = "catalog.db"
-            private const val DB_VERSION = 4
+            private const val DB_VERSION = 5
         }
     }
 
@@ -644,9 +697,9 @@ class CatalogStore private constructor(context: Context) {
 
         private const val INSERT_CHANNEL = """
             INSERT OR IGNORE INTO channels
-                (tvg_id, name, name_key, group_title, logo, url, kind, user_agent, referer,
-                 series_key, series_title, season, episode)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (tvg_id, name, name_key, group_title, group_key, logo, url, kind,
+                 user_agent, referer, series_key, series_title, season, episode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         /** Uma linha por serie; item sem marcador de episodio fica solto (chave propria). */

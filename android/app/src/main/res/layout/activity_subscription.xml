@@ -95,6 +95,18 @@
                     android:textSize="14sp"
                     tools:text="✓ 2 aparelhos\n✓ 1 tela por vez\n✓ HD e Full HD incluídos" />
 
+                <!-- Forma de pagamento da ultima cobranca -->
+                <TextView
+                    android:id="@+id/paymentText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColor="@color/on_surface_variant"
+                    android:textSize="13sp"
+                    android:visibility="gone"
+                    tools:text="Pagamento: cartão final 1234"
+                    tools:visibility="visible" />
+
             </LinearLayout>
 
             <com.google.android.material.button.MaterialButton

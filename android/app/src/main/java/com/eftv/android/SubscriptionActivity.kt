@@ -137,6 +137,7 @@ class SubscriptionActivity : AppCompatActivity() {
             overview.maxDevices,
             overview.maxStreams,
         )
+        renderPayment(overview)
 
         val periodEnd = formatDate(overview.currentPeriodEnd)
         val trialEnd = formatDate(overview.trialEnd)
@@ -185,6 +186,40 @@ class SubscriptionActivity : AppCompatActivity() {
                 showSubscribe(true, R.string.subscription_subscribe_now)
             }
         }
+    }
+
+    /** Mostra o cartao/cobranca usada na ultima renovacao (quando o servidor sabe). */
+    private fun renderPayment(overview: EftvApi.SubscriptionOverview) {
+        val method = overview.paymentMethod
+        val view = binding.paymentText
+        when {
+            method.isNullOrBlank() -> view.visibility = View.GONE
+
+            else -> {
+                val brand = paymentBrand(method)
+                val lastFour = overview.paymentLastFour
+                view.text = if (lastFour.isNullOrBlank()) {
+                    getString(R.string.subscription_payment_method, brand)
+                } else {
+                    getString(R.string.subscription_payment_card, brand, lastFour)
+                }
+                view.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    /** Siglas do Mercado Pago ("visa", "master"...) em nome legivel. */
+    private fun paymentBrand(method: String): String = when (method.lowercase()) {
+        "visa" -> "Visa"
+        "master", "mastercard" -> "Mastercard"
+        "elo" -> "Elo"
+        "amex" -> "American Express"
+        "hipercard" -> "Hipercard"
+        "cabal" -> "Cabal"
+        "naranja" -> "Naranja X"
+        "pagoseguro" -> "PagoSeguro"
+        "credipago" -> "Credipago"
+        else -> method.replaceFirstChar { it.uppercase() }
     }
 
     private fun showSubscribe(visible: Boolean, labelRes: Int) {

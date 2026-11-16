@@ -3,10 +3,15 @@ package com.eftv.android
 import android.content.Context
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
+import com.eftv.android.data.CatalogStore
 import com.eftv.android.databinding.ActivitySettingsBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Tela de configuracoes do app.
@@ -54,6 +59,26 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
             }
+
+            // A opcao so aparece quando a playlist traz algum grupo adulto;
+            // sem conteudo ela so geraria duvida no cliente.
+            hideAdultOptionIfEmpty()
+        }
+
+        private fun hideAdultOptionIfEmpty() {
+            val adultPref = findPreference<Preference>(SettingsActivity.PREF_SHOW_ADULT) ?: return
+            val category = findPreference<Preference>(CATEGORY_PRIVACY) ?: return
+            lifecycleScope.launch {
+                val hasAdult = withContext(Dispatchers.IO) {
+                    runCatching {
+                        CatalogStore.get(requireContext()).hasAdultGroup()
+                    }.getOrDefault(false)
+                }
+                if (!hasAdult && isAdded) {
+                    adultPref.isVisible = false
+                    category.isVisible = false
+                }
+            }
         }
     }
 
@@ -61,6 +86,9 @@ class SettingsActivity : AppCompatActivity() {
         /** Chave da preferencia de conteudo adulto. */
         const val PREF_SHOW_ADULT = "pref_show_adult"
         const val PREFS_NAME = "eftv_settings"
+
+        /** Chave da categoria que guarda a opcao de conteudo adulto. */
+        private const val CATEGORY_PRIVACY = "category_privacy"
 
         /** Verifica se o conteudo adulto esta liberado. */
         @JvmStatic

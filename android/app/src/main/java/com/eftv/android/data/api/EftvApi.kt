@@ -76,6 +76,10 @@ class EftvApi(
         val cancelAtPeriodEnd: Boolean,
         val autoRenew: Boolean,
         val hasAccess: Boolean,
+        /** Ultima cobranca aprovada: "visa", "master", etc. */
+        val paymentMethod: String?,
+        /** Ultimos 4 digitos do cartao, quando o servidor informa. */
+        val paymentLastFour: String?,
     )
 
     data class CheckoutSession(
@@ -217,6 +221,8 @@ class EftvApi(
             cancelAtPeriodEnd = json.optBoolean("cancel_at_period_end", false),
             autoRenew = json.optBoolean("auto_renew", false),
             hasAccess = json.optBoolean("has_access", false),
+            paymentMethod = json.optString("payment_method").takeIf { it.isNotBlank() },
+            paymentLastFour = json.optString("payment_last_four").takeIf { it.isNotBlank() },
         )
     }
 

@@ -108,6 +108,8 @@
     <string name="subscription_refresh">Atualizar status</string>
     <string name="subscription_devices">Gerenciar aparelhos</string>
     <string name="subscription_footnote">Pagamento processado pelo Mercado Pago. Você pode cancelar quando quiser e continua assistindo até o fim do período pago.</string>
+    <string name="subscription_payment_method">Pagamento: %1$s</string>
+    <string name="subscription_payment_card">Pagamento: cartão %1$s final %2$s</string>
     <string name="subscription_status_active">Assinatura ativa</string>
     <string name="subscription_status_trial">Período de teste</string>
     <string name="subscription_status_pending">Pagamento em análise</string>
@@ -159,6 +161,7 @@
     <string name="settings_category_privacy">Privacidade e conteúdo</string>
     <string name="settings_adult_title">Mostrar conteúdo adulto</string>
     <string name="settings_adult_summary">Mostra os canais adultos da playlist na lista, quando existirem. Desativado por padrão.</string>
+    <string name="adult_no_channels">Sua playlist não tem canais adultos no momento.</string>
     <string name="settings_category_about">Sobre</string>
     <string name="settings_about_version">Versão do app</string>
 

@@ -150,6 +150,15 @@ class MainActivity : AppCompatActivity() {
                 if (selectedKind != kind) return@launch
                 rebuildCategoryItems(groups)
 
+                // A opcao so tem efeito se a playlist trouxer canais adultos.
+                if (enabled && groups.none { ChannelKind.isAdultGroup(it) }) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        R.string.adult_no_channels,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+
                 if (!enabled && ChannelKind.isAdultGroup(selectedGroup)) {
                     resetCategorySelection()
                 }
