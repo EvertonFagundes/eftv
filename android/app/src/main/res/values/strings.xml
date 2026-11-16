@@ -102,7 +102,7 @@
     <!-- Minha assinatura -->
     <string name="subscription_title">Minha assinatura</string>
     <string name="subscription_price_caption">por mês · cobrança recorrente</string>
-    <string name="subscription_benefits">%1$d aparelhos · %2$d tela por vez\nHD e Full HD incluídos</string>
+    <string name="subscription_benefits">✓ %1$d aparelhos por conta\n✓ %2$d tela por vez\n✓ HD e Full HD incluídos</string>
     <string name="subscription_subscribe_now">Assinar agora</string>
     <string name="subscription_continue_payment">Continuar pagamento</string>
     <string name="subscription_refresh">Atualizar status</string>

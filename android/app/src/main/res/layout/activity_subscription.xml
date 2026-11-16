@@ -34,86 +34,79 @@
             android:orientation="vertical"
             android:padding="20dp">
 
-            <com.google.android.material.card.MaterialCardView
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:cardBackgroundColor="@color/surface_container_low"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="0dp"
-                app:strokeColor="@color/outline_variant"
-                app:strokeWidth="1dp">
+                android:background="@drawable/bg_subscription_hero"
+                android:orientation="vertical"
+                android:padding="22dp">
 
-                <LinearLayout
+                <TextView
+                    android:id="@+id/statusTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="20dp">
+                    android:textColor="@color/on_background"
+                    android:textSize="21sp"
+                    android:textStyle="bold"
+                    tools:text="Período de teste" />
 
-                    <TextView
-                        android:id="@+id/statusTitle"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textColor="@color/on_background"
-                        android:textSize="21sp"
-                        android:textStyle="bold"
-                        tools:text="Período de teste" />
+                <TextView
+                    android:id="@+id/statusDetail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="@color/on_surface_variant"
+                    android:textSize="14sp"
+                    tools:text="3 dias grátis restantes · termina em 18 de nov. de 2026" />
 
-                    <TextView
-                        android:id="@+id/statusDetail"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:textColor="@color/on_surface_variant"
-                        android:textSize="14sp"
-                        tools:text="3 dias grátis restantes · termina em 18 de nov. de 2026" />
+                <TextView
+                    android:id="@+id/priceText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:letterSpacing="-0.02"
+                    android:textColor="@color/primary"
+                    android:textSize="34sp"
+                    android:textStyle="bold"
+                    tools:text="R$ 19,90" />
 
-                    <TextView
-                        android:id="@+id/priceText"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
-                        android:textColor="@color/primary"
-                        android:textSize="30sp"
-                        android:textStyle="bold"
-                        tools:text="R$ 19,90" />
+                <TextView
+                    android:id="@+id/priceCaption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/subscription_price_caption"
+                    android:textColor="@color/on_surface_variant"
+                    android:textSize="13sp" />
 
-                    <TextView
-                        android:id="@+id/priceCaption"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/subscription_price_caption"
-                        android:textColor="@color/on_surface_variant"
-                        android:textSize="13sp" />
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="18dp"
+                    android:background="#2A5C99" />
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginTop="16dp"
-                        android:background="@color/outline_variant" />
+                <TextView
+                    android:id="@+id/benefitsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:lineSpacingExtra="6dp"
+                    android:textColor="@color/on_surface"
+                    android:textSize="14sp"
+                    tools:text="✓ 2 aparelhos\n✓ 1 tela por vez\n✓ HD e Full HD incluídos" />
 
-                    <TextView
-                        android:id="@+id/benefitsText"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="14dp"
-                        android:lineSpacingExtra="4dp"
-                        android:textColor="@color/on_surface"
-                        android:textSize="14sp"
-                        tools:text="2 aparelhos · 1 tela por vez\nHD e Full HD incluídos" />
-
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/subscribeButton"
+                style="@style/Widget.Material3.Button"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="56dp"
                 android:layout_marginTop="22dp"
-                android:paddingTop="14dp"
-                android:paddingBottom="14dp"
                 android:text="@string/subscription_subscribe_now"
-                android:textSize="16sp"
-                app:cornerRadius="12dp" />
+                android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+                app:cornerRadius="16dp"
+                app:elevation="2dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/refreshButton"
@@ -121,14 +114,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="@string/subscription_refresh" />
+                android:text="@string/subscription_refresh"
+                app:icon="@drawable/ic_refresh"
+                app:iconGravity="textStart" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/devicesButton"
                 style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/subscription_devices" />
+                android:text="@string/subscription_devices"
+                app:icon="@drawable/ic_devices"
+                app:iconGravity="textStart" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/cancelButton"
