@@ -1,8 +1,6 @@
 # main.py - FastAPI app, middleware, lifespan, routers
-import time
 from contextlib import asynccontextmanager
 
-import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -98,45 +96,11 @@ def mercadopago_token_kind() -> str:
     return "unknown"
 
 
-_mp_account_cache: dict = {"at": 0.0, "data": None}
-
-
 async def mercadopago_account_info() -> dict | None:
-    """Diz se a conta que recebe os pagamentos e de teste.
+    """Identidade da conta coletora (com cache) para o /health."""
+    from app.services.mercadopago import get_account_info
 
-    Conta de teste so aceita pagador de teste ("Both payer and collector must
-    be real or test users"). O resultado fica em cache por 10 minutos para o
-    health check nao depender do Mercado Pago a cada acesso.
-    """
-    if not settings.MERCADOPAGO_ACCESS_TOKEN:
-        return None
-
-    now = time.monotonic()
-    if _mp_account_cache["data"] is not None and now - _mp_account_cache["at"] < 600:
-        return _mp_account_cache["data"]
-
-    try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            response = await client.get(
-                "https://api.mercadopago.com/users/me",
-                headers={"Authorization": f"Bearer {settings.MERCADOPAGO_ACCESS_TOKEN}"},
-            )
-        if response.status_code >= 400:
-            return None
-        data = response.json()
-    except Exception:  # noqa: BLE001
-        return None
-
-    email = str(data.get("email") or "")
-    nickname = str(data.get("nickname") or "")
-    info = {
-        "is_test_user": "test_user" in (data.get("tags") or [])
-        or email.endswith("@testuser.com")
-        or nickname.startswith("TESTUSER"),
-        "site_id": data.get("site_id"),
-        "country_id": data.get("country_id"),
-    }
-    _mp_account_cache.update(at=now, data=info)
+    info = await get_account_info()
     return info
 
 

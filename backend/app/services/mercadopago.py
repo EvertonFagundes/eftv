@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import UUID
@@ -25,6 +26,52 @@ logger = logging.getLogger(__name__)
 
 # Estados da preapproval no Mercado Pago que liberam o acesso.
 _ACTIVE_PREAPPROVAL_STATUSES = {"authorized"}
+
+# Cache da identidade da conta coletora (evita consultar o Mercado Pago a
+# cada abertura de tela). Conta de teste nao consegue cobrar cliente real.
+_account_cache: dict = {"at": 0.0, "data": None}
+
+
+async def get_account_info(force: bool = False) -> dict | None:
+    """Diz se a conta que recebe os pagamentos e de teste.
+
+    Conta de teste so aceita pagador de teste ("Both payer and collector must
+    be real or test users"). O resultado fica em cache por 10 minutos.
+    """
+    if not settings.MERCADOPAGO_ACCESS_TOKEN:
+        return None
+
+    now = time.monotonic()
+    if (
+        not force
+        and _account_cache["data"] is not None
+        and now - _account_cache["at"] < 600
+    ):
+        return _account_cache["data"]
+
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            response = await client.get(
+                f"{MERCADOPAGO_BASE_URL}/users/me",
+                headers=_get_headers(),
+            )
+        if response.status_code >= 400:
+            return None
+        data = response.json()
+    except Exception:  # noqa: BLE001
+        return None
+
+    email = str(data.get("email") or "")
+    nickname = str(data.get("nickname") or "")
+    info = {
+        "is_test_user": "test_user" in (data.get("tags") or [])
+        or email.endswith("@testuser.com")
+        or nickname.startswith("TESTUSER"),
+        "site_id": data.get("site_id"),
+        "country_id": data.get("country_id"),
+    }
+    _account_cache.update(at=now, data=info)
+    return info
 
 
 def validate_webhook_signature(headers, data_id: str | None) -> bool:

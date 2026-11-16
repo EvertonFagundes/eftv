@@ -1,4 +1,4 @@
-# routes/admin.py - Rotas administrativas
+﻿# routes/admin.py - Rotas administrativas
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import get_db
 from app.models.category import Category
 from app.models.channel import Channel
@@ -26,8 +25,8 @@ async def claim_ownership(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Permite que o primeiro usuário logado se torne dono do app (admin)
-    se ainda não houver nenhum administrador cadastrado.
+    Permite que o primeiro usuÃ¡rio logado se torne dono do app (admin)
+    se ainda nÃ£o houver nenhum administrador cadastrado.
     """
     try:
         admin_result = await db.execute(select(User).where(User.is_admin == True))  # noqa: E712
@@ -35,7 +34,7 @@ async def claim_ownership(
         if existing_admin is not None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Já existe um administrador cadastrado.",
+                detail="JÃ¡ existe um administrador cadastrado.",
             )
 
         current_user.is_admin = True
@@ -76,7 +75,7 @@ async def claim_ownership(
             "email": current_user.email,
             "is_admin": current_user.is_admin,
             "is_active": current_user.is_active,
-            "message": "Você é agora o dono do app. Tudo liberado.",
+            "message": "VocÃª Ã© agora o dono do app. Tudo liberado.",
         }
     except HTTPException:
         raise
@@ -90,7 +89,7 @@ async def claim_ownership(
 
 @router.get("/stats")
 async def get_stats(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
-    """Estatísticas gerais para dashboard admin."""
+    """EstatÃ­sticas gerais para dashboard admin."""
     total_users = (await db.execute(select(func.count(User.id)))).scalar_one()
     active_users = (
         await db.execute(select(func.count(User.id)).where(User.is_active))
@@ -121,7 +120,7 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    """Lista usuários (admin)."""
+    """Lista usuÃ¡rios (admin)."""
     query = select(User).order_by(User.created_at.desc())
     if search:
         search_term = f"%{search.lower()}%"
@@ -157,12 +156,12 @@ async def list_users(
 async def get_user(
     user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
 ):
-    """Obtém detalhes de usuário + assinaturas (admin)."""
+    """ObtÃ©m detalhes de usuÃ¡rio + assinaturas (admin)."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado")
 
     sub_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
     subscriptions = sub_result.scalars().all()
@@ -215,7 +214,7 @@ async def revoke_user_devices(
     """Desvincula todos os aparelhos do usuario (suporte ao cliente)."""
     result = await db.execute(select(User).where(User.id == user_id))
     if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado")
 
     ids_result = await db.execute(select(Subscription.id).where(Subscription.user_id == user_id))
     subscription_ids = list(ids_result.scalars().all())
@@ -227,12 +226,12 @@ async def revoke_user_devices(
 async def toggle_admin(
     user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
 ):
-    """Alterna status admin do usuário."""
+    """Alterna status admin do usuÃ¡rio."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado")
 
     user.is_admin = not user.is_admin
     await db.commit()
@@ -243,12 +242,12 @@ async def toggle_admin(
 async def toggle_user_active(
     user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
 ):
-    """Ativa/desativa usuário."""
+    """Ativa/desativa usuÃ¡rio."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado")
 
     user.is_active = not user.is_active
     await db.commit()
@@ -260,15 +259,15 @@ async def make_user_owner(
     user_id: UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
 ):
     """
-    Promove um usuário a dono do app (admin) e ativa sua subscription.
-    Útil para configurar o proprietário após o cadastro.
+    Promove um usuÃ¡rio a dono do app (admin) e ativa sua subscription.
+    Ãštil para configurar o proprietÃ¡rio apÃ³s o cadastro.
     """
     try:
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado"
+                status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado"
             )
 
         user.is_admin = True
@@ -317,155 +316,3 @@ async def make_user_owner(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno: {str(exc)}",
         ) from exc
-
-
-@router.post("/diagnostico/preapproval")
-async def diagnostico_preapproval(_: User = Depends(require_admin)):
-    """Diagnostico TEMPORARIO do checkout do Mercado Pago.
-
-    Descobre se a conta coletora e de teste/producao e testa o fluxo por
-    plano (preapproval_plan), que e o caminho recomendado quando o app nao
-    tokeniza cartao. Nada e cobrado: o plano apenas gera um link de assinatura.
-    Remover depois de resolver o checkout.
-    """
-    import httpx
-
-    from app.services.mercadopago import (
-        MERCADOPAGO_BASE_URL,
-        _get_headers,
-        cancel_preapproval,
-    )
-
-    frontend = settings.FRONTEND_URL.rstrip("/")
-    auto_recurring = {
-        "frequency": 1,
-        "frequency_type": "months",
-        "transaction_amount": 19.9,
-        "currency_id": "BRL",
-    }
-    notification = (
-        f"{settings.API_BASE_URL.rstrip('/')}"
-        "/subscriptions/webhook/mercadopago?source_news=webhooks"
-    )
-
-    out: dict = {}
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # 1) Quem e a conta coletora? Se for de teste, so aceita pagador de
-        # teste - e por isso o checkout com cliente real falha.
-        me = await client.get(
-            f"{MERCADOPAGO_BASE_URL}/users/me", headers=_get_headers()
-        )
-        if me.status_code >= 400:
-            out["conta"] = {"http": me.status_code, "resposta": me.text[:300]}
-        else:
-            data = me.json()
-            email = str(data.get("email") or "")
-            out["conta"] = {
-                "id": data.get("id"),
-                "site_id": data.get("site_id"),
-                "country_id": data.get("country_id"),
-                "nickname": data.get("nickname"),
-                "user_type": data.get("user_type"),
-                "tags": data.get("tags"),
-                "email_dominio": email.split("@")[-1] if "@" in email else "",
-                "email_e_teste": email.endswith("@testuser.com"),
-            }
-
-        # 2) Planos existentes (para reaproveitar em vez de criar outro).
-        search = await client.get(
-            f"{MERCADOPAGO_BASE_URL}/preapproval_plan/search",
-            headers=_get_headers(),
-            params={"limit": 5},
-        )
-        out["planos"] = {
-            "http": search.status_code,
-            "resposta": search.text[:500],
-        }
-
-        # 3) Cria o plano de assinatura (mensal, R$ 19,90).
-        plan_payload = {
-            "reason": "EFTV - Mensal",
-            "auto_recurring": auto_recurring,
-            "back_url": f"{frontend}/checkout.html",
-            "payment_methods_allowed": {
-                "payment_types": [{"id": "credit_card"}],
-            },
-        }
-        plan = await client.post(
-            f"{MERCADOPAGO_BASE_URL}/preapproval_plan",
-            json=plan_payload,
-            headers=_get_headers(),
-        )
-        plan_item: dict = {"http": plan.status_code, "resposta": plan.text[:500]}
-        if plan.status_code < 400:
-            pdata = plan.json()
-            plan_item["id"] = pdata.get("id")
-            plan_item["init_point"] = pdata.get("init_point")
-            plan_item["status"] = pdata.get("status")
-            plan_item["sandbox_init_point"] = pdata.get("sandbox_init_point")
-        out["criar_plano"] = plan_item
-
-        # 4) Assinatura direta com payer_email real (mensagem anterior pedia
-        # e-mail de conta MP real). A preapproval nasce pendente e e cancelada.
-        pre_payload = {
-            "reason": "EFTV - Mensal",
-            "external_reference": "diagnostico-real",
-            "payer_email": "evertonfagundes1510@gmail.com",
-            "auto_recurring": auto_recurring,
-            "back_url": f"{frontend}/checkout.html",
-            "notification_url": notification,
-            "status": "pending",
-        }
-        pre = await client.post(
-            f"{MERCADOPAGO_BASE_URL}/preapproval",
-            json=pre_payload,
-            headers=_get_headers(),
-        )
-        pre_item: dict = {"http": pre.status_code, "resposta": pre.text[:500]}
-        if pre.status_code < 400:
-            pdata = pre.json()
-            pre_item["id"] = pdata.get("id")
-            pre_item["init_point"] = pdata.get("init_point")
-            pre_item["status"] = pdata.get("status")
-            if pdata.get("id"):
-                try:
-                    await cancel_preapproval(pdata["id"])
-                    pre_item["cancelado"] = True
-                except Exception as exc:  # noqa: BLE001
-                    pre_item["cancelado"] = False
-                    pre_item["erro_cancelamento"] = str(exc)[:200]
-        out["preapproval_payer_real"] = pre_item
-
-    return out
-
-
-@router.post("/diagnostico/test-user")
-async def diagnostico_test_user(_: User = Depends(require_admin)):
-    """Cria um pagador de TESTE no Mercado Pago. TEMPORARIO.
-
-    A conta coletora atual e de teste, entao o checkout so aceita pagador de
-    teste. Serve para validar o fluxo completo (pagamento -> webhook ->
-    liberacao de acesso). Remover junto com o outro diagnostico.
-    """
-    import httpx
-
-    from app.services.mercadopago import MERCADOPAGO_BASE_URL, _get_headers
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{MERCADOPAGO_BASE_URL}/users/test",
-            json={"site_id": "MLB"},
-            headers=_get_headers(),
-        )
-
-    if response.status_code >= 400:
-        return {"http": response.status_code, "resposta": response.text[:400]}
-
-    data = response.json()
-    return {
-        "id": data.get("id"),
-        "email": data.get("email"),
-        "password": data.get("password"),
-        "nickname": data.get("nickname"),
-        "site_id": data.get("site_id"),
-    }

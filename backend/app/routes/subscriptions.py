@@ -20,6 +20,7 @@ from app.schemas.payment import (
 from app.security.dependencies import get_current_user
 from app.services.mercadopago import (
     create_checkout_preference,
+    get_account_info,
     process_webhook,
     sync_preapproval,
     validate_webhook_signature,
@@ -200,6 +201,21 @@ async def create_checkout(
             detail={
                 "code": "already_active",
                 "message": "Sua assinatura já está ativa.",
+            },
+        )
+
+    # Conta coletora de teste nao consegue cobrar cliente real: o Mercado
+    # Pago recusa no fim do checkout com "Both payer and collector must be
+    # real or test users". Melhor avisar agora do que mandar o cliente para
+    # uma tela de pagamento que sempre falha.
+    account = await get_account_info()
+    if account is not None and account.get("is_test_user"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "payments_unavailable",
+                "message": "O pagamento esta temporariamente indisponivel. "
+                "Tente novamente mais tarde ou fale com o suporte.",
             },
         )
 
