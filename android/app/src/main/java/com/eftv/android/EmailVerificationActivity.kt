@@ -60,7 +60,7 @@ class EmailVerificationActivity : AppCompatActivity() {
 
         // Se a conta ja foi verificada no servidor (outro aparelho/site), nao
         // deixa o usuario preso nesta tela.
-        checkIfAlreadyVerified()
+        lifecycleScope.launch { checkIfAlreadyVerified() }
         binding.tokenInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 verifyEmail()
@@ -71,11 +71,32 @@ class EmailVerificationActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // O e-mail manda um LINK. O usuario confirma no navegador e volta para
+        // o app: aqui a verificacao e detectada sem pedir codigo.
+        lifecycleScope.launch { checkIfAlreadyVerified() }
+    }
+
     private fun verifyEmail() {
-        val token = binding.tokenInput.text?.toString().orEmpty().trim()
+        val raw = binding.tokenInput.text?.toString().orEmpty().trim()
+
+        // Aceita o link inteiro (o usuario costuma colar o link do e-mail).
+        val token = when {
+            raw.isBlank() -> ""
+            raw.startsWith("http") -> Uri.parse(raw).getQueryParameter("token").orEmpty()
+            else -> raw
+        }
+
         if (token.isBlank()) {
-            binding.error.text = getString(R.string.verify_enter_token)
-            binding.error.visibility = View.VISIBLE
+            // Sem codigo: confere se ele ja confirmou pelo link.
+            setLoading(true)
+            binding.error.visibility = View.GONE
+            lifecycleScope.launch {
+                if (!checkIfAlreadyVerified(feedback = true)) {
+                    setLoading(false)
+                }
+            }
             return
         }
 
@@ -137,29 +158,34 @@ class EmailVerificationActivity : AppCompatActivity() {
     /**
      * Consulta o servidor para saber se o email ja esta verificado. Se estiver,
      * libera o catalogo imediatamente.
+     *
+     * @return true se a conta ja esta verificada.
      */
-    private fun checkIfAlreadyVerified() {
+    private suspend fun checkIfAlreadyVerified(feedback: Boolean = false): Boolean {
         val accessToken = session.accessToken()
-        if (accessToken.isNullOrBlank()) return
-        lifecycleScope.launch {
-            try {
-                if (api.me(accessToken).emailVerified) {
-                    session.setEmailVerified(true)
-                    openCatalog()
-                }
-            } catch (_: Exception) {
-                // Sem rede ou token expirado: o usuario continua na tela.
+        if (accessToken.isNullOrBlank()) return false
+        return try {
+            if (api.me(accessToken).emailVerified) {
+                session.setEmailVerified(true)
+                openCatalog()
+                true
+            } else {
+                if (feedback) showError(getString(R.string.verify_not_confirmed))
+                false
             }
+        } catch (e: Exception) {
+            // Sem rede ou token expirado: o usuario continua na tela.
+            if (feedback) showError(getString(R.string.verify_network_error))
+            false
         }
     }
 
     private fun openVerificationLinkInBrowser() {
         val email = session.email().orEmpty()
-        // Instrui o usuario a verificar o email e clicar no link, que abre este app via deep link
-        val subject = "Confirme seu email - EFTV"
-        val body = "Acesse seu email e clique no link de confirmacao enviado pelo EFTV."
+        // O e-mail de confirmacao chega na caixa de entrada; abrir o app de
+        // e-mail e o caminho mais direto para o link.
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            data = Uri.parse("mailto:$email?subject=$subject&body=$body")
+            data = Uri.parse("mailto:$email")
         }
         if (intent.resolveActivity(packageManager) != null) {
             startActivity(intent)
