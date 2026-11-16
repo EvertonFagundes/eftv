@@ -1,10 +1,11 @@
 package com.eftv.android
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SwitchPreferenceCompat
 import com.eftv.android.databinding.ActivitySettingsBinding
 
 /**
@@ -35,12 +36,24 @@ class SettingsActivity : AppCompatActivity() {
 
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            // Usa o mesmo arquivo lido por isAdultContentEnabled().
-            preferenceManager.sharedPreferencesName = SettingsActivity.PREFS_NAME
             setPreferencesFromResource(R.xml.preferences, rootKey)
 
-            findPreference<androidx.preference.Preference>("pref_version")?.summary =
-                BuildConfig.VERSION_NAME
+            findPreference<Preference>("pref_version")?.summary = BuildConfig.VERSION_NAME
+
+            // O switch nao grava sozinho: a fonte da verdade e o arquivo que o
+            // app le em isAdultContentEnabled(). Antes o PreferenceManager podia
+            // usar outro arquivo e a opcao nunca tinha efeito no catalogo.
+            findPreference<SwitchPreferenceCompat>(SettingsActivity.PREF_SHOW_ADULT)?.apply {
+                isPersistent = false
+                isChecked = SettingsActivity.isAdultContentEnabled(requireContext())
+                setOnPreferenceChangeListener { _, novoValor ->
+                    SettingsActivity.setAdultContentEnabled(
+                        requireContext(),
+                        novoValor == true,
+                    )
+                    true
+                }
+            }
         }
     }
 
