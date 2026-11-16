@@ -18,6 +18,7 @@ from app.routes import (
     player_router,
     subscriptions_router,
 )
+from app.services.mercadopago import sync_pending_subscriptions
 from app.tasks.subscription_checker import (
     check_expired_subscriptions,
     cleanup_stale_playback_sessions,
@@ -34,6 +35,9 @@ async def lifespan(app: FastAPI):
     # Agenda tasks periódicas
     scheduler.add_job(check_expired_subscriptions, "interval", minutes=30, id="check_expired")
     scheduler.add_job(cleanup_stale_playback_sessions, "interval", hours=1, id="cleanup_sessions")
+    # Conciliacao do Mercado Pago: libera assinatura paga mesmo se o webhook
+    # atrasar ou nao estiver cadastrado no painel.
+    scheduler.add_job(sync_pending_subscriptions, "interval", minutes=5, id="sync_pending")
     scheduler.start()
 
     yield

@@ -555,6 +555,40 @@ async def find_preapproval_for_user(db, user_id: UUID) -> dict | None:
     return dict(escolhidas[0])
 
 
+async def sync_pending_subscriptions(limit: int = 25) -> None:
+    """Conciliacao periodica das assinaturas pendentes.
+
+    O webhook do Mercado Pago pode atrasar ou falhar. Aqui o backend consulta
+    a fonte a cada poucos minutos e libera o acesso sozinho, sem depender de o
+    cliente abrir a tela de assinatura.
+    """
+    if not settings.MERCADOPAGO_ACCESS_TOKEN:
+        return
+
+    from app.database import get_db_context
+
+    recent = datetime.now(UTC) - timedelta(days=7)
+    async with get_db_context() as db:
+        result = await db.execute(
+            select(Subscription.id)
+            .where(Subscription.status == "pending")
+            .where(Subscription.created_at >= recent)
+            .order_by(Subscription.created_at.desc())
+            .limit(limit)
+        )
+        pending_ids = [row[0] for row in result.all()]
+
+    for subscription_id in pending_ids:
+        try:
+            await sync_preapproval(subscription_id)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Falha ao conciliar a assinatura pendente %s",
+                subscription_id,
+                exc_info=True,
+            )
+
+
 async def sync_preapproval(subscription_id: UUID) -> bool:
     """Sincroniza uma assinatura pendente direto com o Mercado Pago.
 
