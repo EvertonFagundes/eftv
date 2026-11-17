@@ -129,6 +129,9 @@ class Settings(BaseSettings):
     STREAM_SESSION_TIMEOUT_SECONDS: int = 120
     STREAM_HEARTBEAT_SECONDS: int = 45
 
+    # Login na TV por codigo (sem digitar senha no controle remoto)
+    DEVICE_CODE_TTL_MINUTES: int = 10
+
     # Atualizacao do app distribuido por APK (fora da Play Store)
     APP_LATEST_VERSION_CODE: int = 0
     APP_LATEST_VERSION_NAME: str = ""

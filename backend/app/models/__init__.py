@@ -3,6 +3,7 @@ from app.models.category import Category
 from app.models.channel import Channel
 from app.models.client_error import ClientError
 from app.models.device import SubscriptionDevice
+from app.models.device_login_code import DeviceLoginCode
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.playback_session import PlaybackSession
@@ -20,5 +21,6 @@ __all__ = [
     "PlaybackSession",
     "StreamSession",
     "ClientError",
+    "DeviceLoginCode",
     "SubscriptionDevice",
 ]

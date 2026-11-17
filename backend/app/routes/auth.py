@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +32,7 @@ from app.security.dependencies import (
     rate_limit_dependency,
     record_login_success,
 )
+from app.services import device_login
 from app.services.auth_service import (
     create_token_pair,
     decode_token,
@@ -425,6 +427,93 @@ async def logout(response: Response):
     """Logout - remove cookie de refresh token."""
     response.delete_cookie(key="refresh_token", path="/auth/refresh")
     return MessageResponse(message="Logout realizado com sucesso")
+
+
+# ----------------------------------------------------------------------
+# Login na TV por codigo ("entrar pelo celular")
+#
+# O controle remoto nao tem teclado. Em vez de digitar e-mail e senha na TV,
+# ela mostra um codigo curto e o assinante confirma no celular, onde ja esta
+# logado. O mesmo vale para a assinatura (ver /subscriptions/checkout).
+# ----------------------------------------------------------------------
+
+class DeviceCodeRequest(BaseModel):
+    device_name: str | None = None
+
+
+class DeviceCodeResponse(BaseModel):
+    code: str
+    expires_in: int
+    poll_in: int
+
+
+class DeviceCodePollRequest(BaseModel):
+    code: str
+
+
+class DeviceCodePollResponse(BaseModel):
+    status: str
+    access_token: str | None = None
+    refresh_token: str | None = None
+    expires_in: int | None = None
+
+
+class DeviceCodeApproveRequest(BaseModel):
+    code: str
+
+
+@router.post("/device-code", response_model=DeviceCodeResponse)
+async def create_device_code(
+    payload: DeviceCodeRequest | None = Body(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """A TV pede um codigo para exibir na tela."""
+    entry = await device_login.create_code(db, payload.device_name if payload else None)
+    return DeviceCodeResponse(
+        code=device_login.format_code(entry.code),
+        expires_in=settings.DEVICE_CODE_TTL_MINUTES * 60,
+        poll_in=3,
+    )
+
+
+@router.post("/device-code/poll", response_model=DeviceCodePollResponse)
+async def poll_device_code(
+    payload: DeviceCodePollRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """A TV pergunta se ja foi autorizada. Os tokens saem uma unica vez."""
+    state, entry = await device_login.poll_code(db, payload.code)
+    if state != "approved" or entry is None:
+        return DeviceCodePollResponse(status=state)
+    return DeviceCodePollResponse(
+        status="approved",
+        access_token=entry.access_token,
+        refresh_token=entry.refresh_token,
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+@router.post("/device-code/approve", response_model=MessageResponse)
+async def approve_device_code(
+    payload: DeviceCodeApproveRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """O celular (conta ja logada) autoriza a TV digitando o codigo."""
+    try:
+        await device_login.approve_code(db, code=payload.code, user_id=user.id)
+    except ValueError as exc:
+        if str(exc) == "expired":
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Codigo expirado. Gere outro na TV.",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Codigo invalido. Confira os caracteres na TV.",
+        ) from exc
+
+    return MessageResponse(message="TV autorizada. Ela entra sozinha em instantes.")
 
 
 @router.get("/me", response_model=UserResponse)
