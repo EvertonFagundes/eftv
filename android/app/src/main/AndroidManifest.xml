@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Transmitir tela: descobrir a TV na rede e manter a captura viva -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <!-- Android TV -->
     <uses-feature android:name="android.hardware.type.television" android:required="false" />
@@ -102,6 +105,24 @@
             android:name=".SeriesActivity"
             android:exported="false"
             android:theme="@style/Theme.EFTV.NoActionBar" />
+
+        <!-- Transmitir a tela do celular para a TV (rede local) -->
+        <activity
+            android:name=".CastSendActivity"
+            android:exported="false"
+            android:theme="@style/Theme.EFTV.NoActionBar" />
+
+        <activity
+            android:name=".CastReceiveActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize"
+            android:exported="false"
+            android:theme="@style/Theme.EFTV.Player" />
+
+        <service
+            android:name=".cast.CastService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"
+            android:stopWithTask="false" />
 
         <service
             android:name=".EftvServerService"

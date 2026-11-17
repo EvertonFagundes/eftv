@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.2.1** (`versionCode 13`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.3.0** (`versionCode 14`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -20,10 +20,13 @@ android/app/src/main/java/com/eftv/android/
 ├── EmailVerificationActivity.kt
 ├── MainActivity.kt         # catálogo, abas, busca, categorias, atualização
 ├── CategoriesActivity.kt   # escolha de categoria com busca e contagem (1.2.1)
+├── CastSendActivity.kt     # transmitir a tela do celular para a TV (1.3.0)
+├── CastReceiveActivity.kt  # receber a tela na TV / outro aparelho (1.3.0)
 ├── SeriesActivity.kt       # temporadas/episódios
 ├── PlayerActivity.kt       # player, sessão de stream, áudio/qualidade
 ├── SubscriptionActivity.kt # plano, status, assinar, cancelar
 ├── SettingsActivity.kt     # configurações (inclui conteúdo adulto)
+├── cast/                    # transmissão de tela (protocolo, encoder, decoder)
 ├── data/
 │   ├── api/EftvApi.kt      # cliente HTTP do backend (sem libs externas)
 │   ├── CatalogStore.kt     # SQLite do catálogo, favoritos, histórico, progresso
@@ -96,6 +99,17 @@ de TV pedir o código. Ver `docs/TV.md`.
   A lista reserva `paddingEnd="26dp"` e a barra tem fundo próprio para não cobrir
   as estrelas de favorito. Em 1.2.1 o SQL do salto foi corrigido (gerava
   `WHERE WHERE` e derrubava o app) e o salto roda em `runCatching`.
+- **Transmitir tela (1.3.0)**: menu ⋮ → **Transmitir tela** no celular e
+  **Receber tela** na TV. O celular captura com `MediaProjection`, codifica em
+  H.264 (720p, 4 Mbps, 30 fps) e envia por TCP; a TV acha o celular por PIN +
+  mDNS (`_eftvcast._tcp`) e decodifica com `MediaCodec` direto na `Surface`.
+  Não depende de Miracast/Chromecast, então funciona em aparelhos sem
+  espelhamento nativo. A captura fica em `CastService`
+  (`foregroundServiceType="mediaProjection"`) e continua com o app em segundo
+  plano. Limites: mesma rede Wi-Fi, **sem áudio**, DRM (Netflix/Gloplay) pode
+  ficar preto, um celular por vez e a orientação não pode mudar no meio.
+  Protocolo e servidor têm testes JVM (`CastProtocolTest`, `CastServerTest`
+  sobem socket de verdade).
 - **Continuar assistindo**: carrossel com filmes/séries em andamento
   (progresso salvo a cada 5 s).
 - **Favoritos** e **Recentes** aparecem como categorias quando têm itens.

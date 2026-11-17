@@ -255,6 +255,8 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.menu.findItem(R.id.action_subscription)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_device)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_authorize_tv)?.isVisible = !localMode
+        binding.toolbar.menu.findItem(R.id.action_cast_send)?.isVisible = !localMode
+        binding.toolbar.menu.findItem(R.id.action_cast_receive)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_logout)?.isVisible = !localMode
 
         binding.toolbar.setOnMenuItemClickListener { item ->
@@ -291,6 +293,16 @@ class MainActivity : AppCompatActivity() {
 
                 R.id.action_authorize_tv -> {
                     showAuthorizeTvDialog()
+                    true
+                }
+
+                R.id.action_cast_send -> {
+                    startActivity(Intent(this@MainActivity, CastSendActivity::class.java))
+                    true
+                }
+
+                R.id.action_cast_receive -> {
+                    startActivity(Intent(this@MainActivity, CastReceiveActivity::class.java))
                     true
                 }
 

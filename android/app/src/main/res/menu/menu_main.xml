@@ -29,6 +29,14 @@
         android:title="@string/authorize_tv_menu"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_cast_send"
+        android:title="@string/cast_menu_send"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_cast_receive"
+        android:title="@string/cast_menu_receive"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_logout"
         android:title="@string/logout"
         app:showAsAction="never" />

@@ -60,13 +60,31 @@ Backend do login por código já implementado e testado:
   e a tela mostra o novo estado.
 - No celular continua abrindo o navegador como antes.
 
-### 3. Interface 10 pés — pendente
+### 3. Transmitir a tela do celular ✅ (1.3.0)
+- Na TV: menu ⋮ → **Receber tela** (`CastReceiveActivity`). Ela mostra um PIN de
+  4 dígitos, o endereço `IP:porta` e anuncia o serviço `_eftvcast._tcp` na rede
+  (mDNS/NSD).
+- No celular: menu ⋮ → **Transmitir tela** (`CastSendActivity`). O cliente digita
+  o PIN, escolhe a TV encontrada (ou informa o endereço) e autoriza a captura no
+  diálogo do Android.
+- Pipeline: `MediaProjection` → `MediaCodec` H.264 (720p, 4 Mbps, 30 fps) →
+  TCP → `MediaCodec` decodificando direto na `Surface` da TV.
+- **Não usa Miracast nem Chromecast**: funciona em qualquer Android 5.0+,
+  inclusive nos aparelhos sem a opção "Transmitir tela" nas configurações.
+- A captura roda em `CastService` (primeiro plano,
+  `foregroundServiceType="mediaProjection"`), então continua com o EFTV em
+  segundo plano: pode abrir YouTube, galeria, qualquer app.
+- Limites: mesma rede Wi-Fi (não passa pela internet); **sem áudio** nesta
+  versão; apps com DRM (Netflix, Globoplay) podem aparecer pretos; um celular
+  por vez; girar a tela no meio da transmissão distorce a imagem.
+
+### 4. Interface 10 pés — pendente
 - [ ] "Atualizar" no menu já existe; validar no controle.
 - [ ] Configurações hoje entram por **toque longo** no título: expor no menu.
 - [ ] Revisar foco/ordem em telas 1280×720 (sem elementos cortados).
 - [ ] Banner 320×180 (`tv_banner`) conferido no launcher da TV.
 
-### 4. Publicação — pendente
+### 5. Publicação — pendente
 - Google Play (mesmo app, com `LEANBACK_LAUNCHER`).
 - Amazon Appstore (Fire TV).
 - Enquanto não houver loja: `adb install -r` no box.
