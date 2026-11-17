@@ -39,16 +39,23 @@ class CastService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Timber.i("CastService: onStart action=%s startId=%d", intent?.action ?: "null", startId)
         when (intent?.action) {
             ACTION_START -> startCasting(intent)
             ACTION_STOP -> stopSelf()
-            else -> stopSelf()
+            else -> {
+                // Reinicio do sistema com intent nulo: nao ha como retomar uma
+                // captura sem a permissao do usuario.
+                Timber.w("CastService: parado por intent sem acao")
+                stopSelf()
+            }
         }
         return START_NOT_STICKY
     }
 
     private fun startCasting(intent: Intent) {
         startInForeground()
+        Timber.i("CastService: primeiro plano ativo")
 
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
         val data = IntentCompat.getParcelableExtra(intent, EXTRA_DATA, Intent::class.java)
@@ -64,13 +71,17 @@ class CastService : Service() {
             fail("Dados da conexão incompletos")
             return
         }
+        Timber.i("CastService: destino %s:%d audio=%s", host, port, withAudio)
 
         val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        val projection = runCatching { manager.getMediaProjection(resultCode, data) }.getOrNull()
+        val projection = runCatching { manager.getMediaProjection(resultCode, data) }
+            .onFailure { Timber.e(it, "CastService: getMediaProjection falhou") }
+            .getOrNull()
         if (projection == null) {
             fail("Não foi possível capturar a tela")
             return
         }
+        Timber.i("CastService: projecao obtida")
 
         // O Android 14 exige o callback registrado ANTES de criar o display.
         projection.registerCallback(
@@ -161,6 +172,7 @@ class CastService : Service() {
     }
 
     override fun onDestroy() {
+        Timber.i("CastService: onDestroy (estado=%s)", status.state)
         sender?.stop()
         sender = null
         // Um erro precisa continuar visivel na tela que pediu a transmissao.

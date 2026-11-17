@@ -29,6 +29,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import kotlin.concurrent.thread
 import kotlin.math.abs
+import timber.log.Timber
 
 /**
  * Lado do celular: captura a tela inteira e envia para a TV.
@@ -103,11 +104,13 @@ class CastSender(
         var failure: String? = null
         try {
             onStatus(CastStatus(CastStatus.State.CONNECTING, "Conectando a $host…"))
+            Timber.i("Cast: conectando a %s:%d", host, port)
             val connection = Socket().apply {
                 tcpNoDelay = true
                 connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
             }
             socket = connection
+            Timber.i("Cast: conectado")
 
             val output = DataOutputStream(
                 BufferedOutputStream(connection.getOutputStream(), 256 * 1024),
@@ -136,6 +139,7 @@ class CastSender(
             startCapture(output)
         } catch (e: Exception) {
             failure = friendlyMessage(e)
+            Timber.w(e, "Cast: falhou (%s)", failure)
         } finally {
             cleanup()
             if (running) {
@@ -185,7 +189,7 @@ class CastSender(
 
         val handlerThread = HandlerThread("eftv-cast-projection").apply { start() }
         projectionThread = handlerThread
-        virtualDisplay = projection.createVirtualDisplay(
+        val display = projection.createVirtualDisplay(
             "eftv-cast",
             width,
             height,
@@ -195,6 +199,8 @@ class CastSender(
             null,
             Handler(handlerThread.looper),
         )
+        virtualDisplay = display
+        Timber.i("Cast: captura %dx%d, display %s", width, height, display != null)
 
         onStatus(CastStatus(CastStatus.State.STREAMING, "Transmitindo para a TV"))
         // O audio so comeca depois do primeiro quadro: ai ja se sabe a base de

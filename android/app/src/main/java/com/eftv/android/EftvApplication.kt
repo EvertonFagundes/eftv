@@ -1,7 +1,6 @@
 package com.eftv.android
 
 import android.app.Application
-import android.content.pm.ApplicationInfo
 import android.os.Build
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -15,10 +14,11 @@ class EftvApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        if (debuggable) {
-            Timber.plant(Timber.DebugTree())
-        }
+        // Log sempre, inclusive no APK de release: sem isso um problema no
+        // aparelho do cliente ("nao conecta", "fecha sozinho") chega sem
+        // nenhuma pista. O logcat e privado desde o Android 4.1: outro app nao
+        // le; so o usuario via depuracao USB.
+        Timber.plant(Timber.DebugTree())
 
         installCrashReporter()
 

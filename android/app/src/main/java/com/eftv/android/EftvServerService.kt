@@ -1,10 +1,12 @@
 package com.eftv.android
 
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import com.chaquo.python.Python
@@ -30,6 +32,7 @@ class EftvServerService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        clearLegacyChannel()
         acquireWakeLock()
         startNetworkMonitoring()
         thread(name = "eftv-server-boot", isDaemon = true) {
@@ -74,6 +77,17 @@ class EftvServerService : Service() {
         }
         releaseWakeLock()
         super.onDestroy()
+    }
+
+    /**
+     * Apaga o canal de notificacao da versao antiga, quando o servidor rodava
+     * em primeiro plano. Canais sobrevivem a atualizacao do APK e ficariam
+     * aparecendo vazios em Configuracoes -> Notificacoes.
+     */
+    private fun clearLegacyChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        runCatching { manager.deleteNotificationChannel("eftv_server") }
     }
 
     /**

@@ -87,6 +87,19 @@ Backend do login por código já implementado e testado:
   (Netflix, Globoplay) podem aparecer pretos ou mudos; um celular por vez; girar
   a tela no meio da transmissão distorce a imagem.
 
+### 3.1 Pendências de validação (aparelho, 17/11/2026)
+- **Android 14+**: o diálogo do sistema abre em "Share one app". É preciso
+  trocar para **Tela inteira**, senão a TV espelha só o EFTV. O texto da tela
+  já avisa desde a 1.4.4.
+- **`CastService` encerra ~100 ms depois de subir** sem mensagem na tela. A
+  partir da 1.4.4 o `Timber` também loga no APK de release, então
+  `adb logcat | findstr /i "CastService CastSender"` mostra a causa.
+- No teste celular→celular, o socket do `CastServer` (porta 8765) e o anúncio
+  mDNS da tela "Receber tela" **desapareceram** com a tela apenas em segundo
+  plano — e a atividade não foi destruída (`state=STOPPED`, sem `onDestroy`).
+  Investigar com o log novo; se acontecer na TV, quem tenta transmitir não
+  encontra o aparelho.
+
 ### 4. Interface 10 pés — pendente
 - [ ] "Atualizar" no menu já existe; validar no controle.
 - [ ] Configurações hoje entram por **toque longo** no título: expor no menu.

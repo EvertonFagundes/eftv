@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.4.3** (`versionCode 18`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.4.4** (`versionCode 19`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -111,6 +111,9 @@ de TV pedir o código. Ver `docs/TV.md`.
   comum (âncora na primeira amostra + 150 ms); atraso acima de 400 ms (vídeo)
   ou 250 ms (som) é descartado em vez de virar fila. O som só começa depois do
   primeiro quadro de vídeo, para herdar a base de tempo da imagem.
+  No **Android 14+** o diálogo do sistema traz "Share one app" por padrão:
+  é preciso trocar para **Tela inteira**, senão só o EFTV aparece na TV (o
+  texto da tela avisa isso desde a 1.4.4).
   Não depende de Miracast/Chromecast, então funciona em aparelhos sem
   espelhamento nativo. A captura fica em `CastService`
   (`foregroundServiceType="mediaProjection"`) e continua com o app em segundo
@@ -239,6 +242,10 @@ longo) e publicar em Google Play / Amazon Appstore. Detalhes em `docs/TV.md`.
 
 - Distribuição por APK: atualização automática depende de `APP_APK_URL` no Render.
 - Sem Play Store: sem cobrança pela loja e sem instalação automática.
+- **Log no APK de release (1.4.4)**: o `Timber` é plantado sempre, não só em
+  build de debug. Sem isso um problema no aparelho do cliente ("não conecta",
+  "fecha sozinho") chegava sem pista nenhuma e a investigação era às cegas.
+  `adb logcat` continua sendo leitura privada do sistema desde o Android 4.1.
 - O servidor local embutido (proxy) existe para contornar bloqueio de DNS em
   dados móveis; em TV box ele sobe igual. Desde a 1.4.2 ele **não** é mais um
   serviço de primeiro plano, então não aparece notificação fixa — em troca, o
