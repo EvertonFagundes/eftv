@@ -1,9 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols "18_up_rating" (Apache License 2.0, Google). Gerado a partir de
+     https://github.com/google/material-design-icons - nao editar a mao. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:fillColor="@color/on_surface"
-        android:pathData="M12,2C17.5,2 22,6.5 22,12C22,17.5 17.5,22 12,22C6.5,22 2,17.5 2,12C2,6.5 6.5,2 12,2ZM12,4C8.1,4 5,7.1 5,11C5,14.9 8.1,18 12,18C15.9,18 19,14.9 19,11C19,7.1 15.9,4 12,4ZM12,6C14.2,6 16,7.8 16,10C16,12.2 14.2,14 12,14C9.8,14 8,12.2 8,10C8,7.8 9.8,6 12,6ZM12,16C13.7,16 15,14.7 15,13C15,11.3 13.7,10 12,10C10.3,10 9,11.3 9,13C9,14.7 10.3,16 12,16Z" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <group android:translateY="960">
+        <path
+            android:fillColor="@color/on_surface"
+            android:pathData="M340-360h60v-240H280v60h60v180Zm160 0h100q17 0 28.5-11.5T640-400v-160q0-17-11.5-28.5T600-600H500q-17 0-28.5 11.5T460-560v160q0 17 11.5 28.5T500-360Zm20-40v-60h60v60h-60Zm0-100v-60h60v60h-60ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z" />
+    </group>
 </vector>

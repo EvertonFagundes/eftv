@@ -514,15 +514,20 @@ class MainActivity : AppCompatActivity() {
         val excludeAdults = shouldExcludeAdults()
 
         lifecycleScope.launch {
-            val index = withContext(Dispatchers.IO) {
-                repository.catalogStore.firstIndexForLetter(
-                    group = group,
-                    query = query,
-                    mode = mode,
-                    kind = kind,
-                    excludeAdults = excludeAdults,
-                    letter = letter.lowercaseChar(),
-                )
+            val index = runCatching {
+                withContext(Dispatchers.IO) {
+                    repository.catalogStore.firstIndexForLetter(
+                        group = group,
+                        query = query,
+                        mode = mode,
+                        kind = kind,
+                        excludeAdults = excludeAdults,
+                        letter = letter.lowercaseChar(),
+                    )
+                }
+            }.getOrElse {
+                Timber.w(it, "Nao foi possivel pular para a letra %s", letter)
+                return@launch
             }
             if (index >= 0) {
                 (binding.channelList.layoutManager as? LinearLayoutManager)

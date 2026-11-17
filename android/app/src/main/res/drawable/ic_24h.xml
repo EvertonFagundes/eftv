@@ -1,9 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols "schedule" (Apache License 2.0, Google). Gerado a partir de
+     https://github.com/google/material-design-icons - nao editar a mao. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:fillColor="@color/on_surface"
-        android:pathData="M12,2C17.5,2 22,6.5 22,12C22,17.5 17.5,22 12,22C6.5,22 2,17.5 2,12C2,6.5 6.5,2 12,2ZM12,4C8.1,4 5,7.1 5,11C5,14.9 8.1,18 12,18C15.9,18 19,14.9 19,11C19,7.1 15.9,4 12,4ZM12,6C14.2,6 16,7.8 16,10C16,12.2 14.2,14 12,14C9.8,14 8,12.2 8,10C8,7.8 9.8,6 12,6ZM12,16C13.7,16 15,14.7 15,13C15,11.3 13.7,10 12,10C10.3,10 9,11.3 9,13C9,14.7 10.3,16 12,16Z" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <group android:translateY="960">
+        <path
+            android:fillColor="@color/on_surface"
+            android:pathData="m612-292 56-56-148-148v-184h-80v216l172 172ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z" />
+    </group>
 </vector>

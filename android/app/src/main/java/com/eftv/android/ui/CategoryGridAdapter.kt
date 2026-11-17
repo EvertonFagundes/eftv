@@ -1,8 +1,11 @@
 package com.eftv.android.ui
 
+import android.content.res.ColorStateList
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import com.eftv.android.R
 import com.eftv.android.data.ChannelKind
@@ -33,7 +36,8 @@ class CategoryGridAdapter(
     data class Item(
         val selection: Selection,
         val count: Int,
-        val iconRes: Int,
+        /** Icone do assunto; 0 usa o selo com a inicial como reserva. */
+        val iconRes: Int = 0,
         val accentRes: Int,
         val containerRes: Int,
     )
@@ -99,8 +103,25 @@ class CategoryGridAdapter(
 
         val accent = ContextCompat.getColor(context, item.accentRes)
         binding.categoryCard.setCardBackgroundColor(ContextCompat.getColor(context, item.containerRes))
-        binding.categoryIcon.setImageResource(item.iconRes)
-        binding.categoryIcon.setColorFilter(accent)
+
+        // Selo redondo: icone real do assunto ou, sem icone, a inicial do nome.
+        binding.categoryBadge.backgroundTintList =
+            ColorStateList.valueOf(ColorUtils.setAlphaComponent(accent, 45))
+        if (item.iconRes != 0) {
+            binding.categoryIcon.visibility = View.VISIBLE
+            binding.categoryIcon.setImageResource(item.iconRes)
+            binding.categoryIcon.setColorFilter(accent)
+            binding.categoryInitial.visibility = View.GONE
+        } else {
+            binding.categoryIcon.visibility = View.GONE
+            binding.categoryInitial.visibility = View.VISIBLE
+            binding.categoryInitial.text = item.selection.label
+                .firstOrNull { it.isLetterOrDigit() }
+                ?.uppercase()
+                ?: "•"
+            binding.categoryInitial.setTextColor(accent)
+        }
+
         binding.categoryLabel.text = item.selection.label
 
         val number = NumberFormat.getIntegerInstance()

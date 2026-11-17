@@ -1,9 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols "video_library" (Apache License 2.0, Google). Gerado a partir de
+     https://github.com/google/material-design-icons - nao editar a mao. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:fillColor="@color/on_surface"
-        android:pathData="M20,4H4C2.8,4 1.8,4.8 1.8,6L2,18C2,19.2 2.8,20 4,20H20C21.2,20 22,19.2 22,18V6C22,4.8 21.2,4 20,4ZM4,6H20V18H4V6ZM6,8H8V10H6V8ZM10,8H12V10H10V8ZM14,8H16V10H14V8ZM6,12H8V14H6V12ZM10,12H12V14H10V12ZM14,12H16V14H14V12Z" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <group android:translateY="960">
+        <path
+            android:fillColor="@color/on_surface"
+            android:pathData="m460-380 280-180-280-180v360ZM320-240q-33 0-56.5-23.5T240-320v-480q0-33 23.5-56.5T320-880h480q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H320Zm0-80h480v-480H320v480ZM160-80q-33 0-56.5-23.5T80-160v-560h80v560h560v80H160Zm160-720v480-480Z" />
+    </group>
 </vector>

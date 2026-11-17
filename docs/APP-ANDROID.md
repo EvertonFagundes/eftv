@@ -73,12 +73,27 @@ de TV pedir o código. Ver `docs/TV.md`.
   de capas.
 - **Busca**: nome do canal **e** nome do grupo, sem acento/maiúsculas
   (`name_key`, `group_key`), com *debounce* de 250 ms.
-- **Categorias (1.2.0)**: o botão abre `CategoriesActivity` — cartões com ícone,
+- **Categorias (1.2.1)**: o botão abre `CategoriesActivity` — cartões com ícone,
   nome e **quantidade de itens**, busca dentro das categorias, destaque da atual.
   Substituiu o menu suspenso que empilhava dezenas de grupos sem contexto.
+  Os ícones são do **Material Symbols** (Apache 2.0), baixados do repositório
+  oficial `google/material-design-icons` e convertidos para vector drawable com
+  `viewportWidth/Height = 960` + `translateY = 960` (o SVG original usa
+  `viewBox="0 -960 960 960"`). Prefixo "Canais | " do provedor é removido só na
+  exibição; o filtro continua usando o nome completo do grupo.
+- **Abertos (1.2.1)**: categoria virtual (`data/FreeTv.kt`) que reúne por **nome
+  do canal** as emissoras abertas (Globo, Record, SBT, Band, RedeTV, Cultura, TV
+  Brasil, Gazeta, Aparecida, Canção Nova, Rede Vida, TV Senado/Câmara/Justiça
+  etc.), mesmo que a playlist as espalhe em "Canais | Globos Sudeste",
+  "Canais | RecordTV"... Os canais **continuam nas categorias originais** e
+  aparecem também em Abertos. Famílias pagas são excluídas (GloboNews, Globoplay,
+  Premiere, Telecine, Band Sports, Band News); o grupo da playlist com "aberto"
+  no nome também entra, para não perder emissora local.
 - **Barra A-Z (1.2.0)**: `AlphabetIndexView` na lateral da lista ao vivo
   (aparece com 80+ itens, escondida na TV). Tocar/arrastar pula para a primeira
   letra via `CatalogStore.firstIndexForLetter` — resolve "rolar 2 mil canais".
+  A lista reserva `paddingEnd="26dp"` e a barra tem fundo próprio para não cobrir
+  as estrelas de favorito.
 - **Continuar assistindo**: carrossel com filmes/séries em andamento
   (progresso salvo a cada 5 s).
 - **Favoritos** e **Recentes** aparecem como categorias quando têm itens.

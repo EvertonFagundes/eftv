@@ -121,8 +121,13 @@ class CatalogStore private constructor(context: Context) {
     ): Int {
         val prefix = letter.lowercaseChar().toString()
         val (where, args) = buildFilter(group, query, excludeAdults = excludeAdults, kind = kind)
-        val extra = if (where.isEmpty()) "WHERE" else "WHERE $where AND"
-        val sql = "SELECT COUNT(*) FROM ${fromClause(mode)} $extra c.name_key < ?"
+        // buildFilter ja devolve a clausula com "WHERE" (ou vazio).
+        val condition = if (where.isEmpty()) {
+            "WHERE c.name_key < ?"
+        } else {
+            "$where AND c.name_key < ?"
+        }
+        val sql = "SELECT COUNT(*) FROM ${fromClause(mode)} $condition"
 
         val totalBefore = db.rawQuery(sql, (args + prefix).toTypedArray()).use { cursor ->
             if (cursor.moveToFirst()) cursor.getInt(0) else 0
@@ -568,8 +573,15 @@ class CatalogStore private constructor(context: Context) {
         }
 
         if (!group.isNullOrBlank()) {
-            clauses.add("c.group_title = ?")
-            args.add(group)
+            if (group == FreeTv.GROUP) {
+                // Categoria virtual montada pelo nome do canal (TV aberta).
+                val (sql, extraArgs) = FreeTv.clause()
+                clauses.add(sql)
+                args.addAll(extraArgs)
+            } else {
+                clauses.add("c.group_title = ?")
+                args.add(group)
+            }
         }
 
         if (excludeAdults) {

@@ -34,16 +34,22 @@ class AlphabetIndexView @JvmOverloads constructor(
         color = ContextCompat.getColor(context, R.color.on_background)
     }
 
+    /** Fundo arredondado: sem ele as letras pareciam soltas sobre os cartoes. */
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = ContextCompat.getColor(context, R.color.background)
+        alpha = 215
+    }
+
     private var pressedIndex = -1
 
     init {
         isClickable = true
         isFocusable = false
-        alpha = 0.75f
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = (20 * resources.displayMetrics.density).toInt() + paddingLeft + paddingRight
+        val width = (16 * resources.displayMetrics.density).toInt() + paddingLeft + paddingRight
         setMeasuredDimension(width, MeasureSpec.getSize(heightMeasureSpec))
     }
 
@@ -51,10 +57,21 @@ class AlphabetIndexView @JvmOverloads constructor(
         super.onDraw(canvas)
         if (height == 0) return
 
+        val radius = 8 * resources.displayMetrics.density
+        canvas.drawRoundRect(
+            0f,
+            0f,
+            width.toFloat(),
+            height.toFloat(),
+            radius,
+            radius,
+            backgroundPaint,
+        )
+
         val slot = height.toFloat() / letters.size
-        paint.textSize = (slot * 0.62f).coerceIn(
-            8 * resources.displayMetrics.density,
-            13 * resources.displayMetrics.density,
+        paint.textSize = (slot * 0.58f).coerceIn(
+            7 * resources.displayMetrics.density,
+            11 * resources.displayMetrics.density,
         )
         val baselineOffset = paint.textSize / 3f
 
@@ -75,7 +92,7 @@ class AlphabetIndexView @JvmOverloads constructor(
             context,
             if (pressed) R.color.primary else R.color.on_background,
         )
-        paint.alpha = if (pressed) 255 else 190
+        paint.alpha = if (pressed) 255 else 170
     }
 
     @SuppressLint("ClickableViewAccessibility")

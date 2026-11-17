@@ -1,9 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols "newspaper" (Apache License 2.0, Google). Gerado a partir de
+     https://github.com/google/material-design-icons - nao editar a mao. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:fillColor="@color/on_surface"
-        android:pathData="M18,2H6C4.8,2 3.8,3 3.8,4.2V20C3.8,21.2 4.8,22 6,22H18C19.2,22 20.2,21.2 20.2,20V4.2C20.2,3 19.2,2 18,2ZM6,4H18V20H6V4ZM10,8H12V16H10V8ZM8,8H10V14H8V8ZM14,8H16V12H14V8Z" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <group android:translateY="960">
+        <path
+            android:fillColor="@color/on_surface"
+            android:pathData="M160-120q-33 0-56.5-23.5T80-200v-640l67 67 66-67 67 67 67-67 66 67 67-67 67 67 66-67 67 67 67-67 66 67 67-67v640q0 33-23.5 56.5T800-120H160Zm0-80h280v-240H160v240Zm360 0h280v-80H520v80Zm0-160h280v-80H520v80ZM160-520h640v-120H160v120Z" />
+    </group>
 </vector>

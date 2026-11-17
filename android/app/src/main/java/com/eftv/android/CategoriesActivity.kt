@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.ChannelKind
 import com.eftv.android.data.ChannelMode
+import com.eftv.android.data.FreeTv
 import com.eftv.android.databinding.ActivityCategoriesBinding
 import com.eftv.android.ui.CategoryGridAdapter
 import kotlinx.coroutines.Dispatchers
@@ -137,13 +138,35 @@ class CategoriesActivity : AppCompatActivity() {
             )
         }
 
+        // TV aberta: reunida pelo nome do canal (Globo, Record, SBT...), mesmo
+        // que o provedor espalhe esses canais em grupos diferentes.
+        if (kind == ChannelKind.LIVE) {
+            val openTv = store.count(FreeTv.GROUP, "", ChannelMode.ALL, kind)
+            if (openTv > 0) {
+                items.add(
+                    card(
+                        label = getString(R.string.category_open_tv),
+                        count = openTv,
+                        mode = ChannelMode.ALL,
+                        group = FreeTv.GROUP,
+                        icon = R.drawable.ic_live_tv,
+                        accent = R.color.cat_abertos,
+                        container = R.color.cat_abertos_container,
+                    ),
+                )
+            }
+        }
+
         for (group in store.groupsWithCounts(kind)) {
             if (group.title.isBlank()) continue
             if (!adultEnabled && ChannelKind.isAdultGroup(group.title)) continue
+            // "Abertos" da playlist ja esta coberto pela categoria virtual.
+            if (kind == ChannelKind.LIVE && group.title.normalizedForLabel().contains("aberto")) continue
             val style = styleFor(group.title)
+            val label = cleanLabel(group.title)
             items.add(
                 card(
-                    label = group.title,
+                    label = label,
                     count = group.count,
                     mode = ChannelMode.ALL,
                     group = group.title,
@@ -177,6 +200,27 @@ class CategoriesActivity : AppCompatActivity() {
     /** Icone e cor por assunto do grupo (o provedor muda os nomes com frequencia). */
     private data class Style(val icon: Int, val accent: Int, val container: Int)
 
+    /**
+     * Tira o prefixo repetido do provedor ("Canais | ") do texto exibido.
+     * O filtro continua usando o nome completo do grupo.
+     */
+    private fun cleanLabel(title: String): String {
+        val cleaned = title
+            .replace(Regex("(?i)^\\s*canais\\s*[|\\-–:]\\s*"), "")
+            .trim()
+        if (cleaned.isBlank()) return title
+        return cleaned.replaceFirstChar { it.uppercase() }
+    }
+
+    /** Texto sem acento e em minusculas, para comparar nomes de grupo. */
+    private fun String.normalizedForLabel(): String = lowercase()
+        .replace(Regex("[áàâãä]"), "a")
+        .replace(Regex("[éèêë]"), "e")
+        .replace(Regex("[íìîï]"), "i")
+        .replace(Regex("[óòôõö]"), "o")
+        .replace(Regex("[úùûü]"), "u")
+        .replace("ç", "c")
+
     private fun styleFor(title: String): Style {
         val key = title.lowercase()
         fun has(vararg words: String) = words.any { key.contains(it) }
@@ -189,10 +233,16 @@ class CategoriesActivity : AppCompatActivity() {
                 Style(R.drawable.ic_child_friendly, R.color.cat_child, R.color.cat_child_container)
             has("esporte", "jogo", "futebol", "luta") ->
                 Style(R.drawable.ic_sports, R.color.cat_sports, R.color.cat_sports_container)
-            has("noticia", "notícia", "jornal") -> Style(R.drawable.ic_news, R.color.cat_news, R.color.cat_news_container)
-            has("aberto", "aberta") -> Style(R.drawable.ic_tv, R.color.cat_abertos, R.color.cat_abertos_container)
+            has("noticia", "notícia", "jornal", "news") ->
+                Style(R.drawable.ic_news, R.color.cat_news, R.color.cat_news_container)
+            has("aberto", "aberta") -> Style(R.drawable.ic_live_tv, R.color.cat_abertos, R.color.cat_abertos_container)
             has("document") ->
                 Style(R.drawable.ic_documentary, R.color.cat_documentary, R.color.cat_documentary_container)
+            // Emissoras: o provedor agrupa por praça ("Globos Sudeste"), mas para
+            // o cliente e TV aberta. Fica depois de "noticia/news" para nao
+            // capturar GloboNews, Record News e Band News.
+            has("globo", "record", "sbt", "band", "redetv", "rede tv", "cultura", "tv brasil", "gazeta", "aparecida") ->
+                Style(R.drawable.ic_live_tv, R.color.cat_abertos, R.color.cat_abertos_container)
             has("anime") -> Style(R.drawable.ic_anime, R.color.cat_anime, R.color.cat_anime_container)
             has("religio", "religi", "deus") ->
                 Style(R.drawable.ic_religious, R.color.cat_religious, R.color.cat_religious_container)
@@ -202,7 +252,7 @@ class CategoriesActivity : AppCompatActivity() {
                 Style(R.drawable.ic_streaming, R.color.cat_streaming, R.color.cat_streaming_container)
             has("adult", "xxx", "+18") -> Style(R.drawable.ic_adults, R.color.cat_adults, R.color.cat_adults_container)
             has("varied") -> Style(R.drawable.ic_variety, R.color.cat_variety, R.color.cat_variety_container)
-            else -> Style(R.drawable.ic_category, R.color.cat_other, R.color.cat_other_container)
+            else -> Style(R.drawable.ic_other, R.color.cat_other, R.color.cat_other_container)
         }
     }
 
