@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.4.2** (`versionCode 17`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.4.3** (`versionCode 18`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -244,5 +244,10 @@ longo) e publicar em Google Play / Amazon Appstore. Detalhes em `docs/TV.md`.
   serviço de primeiro plano, então não aparece notificação fixa — em troca, o
   Android pode encerrá-lo junto com o app muito tempo em segundo plano (ele
   volta quando o app abre).
+- Desde a 1.4.3 o servidor embutido escuta **apenas em `127.0.0.1`**: outro
+  aparelho na rede Wi-Fi não alcança mais o `:8124`. O que deixa de funcionar é
+  abrir a EFTV no navegador de uma TV/PC apontando para o IP do celular — nesse
+  caso use o app da TV. A versão web (`server.py`) no PC continua com `--lan`
+  quando você quiser expor de propósito.
 - Sem EPG, zapping por número, legendas embutidas do provedor e PIN infantil
   (dependem dos dados do provedor).

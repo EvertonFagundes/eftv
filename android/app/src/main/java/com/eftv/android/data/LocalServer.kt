@@ -12,9 +12,10 @@ import java.net.URL
 /**
  * Servidor EFTV embutido no aplicativo (Chaquopy).
  *
- * O server.py roda dentro do proprio APK escutando em 0.0.0.0:8124. O app
- * usa 127.0.0.1 (funciona no Wi-Fi e nos dados moveis) e a smart TV usa o IP
- * do celular na rede Wi-Fi. Nao depende de Termux, PC ou nuvem.
+ * O server.py roda dentro do proprio APK e escuta em 127.0.0.1:8124 — so o
+ * proprio app alcanca. Antes ele escutava em 0.0.0.0 e qualquer aparelho da
+ * rede Wi-Fi podia usar o proxy de streams. Nao depende de Termux, PC ou
+ * nuvem.
  */
 object LocalServer {
 

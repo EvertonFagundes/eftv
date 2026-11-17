@@ -212,7 +212,15 @@ class EftvServerService : Service() {
 
     companion object {
         const val PORT = 8124
-        const val HOST = "0.0.0.0"
+
+        /**
+         * So o proprio aparelho acessa o servidor.
+         *
+         * Com `0.0.0.0` qualquer um no mesmo Wi-Fi alcancava o proxy e podia
+         * usa-lo para buscar URLs arbitrarias (proxy aberto). Nada no app
+         * precisa de acesso externo: o player e o catalogo falam por loopback.
+         */
+        const val HOST = "127.0.0.1"
 
         /**
          * Inicia o servidor. Sem primeiro plano, o Android 8+ recusa iniciar
