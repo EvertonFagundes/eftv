@@ -1,11 +1,14 @@
 # tasks/subscription_checker.py - Verifica vencimentos e renovações
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
 
 from app.database import get_db_context
 from app.models.subscription import Subscription
-from app.services.mercadopago import get_preapproval
+from app.services.mercadopago import get_preapproval, sync_payments_for_subscription
+
+logger = logging.getLogger(__name__)
 
 
 async def check_expired_subscriptions() -> int:
@@ -44,6 +47,18 @@ async def check_expired_subscriptions() -> int:
                                 next_billing.replace("Z", "+00:00")
                             )
                         sub.status = "active"
+                        # Grava a cobranca da renovacao: sem ela, o cartao
+                        # usado ficaria desatualizado na tela de assinatura.
+                        try:
+                            await sync_payments_for_subscription(
+                                str(sub.mercadopago_subscription_id), db
+                            )
+                        except Exception:  # noqa: BLE001
+                            logger.warning(
+                                "Renovacao da assinatura %s sem cobranca registrada",
+                                sub.id,
+                                exc_info=True,
+                            )
                     elif mp_status in ["cancelled", "paused"]:
                         sub.status = "cancelled"
                         sub.cancelled_at = now
@@ -84,6 +99,16 @@ async def check_past_due_subscriptions() -> int:
                         if next_billing:
                             sub.current_period_end = datetime.fromisoformat(
                                 next_billing.replace("Z", "+00:00")
+                            )
+                        try:
+                            await sync_payments_for_subscription(
+                                str(sub.mercadopago_subscription_id), db
+                            )
+                        except Exception:  # noqa: BLE001
+                            logger.warning(
+                                "Cobranca de recuperacao da assinatura %s nao registrada",
+                                sub.id,
+                                exc_info=True,
                             )
                         processed += 1
                 except Exception:

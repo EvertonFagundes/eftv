@@ -101,6 +101,13 @@ async def current_subscription(
     )
     subscriptions = list(result.scalars().all())
 
+    # Pendente: o pagamento pode ter sido aprovado sem o webhook chegar.
+    # Varre todos os pendentes: com trial ativo a tela mostra outra
+    # assinatura, e o checkout pago ficaria parado ate a proxima tarefa.
+    for pending_sub in subscriptions:
+        if pending_sub.status == "pending" and await sync_preapproval(pending_sub.id):
+            await db.refresh(pending_sub)
+
     subscription = next(
         (sub for sub in subscriptions if sub.has_access),
         subscriptions[0] if subscriptions else None,
@@ -111,13 +118,6 @@ async def current_subscription(
         subscription_plan = plan_result.scalar_one_or_none()
         if subscription_plan is not None:
             plan = subscription_plan
-
-        # Pendente: o pagamento pode ter sido aprovado sem o webhook chegar.
-        # No checkout por plano a assinatura chega sem id local, entao a
-        # sincronizacao tambem roda sem `mercadopago_subscription_id`.
-        if subscription.status == "pending":
-            if await sync_preapproval(subscription.id):
-                await db.refresh(subscription)
 
     # Ultima cobranca aprovada: mostra a forma de pagamento no app para o
     # cliente nao precisar abrir suporte para saber o cartao usado.

@@ -53,6 +53,7 @@ async def test_creates_monthly_plan_when_database_is_empty():
     assert plan.price_cents == 1990
     assert plan.currency == "BRL"
     assert plan.interval == "month"
-    assert plan.max_devices == 1
+    # Produto: 2 aparelhos por assinatura, 1 stream simultaneo.
+    assert plan.max_devices == 2
     assert plan.max_simultaneous_streams == 1
     assert plan.features == {"hd": True, "full_hd": True, "4k": False}

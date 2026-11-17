@@ -1,71 +1,68 @@
-# Pagamentos (Mercado Pago)
+# Pagamentos EFTV — runbook
 
-## Situacao atual (16/11/2026)
-
-**Producao ativa.** A conta coletora e real (`is_test_user: false`) e o
-checkout ja abre com o plano *EFTV - Mensal*, R$ 19,90/mes.
-
-Confira em `https://eftv.onrender.com/health`:
-
-```json
-"mercadopago_token_kind": "production",
-"mercadopago_sandbox": false,
-"mercadopago_account": { "is_test_user": false, "site_id": "MLB", "country_id": "BR" }
-```
-
-Se `is_test_user` voltar a `true`, o checkout responde
-`503 payments_unavailable` e o app mostra a mensagem de indisponibilidade em
-vez de abrir uma tela de pagamento que o Mercado Pago recusaria no fim.
+Como o cobrança funciona, o que é automático e o que conferir quando alguém
+pagar de verdade.
 
 ## Fluxo
 
-1. O app chama `POST /subscriptions/checkout` e recebe `init_point`.
-2. O cliente paga no navegador (o Mercado Pago coleta o cartao).
-3. O Mercado Pago chama o webhook; o backend busca a assinatura na fonte e
-   grava `mercadopago_subscription_id`, status e fim do periodo.
-4. O botao **Atualizar status** do app forca a sincronizacao, caso o webhook
-   atrase. No fluxo por plano a assinatura e localizada pelo
-   `external_reference` do app ou pelo e-mail do pagador.
+1. Usuário verificou o e-mail → **trial de 7 dias**.
+2. ⋮ → Minha assinatura → **Assinar** → `POST /subscriptions/checkout`.
+3. O Mercado Pago recusa a preapproval direta com frequência → o backend cai
+   no **fluxo por plano** (`preapproval_plan`), que é o caminho de produção.
+4. O app abre o `init_point` no navegador; só **cartão de crédito**
+   (`payment_methods_allowed`).
+5. Pagamento aprovado → assinatura vira `active`, `has_access=true`.
 
-## Duas formas de criar o checkout
+## Como o acesso é liberado (3 caminhos, todos independentes)
 
-- **Preapproval direta** (`/preapproval`): exige `payer_email` de uma conta
-  Mercado Pago existente. Usada primeiro, porque ja amarra a assinatura ao
-  usuario na criacao.
-- **Plano** (`/preapproval_plan`): fallback quando a direta e recusada. Gera
-  um link reutilizavel onde o Mercado Pago pede o e-mail e o cartao. O id do
-  plano fica em `plans.mercadopago_plan_id`.
+| Caminho | Quando roda | O que faz |
+|---|---|---|
+| Webhook `subscription_preapproval` | Evento do MP (só chega se `notification_url` foi aceito na criação) | Ativa assinatura |
+| Webhook `subscription_authorized_payment` | Cobrança aprovada | Grava `Payment` (bandeira + últimos 4) |
+| **Conciliação** `sync_pending_subscriptions` | A cada 5 min + botão "Atualizar status" + ao abrir "Minha assinatura" | Busca a preapproval do usuário, ativa e **grava o `Payment` via `/authorized_payments/search`** |
+| Renovação `check_expired_subscriptions` | A cada 30 min | Consulta `next_billing_date`, renova e grava a cobrança da renovação |
 
-Ao trocar o token (teste -> producao), o plano antigo pertence ao coletor
-anterior e e **recriado automaticamente** na proxima chamada, porque o
-backend valida `collector_id` contra a conta atual.
+O webhook é **otimização**; sem ele tudo funciona pela conciliação (até 5 min
+de atraso). Por isso não é necessário cadastrar webhook no painel do MP.
 
-## Webhook
+## Compra de teste (E2E)
 
-URL a cadastrar no painel da aplicacao:
+Conta de teste: `evertonfagundes1510+compra@gmail.com` / `EftvCompra2026`
+(plus-addressing: o e-mail de verificação cai no Gmail normal).
+
+1. Clicar no link de verificação do e-mail → trial ativo.
+2. No app: sair da conta principal, entrar com a conta de teste.
+3. ⋮ → Minha assinatura → Assinar → pagar R$ 19,90.
+4. Conferir:
 
 ```
-https://eftv.onrender.com/subscriptions/webhook/mercadopago?source_news=webhooks
+curl -H "Authorization: Bearer <token>" https://eftv.onrender.com/subscriptions/current
 ```
 
-Eventos: `subscription_preapproval` e `subscription_authorized_payment`.
-Se o painel mostrar uma chave secreta, coloque em
-`MERCADOPAGO_WEBHOOK_SECRET`.
+Esperado: `status: "active"`, `has_access: true`, `payment_method`,
+`payment_last_four`. No app, a linha "Pagamento: cartão …" deve aparecer.
 
-## Plano
+5. Se ficou `pending` por mais de 5 minutos: botão **Atualizar status** e
+   olhar os logs do Render (`sync`, `Webhook`, `conciliac`).
 
-- Nome: Mensal
-- Preco: R$ 19,90
-- 2 aparelhos, 1 stream simultaneo
-- Trial: 7 dias (`FREE_TRIAL_DAYS=7`)
+## Checagens de saúde
 
-Trocar o preco exige criar um plano novo no Mercado Pago: o plano antigo
-continua valendo para quem ja assinou. Para forcar a recriacao, zere
-`plans.mercadopago_plan_id` no banco.
+- `https://eftv.onrender.com/health` → `mercadopago_configured: true`,
+  `mercadopago_token_kind: "production"`, `mercadopago_sandbox: false`,
+  `mercadopago_account.is_test_user: false`.
 
-## Variaveis no Render
+## Segredos e backup
 
-- `MERCADOPAGO_ACCESS_TOKEN` — token de **producao** da aplicacao
-- `MERCADOPAGO_SANDBOX=false`
-- `FRONTEND_URL` — site que hospeda `checkout.html`
-- `API_BASE_URL` — usada no `notification_url` do webhook
+- `android/eftv-release.jks` + `android/keystore.properties` **não estão no
+  Git** (nunca devem estar). Backup local:
+  `C:\Users\evert\Documents\EFTV-keystore-backup\` (+ zip datado).
+  Copiar também para nuvem/pen drive — sem essa chave não há como atualizar
+  quem já instalou o app.
+- `MERCADOPAGO_ACCESS_TOKEN` e `SECRET_KEY` vivem só no Render.
+
+## Limite da conta de teste do MP
+
+Conta coletora de teste não cobra cliente real ("Both payer and collector
+must be real or test users"). O backend detecta via `is_test_user` e devolve
+503 `payments_unavailable` em vez de mandar o cliente para um checkout que
+sempre falha.
