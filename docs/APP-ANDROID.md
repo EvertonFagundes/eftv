@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.4.4** (`versionCode 19`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.4.5** (`versionCode 20`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -246,6 +246,13 @@ longo) e publicar em Google Play / Amazon Appstore. Detalhes em `docs/TV.md`.
   build de debug. Sem isso um problema no aparelho do cliente ("não conecta",
   "fecha sozinho") chegava sem pista nenhuma e a investigação era às cegas.
   `adb logcat` continua sendo leitura privada do sistema desde o Android 4.1.
+- **Erro de conexão do cast (1.4.5)**: antes a mensagem real ("não foi possível
+  conectar", "PIN incorreto") era trocada por "o Android encerrou a captura" e
+  o serviço morria em ~100 ms. Agora a causa aparece na tela e fica 6 s.
+- O receptor (`CastServer`) loga tentativas, PIN errado, quedas e abertura do
+  socket com a tag `Receber tela:`. Ao conferir a porta, lembre que o Java pode
+  abrir o `ServerSocket` em IPv6: nesse caso ele aparece em `/proc/net/tcp6`,
+  não em `/proc/net/tcp`.
 - O servidor local embutido (proxy) existe para contornar bloqueio de DNS em
   dados móveis; em TV box ele sobe igual. Desde a 1.4.2 ele **não** é mais um
   serviço de primeiro plano, então não aparece notificação fixa — em troca, o

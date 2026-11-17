@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.io.IOException
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -40,7 +41,8 @@ class CastServerTest {
                     audios += ptsUs to data
                 }
             },
-        ) { isConnected, _ -> connected += isConnected }
+            onState = { isConnected, _ -> connected += isConnected },
+        )
         server.bind()
         server.acceptLoop()
         return server
@@ -159,6 +161,40 @@ class CastServerTest {
                 assertEquals(CastProtocol.TYPE_OK, CastProtocol.read(input)?.type)
             }
         } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun `stop fecha a conexao em andamento`() {
+        val server = startServer("4821")
+        val socket = Socket("127.0.0.1", server.port)
+        try {
+            socket.tcpNoDelay = true
+            socket.soTimeout = 3_000
+            val out = DataOutputStream(socket.getOutputStream())
+            val input = DataInputStream(socket.getInputStream())
+
+            CastProtocol.write(
+                out,
+                CastProtocol.TYPE_HELLO,
+                CastProtocol.helloPayload("4821", "Celular de teste"),
+            )
+            assertEquals(CastProtocol.TYPE_OK, CastProtocol.read(input)?.type)
+
+            // A thread do servidor fica bloqueada no read durante a
+            // transmissao. Fechar a tela da TV precisa encerrar essa conexao,
+            // senao a porta e a thread ficam presas.
+            server.stop()
+
+            val ended = try {
+                CastProtocol.read(input) == null
+            } catch (_: IOException) {
+                true
+            }
+            assertTrue(ended)
+        } finally {
+            runCatching { socket.close() }
             server.stop()
         }
     }

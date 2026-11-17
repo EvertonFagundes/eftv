@@ -80,9 +80,14 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
     }
 
     private fun startServer() {
-        val castServer = CastServer(pin, this) { connected, name ->
-            runOnUiThread { handleConnection(connected, name) }
-        }
+        val castServer = CastServer(
+            pin,
+            this,
+            onState = { connected, name ->
+                runOnUiThread { handleConnection(connected, name) }
+            },
+            onLog = { message -> Timber.i("Receber tela: %s", message) },
+        )
         val port = runCatching { castServer.bind() }.getOrNull()
         if (port == null) {
             showError(getString(R.string.cast_receive_error))
@@ -98,6 +103,7 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
         }
         registerService(port)
         castServer.acceptLoop()
+        Timber.i("Receber tela: socket aberto na porta %d (ip=%s)", port, address)
     }
 
     private fun registerService(port: Int) {
@@ -220,7 +226,26 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
+    override fun onStart() {
+        super.onStart()
+        Timber.i(
+            "Receber tela: onStart (servidor=%s, anunciada=%s)",
+            server?.port,
+            registration != null,
+        )
+    }
+
+    override fun onStop() {
+        Timber.i(
+            "Receber tela: onStop (servidor=%s, anunciada=%s) - socket continua aberto",
+            server?.port,
+            registration != null,
+        )
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        Timber.i("Receber tela: onDestroy")
         server?.stop()
         server = null
         decoder?.release()

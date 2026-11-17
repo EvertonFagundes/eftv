@@ -29,9 +29,15 @@ class CastServer(
     private val sink: CastSink,
     /** (conectado, nome do aparelho) — chamado tambem no fim da transmissao. */
     private val onState: (Boolean, String?) -> Unit,
+    /** Diagnostico opcional: a TV loga tentativas, PIN errado e quedas. */
+    private val onLog: (String) -> Unit = {},
 ) {
 
     private var serverSocket: ServerSocket? = null
+
+    /** Conexao em andamento, para o stop() nao deixar a thread presa no read. */
+    @Volatile
+    private var clientSocket: Socket? = null
 
     @Volatile
     private var running = false
@@ -63,20 +69,25 @@ class CastServer(
     fun acceptLoop() {
         if (serverSocket == null) return
         acceptThread = thread(name = "eftv-cast-accept", isDaemon = true) {
+            onLog("aguardando conexao")
             while (running) {
                 val client = try {
                     serverSocket?.accept()
-                } catch (_: IOException) {
+                } catch (e: IOException) {
+                    if (running) onLog("accept falhou: ${e.message}")
                     break
                 } ?: continue
                 // Um celular por vez: a transmissao e da tela inteira.
+                onLog("conexao de ${client.inetAddress?.hostAddress}")
                 handle(client)
             }
+            onLog("servidor encerrado")
         }
     }
 
     private fun handle(client: Socket) {
         var connected = false
+        clientSocket = client
         try {
             client.tcpNoDelay = true
             client.soTimeout = HANDSHAKE_TIMEOUT_MS
@@ -85,16 +96,19 @@ class CastServer(
 
             val hello = CastProtocol.read(input)
             if (hello == null || hello.type != CastProtocol.TYPE_HELLO) {
+                onLog("handshake invalido")
                 replyError(output, "Handshake invalido")
                 return
             }
             val parsed = CastProtocol.parseHello(hello.payload)
             if (parsed == null) {
+                onLog("handshake ilegivel")
                 replyError(output, "Handshake invalido")
                 return
             }
             val (receivedPin, deviceName) = parsed
             if (receivedPin != pin) {
+                onLog("PIN incorreto (${deviceName.ifBlank { "aparelho sem nome" }})")
                 replyError(output, "PIN incorreto")
                 return
             }
@@ -132,10 +146,12 @@ class CastServer(
                     CastProtocol.TYPE_BYE -> return
                 }
             }
-        } catch (_: IOException) {
+        } catch (e: IOException) {
             // Queda de rede / celular fechando o app: encerra esta conexao.
+            onLog("conexao encerrada: ${e.message}")
         } finally {
             runCatching { client.close() }
+            clientSocket = null
             if (connected) onState(false, null)
         }
     }
@@ -151,7 +167,10 @@ class CastServer(
     }
 
     fun stop() {
+        onLog("fechando servidor")
         running = false
+        runCatching { clientSocket?.close() }
+        clientSocket = null
         runCatching { serverSocket?.close() }
         serverSocket = null
         runCatching { acceptThread?.join(500) }

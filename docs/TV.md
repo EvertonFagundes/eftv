@@ -87,18 +87,29 @@ Backend do login por código já implementado e testado:
   (Netflix, Globoplay) podem aparecer pretos ou mudos; um celular por vez; girar
   a tela no meio da transmissão distorce a imagem.
 
-### 3.1 Pendências de validação (aparelho, 17/11/2026)
+### 3.1 Diagnóstico do cast (17/11/2026)
+
 - **Android 14+**: o diálogo do sistema abre em "Share one app". É preciso
   trocar para **Tela inteira**, senão a TV espelha só o EFTV. O texto da tela
   já avisa desde a 1.4.4.
-- **`CastService` encerra ~100 ms depois de subir** sem mensagem na tela. A
-  partir da 1.4.4 o `Timber` também loga no APK de release, então
-  `adb logcat | findstr /i "CastService CastSender"` mostra a causa.
-- No teste celular→celular, o socket do `CastServer` (porta 8765) e o anúncio
-  mDNS da tela "Receber tela" **desapareceram** com a tela apenas em segundo
-  plano — e a atividade não foi destruída (`state=STOPPED`, sem `onDestroy`).
-  Investigar com o log novo; se acontecer na TV, quem tenta transmitir não
-  encontra o aparelho.
+- **`CastService` encerrava ~100 ms depois de subir** (corrigido na 1.4.5): a
+  falha de conexão fazia o `CastSender` soltar a projeção; o callback da
+  projeção interpretava isso como captura interrompida pelo sistema,
+  sobrescrevia a mensagem real e chamava `stopSelf()`. Agora o `CastService`
+  distingue a limpeza feita por ele mesmo (`CastSender.isStopping`), mantém a
+  mensagem de rede/PIN na tela e só encerra depois dos 6 s de aviso.
+  - O callback também ficou preso à sessão que o registrou: conectar de novo
+    fecha a projeção antiga sem derrubar a transmissão nova.
+  - Queda do socket durante a transmissão agora vira **"A conexão com a TV
+    caiu"** em vez de deixar "Transmitindo" na tela para sempre.
+- O socket do `CastServer` (porta 8765) e o anúncio mDNS da tela "Receber
+  tela" **podem não ter sumido**: a checagem anterior lia só
+  `/proc/net/tcp`, mas o `ServerSocket` do Java também pode abrir em IPv6
+  (`/proc/net/tcp6`). Na 1.4.5 a TV loga abertura/fechamento do socket,
+  tentativas de conexão, PIN errado e quedas com a tag `Receber tela:`, então
+  o próximo teste no aparelho confirma (ou descarta) o problema.
+- Fechar a tela da TV agora derruba também a conexão em andamento (antes a
+  thread ficava presa no `read`), liberando a porta e o celular na hora.
 
 ### 4. Interface 10 pés — pendente
 - [ ] "Atualizar" no menu já existe; validar no controle.

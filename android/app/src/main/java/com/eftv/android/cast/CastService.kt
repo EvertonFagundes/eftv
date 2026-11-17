@@ -40,6 +40,9 @@ class CastService : Service() {
     /** Quando a transmissao comecou, para saber se a captura durou pouco. */
     private var startedAt = 0L
 
+    private val handler = Handler(Looper.getMainLooper())
+    private var pendingStop: Runnable? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -58,6 +61,12 @@ class CastService : Service() {
     }
 
     private fun startCasting(intent: Intent) {
+        // Uma tentativa nova cancela o encerramento agendado pela anterior:
+        // sem isso, o stopSelf atrasado derrubaria a transmissao recem-iniciada.
+        cancelPendingStop()
+        // E encerra a transmissao anterior, se o usuario tocou em Conectar de novo.
+        sender?.stop()
+        sender = null
         startedAt = SystemClock.elapsedRealtime()
         startInForeground()
         Timber.i("CastService: primeiro plano ativo")
@@ -88,20 +97,45 @@ class CastService : Service() {
         }
         Timber.i("CastService: projecao obtida")
 
+        val cast = CastSender(this, projection, host, port, pin, withAudio) { newStatus ->
+            status = newStatus
+            updateNotification(newStatus)
+            if (newStatus.state == CastStatus.State.ERROR) {
+                // Deixa a mensagem visivel antes de encerrar o servico.
+                scheduleStop()
+            }
+        }
+        sender = cast
+
         // O Android 14 exige o callback registrado ANTES de criar o display.
+        // O callback fica preso a ESTA sessao: se o usuario conectar de novo,
+        // a projecao antiga fecha e nao pode derrubar a transmissao nova.
         projection.registerCallback(
             object : MediaProjection.Callback() {
                 override fun onStop() {
+                    if (sender !== cast) {
+                        Timber.i("Captura de uma sessao antiga encerrada; ignorando")
+                        return
+                    }
                     val aliveMs = SystemClock.elapsedRealtime() - startedAt
+                    val ownCleanup = cast.isStopping
                     Timber.i(
-                        "Captura de tela encerrada pelo sistema (%d ms, estado=%s)",
+                        "Captura de tela encerrada (%d ms, estado=%s, por nos=%s)",
                         aliveMs,
                         status.state,
+                        ownCleanup,
                     )
-                    sender?.stop()
-                    // Se o sistema derrubou a captura antes de qualquer imagem
-                    // chegar, o usuario precisa saber o motivo: no Android 14+
-                    // costuma ser o "um app so" escolhido no aviso.
+                    if (ownCleanup) {
+                        // Foi o proprio CastSender que soltou a projecao ao
+                        // falhar ou parar. O motivo real (rede, PIN, botao
+                        // Parar) ja foi publicado em `status`; sobrescrever
+                        // aqui esconderia a mensagem do cliente.
+                        return
+                    }
+                    cast.stop()
+                    // O sistema derrubou a captura (tela bloqueada, "Parar" no
+                    // aviso do Android, app restrito). Se nenhuma imagem chegou,
+                    // o usuario precisa saber o motivo.
                     status = if (status.state != CastStatus.State.STREAMING) {
                         CastStatus(CastStatus.State.ERROR, getString(R.string.cast_capture_stopped))
                     } else {
@@ -110,18 +144,9 @@ class CastService : Service() {
                     stopSelf()
                 }
             },
-            Handler(Looper.getMainLooper()),
+            handler,
         )
 
-        val cast = CastSender(this, projection, host, port, pin, withAudio) { newStatus ->
-            status = newStatus
-            updateNotification(newStatus)
-            if (newStatus.state == CastStatus.State.ERROR) {
-                // Deixa a mensagem visivel antes de encerrar o servico.
-                Handler(Looper.getMainLooper()).postDelayed({ stopSelf() }, ERROR_LINGER_MS)
-            }
-        }
-        sender = cast
         cast.start()
     }
 
@@ -129,7 +154,19 @@ class CastService : Service() {
         val error = CastStatus(CastStatus.State.ERROR, message)
         status = error
         updateNotification(error)
-        Handler(Looper.getMainLooper()).postDelayed({ stopSelf() }, ERROR_LINGER_MS)
+        scheduleStop()
+    }
+
+    private fun scheduleStop() {
+        cancelPendingStop()
+        val runnable = Runnable { stopSelf() }
+        pendingStop = runnable
+        handler.postDelayed(runnable, ERROR_LINGER_MS)
+    }
+
+    private fun cancelPendingStop() {
+        pendingStop?.let(handler::removeCallbacks)
+        pendingStop = null
     }
 
     private fun startInForeground() {
@@ -190,6 +227,7 @@ class CastService : Service() {
 
     override fun onDestroy() {
         Timber.i("CastService: onDestroy (estado=%s)", status.state)
+        cancelPendingStop()
         sender?.stop()
         sender = null
         // Um erro precisa continuar visivel na tela que pediu a transmissao.

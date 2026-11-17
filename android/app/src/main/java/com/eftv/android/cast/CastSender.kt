@@ -57,6 +57,15 @@ class CastSender(
     @Volatile
     private var running = false
 
+    /**
+     * True quando a limpeza partiu do proprio app (erro, botao Parar, servico
+     * encerrando). Serve para o servico nao confundir a queda da projecao que
+     * ele mesmo pediu com uma captura interrompida pelo sistema.
+     */
+    @Volatile
+    var isStopping = false
+        private set
+
     private var socket: Socket? = null
     private var codec: MediaCodec? = null
     private var inputSurface: Surface? = null
@@ -141,8 +150,10 @@ class CastSender(
             failure = friendlyMessage(e)
             Timber.w(e, "Cast: falhou (%s)", failure)
         } finally {
+            // Se a parada partiu do servico/botao, o estado final e dele.
+            val stoppedByUs = isStopping
             cleanup()
-            if (running) {
+            if (!stoppedByUs) {
                 running = false
                 onStatus(
                     if (failure != null) {
@@ -431,7 +442,7 @@ class CastSender(
         return if (abs(guess) > CLOCK_MISMATCH_US) guess else 0L
     }
 
-    private fun sendConfig(output: DataOutputStream, csd: java.nio.ByteBuffer): Boolean = try {
+    private fun sendConfig(output: DataOutputStream, csd: java.nio.ByteBuffer): Boolean {
         val data = ByteArray(csd.remaining())
         csd.get(data)
         send(
@@ -439,10 +450,7 @@ class CastSender(
             CastProtocol.TYPE_CONFIG,
             CastProtocol.configPayload(encoderWidth, encoderHeight, data),
         )
-        true
-    } catch (_: IOException) {
-        running = false
-        false
+        return true
     }
 
     /** Encerra a transmissao (chamado pelo servico ou pelo botao Parar). */
@@ -455,6 +463,7 @@ class CastSender(
 
     @Synchronized
     private fun cleanup() {
+        isStopping = true
         stopAudio()
 
         runCatching { virtualDisplay?.release() }
@@ -495,6 +504,7 @@ class CastSender(
             "Não foi possível conectar. Confira se o celular e a TV estão no mesmo Wi-Fi"
 
         is SocketTimeoutException -> "A TV demorou para responder"
+        is IOException -> "A conexão com a TV caiu"
         else -> e.message ?: "Falha na transmissão"
     }
 
