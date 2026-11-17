@@ -79,6 +79,14 @@
     <string name="authorize_tv_invalid">Digite os 8 caracteres do código da TV.</string>
     <string name="authorize_tv_done">TV autorizada.</string>
 
+    <!-- Instalar o app na TV (TV box, Android TV, Fire TV) -->
+    <string name="install_tv_menu">Instalar na TV</string>
+    <string name="install_tv_title">Instalar o EFTV na TV</string>
+    <string name="install_tv_steps">Na TV, abra o Downloader (Fire TV) ou o navegador do box, digite o link abaixo e confirme. Quando a TV avisar, autorize a instalação de apps desconhecidos. Serve para TV box, Android TV e Fire TV; em Samsung e LG o app ainda não roda.</string>
+    <string name="install_tv_copy">Copiar link</string>
+    <string name="install_tv_copied">Link copiado.</string>
+    <string name="install_tv_unavailable">O APK ainda não foi publicado no servidor. Fale com o suporte.</string>
+
     <!-- Transmitir tela (celular -> TV) -->
     <string name="cast_menu_send">Transmitir tela</string>
     <string name="cast_menu_receive">Receber tela</string>

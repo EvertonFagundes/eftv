@@ -19,6 +19,7 @@ from app.routes import (
     player_router,
     subscriptions_router,
 )
+from app.routes.app_client import apk_download
 from app.security.dependencies import client_ip
 from app.services.mercadopago import sync_pending_subscriptions
 from app.tasks.lifecycle_emails import send_lifecycle_emails
@@ -151,6 +152,10 @@ app.include_router(subscriptions_router)
 app.include_router(player_router)
 app.include_router(admin_router)
 app.include_router(app_router)
+
+# Alias curto (`/tv`) para digitar no controle remoto: mesma resposta de
+# /app/tv, o 302 que entrega o APK.
+app.add_api_route("/tv", apk_download, include_in_schema=False)
 
 
 if __name__ == "__main__":

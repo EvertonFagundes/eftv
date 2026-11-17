@@ -1,5 +1,7 @@
 package com.eftv.android
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -7,12 +9,13 @@ import android.net.Uri
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
-import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -259,8 +262,7 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.menu.findItem(R.id.action_subscription)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_device)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_authorize_tv)?.isVisible = !localMode
-        binding.toolbar.menu.findItem(R.id.action_cast_send)?.isVisible = !localMode
-        binding.toolbar.menu.findItem(R.id.action_cast_receive)?.isVisible = !localMode
+        binding.toolbar.menu.findItem(R.id.action_install_tv)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_logout)?.isVisible = !localMode
 
         binding.toolbar.setOnMenuItemClickListener { item ->
@@ -300,13 +302,8 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
 
-                R.id.action_cast_send -> {
-                    startActivity(Intent(this@MainActivity, CastSendActivity::class.java))
-                    true
-                }
-
-                R.id.action_cast_receive -> {
-                    startActivity(Intent(this@MainActivity, CastReceiveActivity::class.java))
+                R.id.action_install_tv -> {
+                    showInstallTvDialog()
                     true
                 }
 
@@ -434,6 +431,69 @@ class MainActivity : AppCompatActivity() {
      * "Autorizar TV": a TV mostra um codigo e o assinante confirma aqui, onde
      * ja esta logado. Evita digitar e-mail e senha no controle remoto.
      */
+    /**
+     * Link curto para instalar o APK na TV.
+     *
+     * A TV nao consegue "receber" o app por perto: o cliente digita este
+     * endereco no Downloader (Fire TV) ou no navegador do box e a TV baixa o
+     * APK. O backend responde com 302 direto no arquivo (/tv e /app/tv).
+     */
+    private fun installTvUrl(): String? {
+        val base = BuildConfig.API_BASE_URL.trim().trimEnd('/')
+        if (base.isBlank() || base.contains("127.0.0.1") || base.contains("localhost")) {
+            return null
+        }
+        return "$base/tv"
+    }
+
+    private fun showInstallTvDialog() {
+        val url = installTvUrl()
+        if (url == null) {
+            Toast.makeText(this, R.string.install_tv_unavailable, Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val density = resources.displayMetrics.density
+        val padding = (24 * density).toInt()
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, padding, padding, 0)
+        }
+
+        content.addView(
+            TextView(this).apply {
+                setText(R.string.install_tv_steps)
+                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.on_background))
+                textSize = 14f
+            },
+        )
+
+        content.addView(
+            TextView(this).apply {
+                text = url
+                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.primary))
+                textSize = 17f
+                typeface = android.graphics.Typeface.MONOSPACE
+                setTextIsSelectable(true)
+                setPadding(0, (16 * density).toInt(), 0, 0)
+            },
+        )
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.install_tv_title)
+            .setView(content)
+            .setPositiveButton(R.string.install_tv_copy) { _, _ ->
+                val clipboard =
+                    getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText(getString(R.string.install_tv_title), url),
+                )
+                Toast.makeText(this, R.string.install_tv_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun showAuthorizeTvDialog() {
         val input = EditText(this).apply {
             hint = getString(R.string.authorize_tv_hint)

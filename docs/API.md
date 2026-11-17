@@ -69,10 +69,16 @@ Conciliação: `sync_pending_subscriptions` a cada 5 min; renovação/expiraçã
 | Método | Rota | Uso |
 |---|---|---|
 | GET | `/app/version` | última versão publicada (atualização por APK) |
+| GET | `/app/tv` | `302` para o APK — link digitado na TV |
+| GET | `/tv` | alias curto de `/app/tv` (mesma resposta) |
 | POST | `/app/crashes` | relato de erro/travamento do app (público, limitado por tamanho) |
 
 `/app/version` devolve `update_available_from: false` quando `APP_APK_URL` não
 está configurado.
+
+`/tv` e `/app/tv` redirecionam direto para `APP_APK_URL` (sem página HTML, para
+o Downloader do Fire TV baixar o arquivo em vez de salvar uma página). Sem
+`APP_APK_URL`, respondem `503`.
 
 ---
 

@@ -1,5 +1,6 @@
 # tests/test_app_client.py - Versao do app (atualizacao por APK) e erros do cliente
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.config import settings
@@ -43,6 +44,25 @@ async def test_version_says_nothing_when_no_apk_published(monkeypatch):
     response = await app_client.app_version()
 
     assert response.update_available_from is False
+
+
+async def test_tv_download_redirects_to_apk(monkeypatch):
+    """A TV recebe 302 direto no APK: app de download da TV nao abre HTML."""
+    monkeypatch.setattr(settings, "APP_APK_URL", "https://exemplo/eftv-1.4.7.apk")
+
+    response = await app_client.apk_download()
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "https://exemplo/eftv-1.4.7.apk"
+
+
+async def test_tv_download_without_apk_is_unavailable(monkeypatch):
+    monkeypatch.setattr(settings, "APP_APK_URL", "   ")
+
+    with pytest.raises(HTTPException) as exc:
+        await app_client.apk_download()
+
+    assert exc.value.status_code == 503
 
 
 async def test_crash_report_is_stored(monkeypatch):

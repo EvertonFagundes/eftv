@@ -7,7 +7,8 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,6 +55,26 @@ async def app_version():
         mandatory=settings.APP_UPDATE_MANDATORY,
         update_available_from=configured,
     )
+
+
+@router.get("/tv", include_in_schema=False)
+async def apk_download():
+    """URL curta para instalar o APK na TV.
+
+    A TV nao tem como abrir uma pagina bonita com botao: apps de download
+    (Downloader do Fire TV, navegador do box) precisam de um link que entregue
+    o arquivo. Por isso este endpoint responde com 302 direto para o APK, em
+    vez de HTML - HTML faria a TV salvar uma pagina em vez do app.
+
+    Tambem montado em `/tv` (sem prefixo) para ser digitavel no controle.
+    """
+    url = settings.APP_APK_URL.strip()
+    if not url:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="APK ainda nao publicado",
+        )
+    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/crashes", status_code=status.HTTP_202_ACCEPTED)

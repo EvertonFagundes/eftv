@@ -39,6 +39,9 @@ Backend do login por código já implementado e testado:
 `POST /auth/device-code`, `POST /auth/device-code/poll`,
 `POST /auth/device-code/approve`.
 
+Para instalar no box, a partir da 1.4.7 o app no celular mostra o link curto
+(`/tv`) e o servidor entrega o APK direto — veja **3.2**.
+
 ---
 
 ## Fase 1 — o que já está implementado (1.2.0)
@@ -60,11 +63,29 @@ Backend do login por código já implementado e testado:
   e a tela mostra o novo estado.
 - No celular continua abrindo o navegador como antes.
 
-### 3. Transmitir a tela do celular ✅ (1.4.1)
-- Na TV: menu ⋮ → **Receber tela** (`CastReceiveActivity`). Ela mostra um PIN de
+### 3. Transmitir a tela do celular ⏸️ (parado na 1.4.7)
+- **Decisão de produto (17/11/2026)**: se a TV já tem o EFTV, espelhar do celular
+  é pior em tudo (720p, atraso, bateria, DRM preto) — basta abrir o app na TV. E
+  se a TV **não** tem o EFTV, o app-to-app não funciona, porque depende do
+  receptor Android. O recurso só serve para mostrar conteúdo de **outros apps**
+  (fotos, galeria, navegador) numa TV que já tem o EFTV.
+- Por isso as entradas **Transmitir tela / Receber tela saíram do menu** na
+  1.4.7. As telas e o protocolo continuam no APK, testados, sem entrada — para
+  reativar basta devolver os itens em `res/menu/menu_main.xml` e os dois
+  `when` em `MainActivity.setupToolbar()`.
+- Limites conhecidos, se um dia voltar: mesma rede Wi-Fi (não passa pela
+  internet); **som** exige Android 10+ e a permissão de gravação (negada,
+  transmite só imagem); apps com DRM (Netflix, Globoplay) podem aparecer pretos
+  ou mudos; um celular por vez; girar a tela no meio da transmissão distorce a
+  imagem.
+
+<details>
+<summary>Como o cast app-to-app funcionava (implementação preservada)</summary>
+
+- Na TV: `CastReceiveActivity` mostra um PIN de
   4 dígitos, o endereço `IP:porta` e anuncia o serviço `_eftvcast._tcp` na rede
   (mDNS/NSD).
-- No celular: menu ⋮ → **Transmitir tela** (`CastSendActivity`). O cliente digita
+- No celular: `CastSendActivity`. O cliente digita
   o PIN, escolhe a TV encontrada (ou informa o endereço) e autoriza a captura no
   diálogo do Android.
 - Pipeline: `MediaProjection` → `MediaCodec` H.264 (720p, 4 Mbps, 30 fps) →
@@ -82,10 +103,21 @@ Backend do login por código já implementado e testado:
 - A captura roda em `CastService` (primeiro plano,
   `foregroundServiceType="mediaProjection"`), então continua com o EFTV em
   segundo plano: pode abrir YouTube, galeria, qualquer app.
-- Limites: mesma rede Wi-Fi (não passa pela internet); **som** exige Android 10+
-  e a permissão de gravação (negada, transmite só imagem); apps com DRM
-  (Netflix, Globoplay) podem aparecer pretos ou mudos; um celular por vez; girar
-  a tela no meio da transmissão distorce a imagem.
+
+</details>
+
+### 3.2 Instalar o APK na TV (1.4.7)
+- Menu ⋮ → **Instalar na TV** mostra o link curto e um botão **Copiar link**.
+- O backend responde `302` direto no APK em `/tv` (alias curto, digitável no
+  controle) e `/app/tv`. Não é página HTML de propósito: o Downloader do Fire TV
+  e o navegador do box precisam receber o arquivo, não uma página.
+- Sem `APP_APK_URL` configurada no servidor a rota devolve `503` e o app avisa
+  "O APK ainda não foi publicado no servidor".
+- Passo a passo do cliente: abrir o **Downloader** (Fire TV) ou o navegador do
+  box → digitar `https://eftv.onrender.com/tv` → autorizar "apps de fontes
+  desconhecidas" → instalar → entrar com o código de TV.
+
+
 
 ### 3.1 Diagnóstico do cast (17/11/2026)
 
@@ -113,6 +145,13 @@ Backend do login por código já implementado e testado:
 
 ### 4. Interface 10 pés
 - [x] Configurações no menu (além do toque longo no título).
+- [x] Cartões, linhas, abas e menus focáveis, com borda visível no foco
+  (`bg_channel_item`, `selectableItemBackground`); na abertura da lista o foco
+  já cai no primeiro canal (`focusListIfTelevision`).
+- [x] Player no controle (1.4.7): **OK** mostra os controles e o foco cai no
+  play/pause; **esquerda/direita** pulam 10 s sem abrir o menu (segurar a seta
+  não dispara vários saltos); **play/pause** do controle funciona direto;
+  **VOLTAR** fecha o menu antes de sair do canal.
 - [ ] "Atualizar" no menu: validar no controle.
 - [ ] Revisar foco/ordem em telas 1280×720 (sem elementos cortados).
 - [ ] Banner 320×180 (`tv_banner`) conferido no launcher da TV. Hoje ele é um
@@ -126,7 +165,9 @@ Backend do login por código já implementado e testado:
 ### 5. Publicação — pendente
 - Google Play (mesmo app, com `LEANBACK_LAUNCHER`).
 - Amazon Appstore (Fire TV).
-- Enquanto não houver loja: `adb install -r` no box.
+- Enquanto não houver loja: `adb install -r` no box ou o link `/tv` (1.4.7).
+  O link só funciona depois de definir `APP_APK_URL` e `APP_LATEST_VERSION_*`
+  no Render — até lá a rota responde `503`.
 
 ---
 

@@ -675,6 +675,9 @@ class PlayerActivity : AppCompatActivity() {
         Timber.d("Overlay visivel (nome/badges/controles)")
         binding.topBar.visibility = View.VISIBLE
         binding.bottomControls.visibility = View.VISIBLE
+        // No controle remoto o foco precisa cair num botao; senao a seta nao
+        // sai do lugar e o OK nao faz nada.
+        if (TvScreen.isTelevision(this)) binding.btnPlayPause.requestFocus()
     }
 
     /**
@@ -685,6 +688,7 @@ class PlayerActivity : AppCompatActivity() {
         cancelHideOverlay()
         overlayVisible = false
         Timber.d("Overlay oculto (apenas video)")
+        if (TvScreen.isTelevision(this)) binding.btnPlayPause.clearFocus()
         binding.topBar.visibility = View.GONE
         binding.bottomControls.visibility = View.GONE
     }
@@ -940,16 +944,47 @@ class PlayerActivity : AppCompatActivity() {
     /**
      * Android TV / controle remoto: OK mostra os controles quando estao
      * escondidos. Sem isso o assinante de TV fica sem menu nenhum.
+     *
+     * Tambem atende os botoes que o controle manda direto: esquerda/direita
+     * pulam 10 s (sem abrir o menu), play/pause do controle funciona e
+     * VOLTAR fecha o menu em vez de sair do canal.
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val isEnter = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
             event.keyCode == KeyEvent.KEYCODE_ENTER
-        if (event.action == KeyEvent.ACTION_DOWN && isEnter &&
-            binding.bottomControls.visibility != View.VISIBLE
-        ) {
+        if (event.action == KeyEvent.ACTION_DOWN && isEnter && !overlayVisible) {
             showOverlay()
             scheduleHideOverlay()
             return true
+        }
+
+        // repeatCount == 0: segurar a seta no controle nao vira 200 s de salto.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> {
+                    togglePlayPause()
+                    return true
+                }
+
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (!overlayVisible) {
+                    seekBy(-SEEK_STEP_MS)
+                    showOverlay()
+                    scheduleHideOverlay()
+                    return true
+                }
+
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (!overlayVisible) {
+                    seekBy(SEEK_STEP_MS)
+                    showOverlay()
+                    scheduleHideOverlay()
+                    return true
+                }
+
+                KeyEvent.KEYCODE_BACK -> if (overlayVisible) {
+                    hideOverlay()
+                    return true
+                }
+            }
         }
         return super.dispatchKeyEvent(event)
     }
