@@ -256,12 +256,16 @@ def record_login_success(email: str) -> None:
 
 
 def client_ip(request: Request) -> str:
-    """IP do cliente real, atrás do proxy do Render.
+    """O que o rate limit enxerga como IP do cliente.
 
-    ``request.client.host`` atras do proxy e o IP do proprio proxy: todos os
-    usuarios cairiam no mesmo balde de rate limit e um unico atacante
-    bloquearia o login de todo mundo. O X-Forwarded-For e o campo que o
-    proxy preenche com o IP de origem.
+    No Render o IP real do cliente NAO chega: ``request.client.host`` e o
+    proxy e o ``X-Forwarded-For`` vem com a cadeia de proxies do proprio
+    Render (170.84.x, 10.x), sem o cliente. Ou seja, atras desse proxy
+    todos os clientes parecem o mesmo IP, entao limites que precisam de
+    granularidade fina (como o login) sao feitos por CONTA, nao por IP.
+
+    Mantido para os limites grossos (cadastro, reenvio de e-mail), onde um
+    balde compartilhado por hora de janela e aceitavel.
     """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
