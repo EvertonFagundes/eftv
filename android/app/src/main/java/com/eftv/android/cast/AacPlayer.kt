@@ -20,6 +20,7 @@ class AacPlayer(
     private val sampleRate: Int,
     private val channels: Int,
     private val csd: ByteArray,
+    private val clock: PresentationClock,
     private val onError: (String) -> Unit,
 ) {
 
@@ -71,11 +72,33 @@ class AacPlayer(
 
     private fun loop() {
         val info = MediaCodec.BufferInfo()
+        var pending: Frame? = null
+
         while (running) {
             val codec = decoder ?: break
             try {
-                val frame = queue.poll(30, TimeUnit.MILLISECONDS)
-                if (frame != null) feed(codec, frame)
+                val frame = pending ?: queue.poll(30, TimeUnit.MILLISECONDS)
+                if (frame == null) {
+                    drain(codec, info)
+                    continue
+                }
+                val now = System.nanoTime()
+                val scheduled = clock.schedule(frame.ptsUs, now)
+                when {
+                    // Chegou adiantado: segura para o som nao sair antes do video.
+                    // O PREBUFFER cobre a latencia de decodificacao + AudioTrack,
+                    // entao a amostra sai do alto-falante no horario do video.
+                    now + PREBUFFER_NS < scheduled -> {
+                        pending = frame
+                        Thread.sleep(10)
+                    }
+                    // Atrasado demais: descarta para alcancar a imagem.
+                    now - scheduled > MAX_LAG_NS -> pending = null
+                    else -> {
+                        pending = null
+                        feed(codec, frame)
+                    }
+                }
                 drain(codec, info)
             } catch (e: IllegalStateException) {
                 if (running) onError(e.message ?: "O áudio parou")
@@ -181,5 +204,15 @@ class AacPlayer(
 
     private companion object {
         const val QUEUE_SIZE = 20
+
+        /**
+         * Antecedencia com que a amostra e entregue ao decodificador. Cobre a
+         * latencia de decode do AAC (~20 ms) mais o buffer do AudioTrack
+         * (~50-90 ms), para o som sair no horario agendado.
+         */
+        const val PREBUFFER_NS = 80_000_000L
+
+        /** Som com mais de 250 ms de atraso e descartado. */
+        const val MAX_LAG_NS = 250_000_000L
     }
 }

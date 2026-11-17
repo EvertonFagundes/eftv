@@ -60,7 +60,7 @@ Backend do login por código já implementado e testado:
   e a tela mostra o novo estado.
 - No celular continua abrindo o navegador como antes.
 
-### 3. Transmitir a tela do celular ✅ (1.3.0)
+### 3. Transmitir a tela do celular ✅ (1.4.1)
 - Na TV: menu ⋮ → **Receber tela** (`CastReceiveActivity`). Ela mostra um PIN de
   4 dígitos, o endereço `IP:porta` e anuncia o serviço `_eftvcast._tcp` na rede
   (mDNS/NSD).
@@ -70,6 +70,13 @@ Backend do login por código já implementado e testado:
 - Pipeline: `MediaProjection` → `MediaCodec` H.264 (720p, 4 Mbps, 30 fps) →
   TCP → `MediaCodec` decodificando direto na `Surface` da TV. O som vai no
   mesmo socket em AAC-LC (44,1 kHz estéreo, 128 kbps) e toca num `AudioTrack`.
+- **Sincronia de som e imagem (1.4.1)**: as duas trilhas são carimbadas no mesmo
+  relógio (`System.nanoTime()`) e a TV usa um `PresentationClock` — a primeira
+  amostra define a âncora (com 150 ms de folga para o buffer) e cada quadro é
+  agendado em `releaseOutputBuffer(index, instanteNs)`. Assim o som não
+  escorrega ao longo do tempo, e quadro/som com mais de 400/250 ms de atraso é
+  descartado em vez de acumular fila. O som só começa a ser capturado depois do
+  primeiro quadro de vídeo: aí a base de tempo da imagem já é conhecida.
 - **Não usa Miracast nem Chromecast**: funciona em qualquer Android 5.0+,
   inclusive nos aparelhos sem a opção "Transmitir tela" nas configurações.
 - A captura roda em `CastService` (primeiro plano,

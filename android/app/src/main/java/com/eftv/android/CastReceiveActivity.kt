@@ -18,6 +18,7 @@ import com.eftv.android.cast.CastProtocol
 import com.eftv.android.cast.CastServer
 import com.eftv.android.cast.CastSink
 import com.eftv.android.cast.H264Decoder
+import com.eftv.android.cast.PresentationClock
 import com.eftv.android.databinding.ActivityCastReceiveBinding
 import timber.log.Timber
 import java.net.Inet4Address
@@ -42,6 +43,12 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
     private var surface: Surface? = null
     private var pendingConfig: Triple<Int, Int, ByteArray>? = null
     private var audioPlayer: AacPlayer? = null
+
+    /**
+     * Relogio comum de video e audio: o celular carimba as duas trilhas no
+     * mesmo instante e a TV agenda cada amostra por ele.
+     */
+    private val clock = PresentationClock()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -138,7 +145,7 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
     override fun onAudioConfig(sampleRate: Int, channels: Int, csd: ByteArray) {
         runOnUiThread {
             audioPlayer?.release()
-            val player = AacPlayer(sampleRate, channels, csd) { message ->
+            val player = AacPlayer(sampleRate, channels, csd, clock) { message ->
                 // Som e imagem sao independentes: se o aparelho recusar o AAC,
                 // o video continua.
                 Timber.w("Audio da transmissao: %s", message)
@@ -157,7 +164,7 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
         val currentSurface = surface ?: return
         decoder?.release()
         binding.videoFrame.setAspectRatio(config.first.toFloat() / config.second)
-        val newDecoder = H264Decoder(currentSurface) { message ->
+        val newDecoder = H264Decoder(currentSurface, clock) { message ->
             runOnUiThread {
                 showError(message)
                 handleConnection(false, null)
@@ -170,6 +177,8 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
     private fun handleConnection(connected: Boolean, deviceName: String?) {
         if (isFinishing || isDestroyed) return
         if (connected) {
+            // Cada transmissao comeca do zero: a ancora antiga nao vale mais.
+            clock.reset()
             binding.waitingPanel.visibility = View.GONE
             binding.videoFrame.visibility = View.VISIBLE
             binding.castError.visibility = View.GONE
@@ -180,6 +189,7 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
             pendingConfig = null
             audioPlayer?.release()
             audioPlayer = null
+            clock.reset()
             binding.videoFrame.visibility = View.GONE
             binding.waitingPanel.visibility = View.VISIBLE
             binding.closeButton.requestFocus()

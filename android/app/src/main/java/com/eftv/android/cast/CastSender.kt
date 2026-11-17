@@ -28,6 +28,7 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import kotlin.concurrent.thread
+import kotlin.math.abs
 
 /**
  * Lado do celular: captura a tela inteira e envia para a TV.
@@ -69,6 +70,16 @@ class CastSender(
 
     @Volatile
     private var audioRunning = false
+
+    /**
+     * Diferenca entre o relogio das amostras de video (vem do encoder, baseado
+     * no timestamp das telas) e o `System.nanoTime()` usado para carimbar o
+     * som. Normalmente e zero: os dois vem do mesmo relogio monotonico do
+     * Android. So e diferente se o aparelho usar outra base, e nesse caso o
+     * som precisa do mesmo deslocamento para a TV alinhar as trilhas.
+     */
+    @Volatile
+    private var audioBaseOffsetUs = 0L
 
     /**
      * Video e audio saem por threads diferentes no mesmo socket. Sem esta
@@ -186,7 +197,8 @@ class CastSender(
         )
 
         onStatus(CastStatus(CastStatus.State.STREAMING, "Transmitindo para a TV"))
-        if (withAudio && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startAudio(output)
+        // O audio so comeca depois do primeiro quadro: ai ja se sabe a base de
+        // tempo do video e o som entra carimbado no mesmo relogio.
         drainEncoder(encoder, output)
     }
 
@@ -263,12 +275,19 @@ class CastSender(
         val info = MediaCodec.BufferInfo()
         val bytesPerSecond = AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * 2
         var configSent = false
+        // Carimbo do primeiro PCM lido, no relogio comum das duas trilhas.
         var ptsUs = 0L
 
         while (audioRunning && running) {
+            val startNs = System.nanoTime()
             val read = runCatching { record.read(pcm, 0, pcm.size) }.getOrDefault(-1)
             if (read <= 0) continue
-            ptsUs += read * 1_000_000L / bytesPerSecond
+
+            val durationUs = read * 1_000_000L / bytesPerSecond
+            if (ptsUs == 0L) {
+                // O primeiro byte do bloco foi capturado `durationUs` atras.
+                ptsUs = startNs / 1_000L - durationUs + audioBaseOffsetUs
+            }
 
             val inputIndex = encoder.dequeueInputBuffer(10_000)
             if (inputIndex >= 0) {
@@ -281,6 +300,9 @@ class CastSender(
                     encoder.queueInputBuffer(inputIndex, 0, 0, ptsUs, 0)
                 }
             }
+            // O bloco seguinte comeca onde este terminou (contagem de amostras,
+            // nao relogio: assim o som nao escorrega se a thread atrasar).
+            ptsUs += durationUs
 
             var outputIndex = encoder.dequeueOutputBuffer(info, 0)
             while (outputIndex >= 0) {
@@ -348,6 +370,7 @@ class CastSender(
     private fun drainEncoder(encoder: MediaCodec, output: DataOutputStream) {
         val info = MediaCodec.BufferInfo()
         var configSent = false
+        var audioStarted = false
 
         while (running) {
             val index = encoder.dequeueOutputBuffer(info, 10_000)
@@ -372,11 +395,34 @@ class CastSender(
                             CastProtocol.TYPE_VIDEO,
                             CastProtocol.videoPayload(info.presentationTimeUs, data),
                         )
+                        if (!audioStarted) {
+                            // Primeiro quadro a caminho: agora existe uma base de
+                            // tempo de video para o som se alinhar.
+                            audioStarted = true
+                            if (withAudio && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                audioBaseOffsetUs = clockOffsetFor(info.presentationTimeUs)
+                                startAudio(output)
+                            }
+                        }
                     }
                 }
                 encoder.releaseOutputBuffer(index, false)
             }
         }
+    }
+
+    /**
+     * Descobre quanto o carimbo do video esta deslocado do `System.nanoTime()`.
+     *
+     * O plano normal e zero: o encoder usa o timestamp das telas, que vem do
+     * mesmo relogio monotonico. A medida no primeiro quadro, porem, carrega a
+     * latencia do encoder (dezenas de ms de atraso entre capturar e sair), e
+     * corrigir por ela deixaria o som adiantado. Por isso so vale um
+     * deslocamento grande — sinal de que o aparelho usa outra base de tempo.
+     */
+    private fun clockOffsetFor(videoPtsUs: Long): Long {
+        val guess = videoPtsUs - System.nanoTime() / 1_000L
+        return if (abs(guess) > CLOCK_MISMATCH_US) guess else 0L
     }
 
     private fun sendConfig(output: DataOutputStream, csd: java.nio.ByteBuffer): Boolean = try {
@@ -457,5 +503,11 @@ class CastSender(
         const val AUDIO_SAMPLE_RATE = 44_100
         const val AUDIO_CHANNELS = 2
         const val AUDIO_BIT_RATE = 128_000
+
+        /**
+         * Diferenca de relogio que so pode ser troca de base de tempo (segundos
+         * ou mais), nunca latencia. Abaixo disso, assumimos base igual.
+         */
+        const val CLOCK_MISMATCH_US = 2_000_000L
     }
 }

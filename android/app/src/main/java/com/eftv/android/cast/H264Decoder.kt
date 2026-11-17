@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit
  */
 class H264Decoder(
     private val surface: Surface,
+    private val clock: PresentationClock,
     private val onError: (String) -> Unit,
 ) {
 
@@ -112,8 +113,15 @@ class H264Decoder(
     private fun drain(decoder: MediaCodec, info: MediaCodec.BufferInfo) {
         var index = decoder.dequeueOutputBuffer(info, 0)
         while (index >= 0) {
-            // `true` entrega o quadro para a Surface imediatamente.
-            decoder.releaseOutputBuffer(index, true)
+            val now = System.nanoTime()
+            val scheduled = clock.schedule(info.presentationTimeUs, now)
+            when {
+                // Muito atrasado: descartar e melhor do que acumular fila.
+                now - scheduled > MAX_LAG_NS -> decoder.releaseOutputBuffer(index, false)
+                // Agenda a entrega para a Surface no horario do audio.
+                scheduled > now -> decoder.releaseOutputBuffer(index, scheduled)
+                else -> decoder.releaseOutputBuffer(index, true)
+            }
             index = decoder.dequeueOutputBuffer(info, 0)
         }
     }
@@ -135,5 +143,8 @@ class H264Decoder(
 
     private companion object {
         const val QUEUE_SIZE = 10
+
+        /** Quadro com mais de 400 ms de atraso e descartado. */
+        const val MAX_LAG_NS = 400_000_000L
     }
 }

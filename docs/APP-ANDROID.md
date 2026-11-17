@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.4.0** (`versionCode 15`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.4.1** (`versionCode 16`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -99,20 +99,25 @@ de TV pedir o código. Ver `docs/TV.md`.
   A lista reserva `paddingEnd="26dp"` e a barra tem fundo próprio para não cobrir
   as estrelas de favorito. Em 1.2.1 o SQL do salto foi corrigido (gerava
   `WHERE WHERE` e derrubava o app) e o salto roda em `runCatching`.
-- **Transmitir tela (1.4.0)**: menu ⋮ → **Transmitir tela** no celular e
+- **Transmitir tela (1.4.1)**: menu ⋮ → **Transmitir tela** no celular e
   **Receber tela** na TV. O celular captura com `MediaProjection`, codifica em
   H.264 (720p, 4 Mbps, 30 fps) e envia por TCP; a TV acha o celular por PIN +
   mDNS (`_eftvcast._tcp`) e decodifica com `MediaCodec` direto na `Surface`.
   O som vai no mesmo socket em AAC-LC (44,1 kHz estéreo, 128 kbps) e toca num
   `AudioTrack` (`AacPlayer`), capturado com `AudioPlaybackCaptureConfiguration`
   — Android 10+ e permissão `RECORD_AUDIO`; negada, transmite só imagem.
+  **Sincronia (1.4.1)**: as duas trilhas usam o mesmo carimbo de tempo
+  (`System.nanoTime()`) e a TV agenda cada amostra num `PresentationClock`
+  comum (âncora na primeira amostra + 150 ms); atraso acima de 400 ms (vídeo)
+  ou 250 ms (som) é descartado em vez de virar fila. O som só começa depois do
+  primeiro quadro de vídeo, para herdar a base de tempo da imagem.
   Não depende de Miracast/Chromecast, então funciona em aparelhos sem
   espelhamento nativo. A captura fica em `CastService`
   (`foregroundServiceType="mediaProjection"`) e continua com o app em segundo
   plano. Limites: mesma rede Wi-Fi, DRM (Netflix/Gloplay) pode ficar preto ou
   mudo, um celular por vez e a orientação não pode mudar no meio.
   Protocolo e servidor têm testes JVM (`CastProtocolTest`, `CastServerTest`
-  sobem socket de verdade).
+  sobem socket de verdade; `PresentationClockTest` cobre o agendamento).
 - **Continuar assistindo**: carrossel com filmes/séries em andamento
   (progresso salvo a cada 5 s).
 - **Favoritos** e **Recentes** aparecem como categorias quando têm itens.
