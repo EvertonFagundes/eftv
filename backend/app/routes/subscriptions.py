@@ -20,6 +20,7 @@ from app.schemas.payment import (
 )
 from app.security.dependencies import get_current_user
 from app.services.mercadopago import (
+    cancel_preapproval,
     create_checkout_preference,
     get_account_info,
     process_webhook,
@@ -367,6 +368,22 @@ async def cancel_subscription(
     subscription.auto_renew = False
     await db.commit()
     await db.refresh(subscription)
+
+    # Corta a recorrencia no Mercado Pago. Sem isso o cartao continuaria
+    # sendo cobrado todo mes e o verificador de vencimento reativaria a
+    # assinatura. Se a chamada falhar, o cancelamento local segue valendo:
+    # o verificador nao renova quem pediu cancelamento e o erro fica nos
+    # logs (suporte: /admin/payments mostra se houve cobranca indevida).
+    if subscription.mercadopago_subscription_id:
+        try:
+            await cancel_preapproval(str(subscription.mercadopago_subscription_id))
+        except Exception:  # noqa: BLE001
+            logger.error(
+                "Cancelamento local da assinatura %s, mas falhou ao cancelar "
+                "no Mercado Pago",
+                subscription.id,
+                exc_info=True,
+            )
 
     plan_result = await db.execute(select(Plan).where(Plan.id == subscription.plan_id))
     plan = plan_result.scalar_one()

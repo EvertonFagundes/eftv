@@ -133,7 +133,12 @@ async def test_preapproval_authorized_activates_subscription(monkeypatch):
 
 
 async def test_preapproval_cancelled_blocks_access(monkeypatch):
-    subscription = make_subscription(status="active", mercadopago_subscription_id="pre-1")
+    # Periodo vencido: cancelada nao devolve acesso.
+    subscription = make_subscription(
+        status="active",
+        mercadopago_subscription_id="pre-1",
+        current_period_end=datetime.now(UTC) - timedelta(hours=1),
+    )
     session = FakeSession(subscription)
 
     async def fake_get_preapproval(preapproval_id: str) -> dict:

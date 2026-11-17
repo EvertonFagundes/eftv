@@ -687,9 +687,17 @@ async def _handle_preapproval(preapproval_id: str, db) -> None:
     elif preapproval_status == "paused":
         subscription.status = "past_due"
     elif preapproval_status == "cancelled":
-        subscription.status = "cancelled"
-        subscription.cancelled_at = datetime.now(UTC)
+        # Cancelada: corta a recorrencia, mas quem ja pagou o periodo
+        # vigente mantem o acesso ate o fim dele (cancelamento "no fim do
+        # ciclo"). Cortar na hora seria cobrar por tempo que o cliente nao usa.
         subscription.auto_renew = False
+        subscription.cancel_at_period_end = True
+        period_end = subscription.current_period_end
+        if period_end is not None and period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=UTC)
+        if period_end is None or period_end <= datetime.now(UTC):
+            subscription.status = "cancelled"
+            subscription.cancelled_at = datetime.now(UTC)
 
     start = _parse_datetime(data.get("date_created"))
     end = _parse_datetime(data.get("next_payment_date"))

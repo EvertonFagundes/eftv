@@ -6,7 +6,11 @@ from sqlalchemy import select
 
 from app.database import get_db_context
 from app.models.subscription import Subscription
-from app.services.mercadopago import get_preapproval, sync_payments_for_subscription
+from app.services.mercadopago import (
+    cancel_preapproval,
+    get_preapproval,
+    sync_payments_for_subscription,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,27 @@ async def check_expired_subscriptions() -> int:
         expired = result.scalars().all()
 
         for sub in expired:
+            # Quem pediu cancelamento nao renova, mesmo que o Mercado Pago
+            # ainda diga "authorized": sem isso o cancelamento local seria
+            # desfeito aqui e o cartao continuaria sendo cobrado.
+            if sub.cancel_at_period_end:
+                sub.status = "cancelled"
+                sub.cancelled_at = now
+                sub.auto_renew = False
+                # Rede de seguranca: corta a recorrencia no Mercado Pago caso
+                # o cancelamento enviado na hora do pedido tenha falhado.
+                if sub.mercadopago_subscription_id:
+                    try:
+                        await cancel_preapproval(str(sub.mercadopago_subscription_id))
+                    except Exception:  # noqa: BLE001
+                        logger.warning(
+                            "Cancelamento no Mercado Pago da assinatura %s falhou de novo",
+                            sub.id,
+                            exc_info=True,
+                        )
+                updated += 1
+                continue
+
             # Tenta buscar status no Mercado Pago
             if sub.mercadopago_subscription_id:
                 try:
