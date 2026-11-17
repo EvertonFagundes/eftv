@@ -33,6 +33,7 @@
 
     <!-- Player controls -->
     <string name="player_back">Voltar para a lista</string>
+    <string name="continue_watching">Continuar assistindo</string>
     <string name="player_play">Reproduzir</string>
     <string name="player_pause">Pausar</string>
     <string name="player_rewind">Voltar 10s</string>

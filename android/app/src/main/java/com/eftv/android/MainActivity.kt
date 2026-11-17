@@ -36,6 +36,7 @@ import com.eftv.android.data.normalizedForSearch
 import com.eftv.android.databinding.ActivityMainBinding
 import com.eftv.android.ui.CategoryAdapter
 import com.eftv.android.ui.ChannelAdapter
+import com.eftv.android.ui.ContinueAdapter
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.CancellationException
@@ -61,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: PlaylistRepository
     private var source: PlaylistSource = PlaylistSource.local()
     private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage, ::toggleFavorite)
+    private val continueAdapter = ContinueAdapter(::openPlayer)
 
     private var selectedKind = ChannelKind.LIVE
     private var selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
@@ -173,6 +175,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Atualiza o progresso das capas de filmes/series ja carregadas. */
     private fun refreshProgress() {
+        refreshContinueWatching()
         val urls = channelAdapter.loadedUrls()
         if (urls.isEmpty()) return
         lifecycleScope.launch {
@@ -254,7 +257,45 @@ class MainActivity : AppCompatActivity() {
             })
         }
         updateLayoutManager()
+        setupContinueWatching()
         setupCategoryButton()
+    }
+
+    /** Carrossel horizontal com o VOD parado ("Continuar assistindo"). */
+    private fun setupContinueWatching() {
+        binding.continueList.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity, RecyclerView.HORIZONTAL, false)
+            adapter = continueAdapter
+        }
+    }
+
+    /**
+     * Mostra o carrossel quando ha progresso salvo. Some na aba Ao vivo,
+     * durante a busca e quando a lista ainda nao carregou.
+     */
+    private fun refreshContinueWatching() {
+        val enabled = selectedKind != ChannelKind.LIVE &&
+            searchQuery.isBlank() &&
+            hasCatalog &&
+            ::repository.isInitialized
+        if (!enabled) {
+            binding.continueWatchingLayout.visibility = View.GONE
+            return
+        }
+
+        lifecycleScope.launch {
+            val items = withContext(Dispatchers.IO) {
+                repository.catalogStore.continueWatching()
+                    // Grupos adultos so aparecem se a preferencia estiver ligada.
+                    .filter { adultEnabled || !ChannelKind.isAdultGroup(it.group) }
+            }
+            // A aba ou a busca podem ter mudado durante a leitura do banco.
+            if (selectedKind == ChannelKind.LIVE || searchQuery.isNotBlank()) return@launch
+
+            continueAdapter.submitList(items)
+            binding.continueWatchingLayout.visibility =
+                if (items.isEmpty()) View.GONE else View.VISIBLE
+        }
     }
 
     /** Abas principais: separa canais ao vivo de filmes e series. */
@@ -285,6 +326,7 @@ class MainActivity : AppCompatActivity() {
                     binding.categoryButton.text = selectedCategory.label
                     filterChannels(debounce = 0)
                 }
+                refreshContinueWatching()
             }
 
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
@@ -327,6 +369,8 @@ class MainActivity : AppCompatActivity() {
     private fun setupSearch() {
         binding.searchInput.doAfterTextChanged { text ->
             searchQuery = text?.toString().orEmpty()
+            // Digitando, o carrossel sai da frente da busca na hora.
+            refreshContinueWatching()
             filterChannels(debounce = 250)
         }
         binding.searchInput.setOnEditorActionListener { _, actionId, _ ->
@@ -650,6 +694,7 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.subtitle = buildSubtitle()
         binding.swipeRefresh.visibility = View.VISIBLE
         filterChannels(debounce = 0)
+        refreshContinueWatching()
     }
 
     /**

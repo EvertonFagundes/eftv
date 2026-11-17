@@ -372,6 +372,36 @@ class CatalogStore private constructor(context: Context) {
     }
 
     /**
+     * Conteudo sob demanda parado, mais recente primeiro: base do carrossel
+     * "Continuar assistindo" da home.
+     *
+     * Deixa de fora o que ja foi concluido (ou quase) e o que tem menos de
+     * 1 minuto assistido, para nao oferecer aberturas acidentais. As colunas
+     * seguem a ordem de [readEpisodeRow].
+     */
+    fun continueWatching(limit: Int = 12): List<Channel> {
+        val sql = """
+            SELECT c.tvg_id, c.name, c.group_title, c.logo, c.url, c.user_agent, c.referer,
+                   c.kind, p.position_ms, p.duration_ms,
+                   c.series_key, c.series_title, c.season, c.episode
+            FROM progress p
+            JOIN channels c ON c.url = p.url
+            WHERE c.kind <> 'LIVE'
+              AND p.duration_ms > 0
+              AND p.position_ms >= 60000
+              AND p.position_ms <= p.duration_ms - 30000
+            ORDER BY p.updated_at DESC
+            LIMIT ?
+        """.trimIndent()
+
+        val result = ArrayList<Channel>(limit)
+        db.rawQuery(sql, arrayOf(limit.toString())).use { cursor ->
+            while (cursor.moveToNext()) result.add(readEpisodeRow(cursor))
+        }
+        return result
+    }
+
+    /**
      * Substitui o catalogo inteiro em uma unica transacao.
      *
      * O parser entrega um canal por vez para [feed]. Se o download falhar ou a
