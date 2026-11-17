@@ -59,6 +59,7 @@ class CastService : Service() {
         val host = intent.getStringExtra(EXTRA_HOST).orEmpty()
         val port = intent.getIntExtra(EXTRA_PORT, CastProtocol.DEFAULT_PORT)
         val pin = intent.getStringExtra(EXTRA_PIN).orEmpty()
+        val withAudio = intent.getBooleanExtra(EXTRA_AUDIO, false)
         if (host.isBlank() || pin.length < 4) {
             fail("Dados da conexão incompletos")
             return
@@ -84,7 +85,7 @@ class CastService : Service() {
             Handler(Looper.getMainLooper()),
         )
 
-        val cast = CastSender(this, projection, host, port, pin) { newStatus ->
+        val cast = CastSender(this, projection, host, port, pin, withAudio) { newStatus ->
             status = newStatus
             updateNotification(newStatus)
             if (newStatus.state == CastStatus.State.ERROR) {
@@ -183,6 +184,7 @@ class CastService : Service() {
         private const val EXTRA_HOST = "host"
         private const val EXTRA_PORT = "port"
         private const val EXTRA_PIN = "pin"
+        private const val EXTRA_AUDIO = "audio"
 
         fun start(
             context: Context,
@@ -191,6 +193,7 @@ class CastService : Service() {
             host: String,
             port: Int,
             pin: String,
+            withAudio: Boolean = false,
         ) {
             status = CastStatus(CastStatus.State.CONNECTING, "Conectando a $host…")
             val intent = Intent(context, CastService::class.java)
@@ -200,6 +203,7 @@ class CastService : Service() {
                 .putExtra(EXTRA_HOST, host)
                 .putExtra(EXTRA_PORT, port)
                 .putExtra(EXTRA_PIN, pin)
+                .putExtra(EXTRA_AUDIO, withAudio)
             ContextCompat.startForegroundService(context, intent)
         }
 

@@ -3,6 +3,10 @@ package com.eftv.android.cast
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioPlaybackCaptureConfiguration
+import android.media.AudioRecord
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
@@ -11,6 +15,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.view.Surface
+import androidx.annotation.RequiresApi
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -43,6 +48,7 @@ class CastSender(
     private val host: String,
     private val port: Int,
     private val pin: String,
+    private val withAudio: Boolean,
     private val onStatus: (CastStatus) -> Unit,
 ) {
 
@@ -56,6 +62,25 @@ class CastSender(
     private var projectionThread: HandlerThread? = null
     private var encoderWidth = 0
     private var encoderHeight = 0
+
+    private var audioRecord: AudioRecord? = null
+    private var audioCodec: MediaCodec? = null
+    private var audioThread: Thread? = null
+
+    @Volatile
+    private var audioRunning = false
+
+    /**
+     * Video e audio saem por threads diferentes no mesmo socket. Sem esta
+     * trava, duas mensagens poderiam se entrelaçar e corromper o stream.
+     */
+    private val writeLock = Any()
+
+    private fun send(output: DataOutputStream, type: Int, payload: ByteArray) {
+        synchronized(writeLock) {
+            CastProtocol.write(output, type, payload)
+        }
+    }
 
     fun start() {
         if (running) return
@@ -80,7 +105,7 @@ class CastSender(
                 BufferedInputStream(connection.getInputStream(), 4 * 1024),
             )
 
-            CastProtocol.write(
+            send(
                 output,
                 CastProtocol.TYPE_HELLO,
                 CastProtocol.helloPayload(pin, Build.MODEL),
@@ -161,7 +186,137 @@ class CastSender(
         )
 
         onStatus(CastStatus(CastStatus.State.STREAMING, "Transmitindo para a TV"))
+        if (withAudio && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startAudio(output)
         drainEncoder(encoder, output)
+    }
+
+    /**
+     * Captura o som que o proprio Android esta tocando (nao o microfone) via
+     * `AudioPlaybackCaptureConfiguration`. Só existe no Android 10+ e depende
+     * da permissao RECORD_AUDIO; sem ela, a transmissao segue so com a imagem.
+     */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun startAudio(output: DataOutputStream) {
+        try {
+            val capture = AudioPlaybackCaptureConfiguration.Builder(projection)
+                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+                .build()
+            val audioFormat = AudioFormat.Builder()
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(AUDIO_SAMPLE_RATE)
+                .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
+                .build()
+            val minBuffer = AudioRecord.getMinBufferSize(
+                AUDIO_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT,
+            )
+            val record = AudioRecord.Builder()
+                .setAudioFormat(audioFormat)
+                .setBufferSizeInBytes(minBuffer.coerceAtLeast(4_096) * 2)
+                .setAudioPlaybackCaptureConfig(capture)
+                .build()
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                record.release()
+                return
+            }
+
+            val encoderFormat = MediaFormat.createAudioFormat(
+                MediaFormat.MIMETYPE_AUDIO_AAC,
+                AUDIO_SAMPLE_RATE,
+                AUDIO_CHANNELS,
+            )
+            encoderFormat.setInteger(
+                MediaFormat.KEY_AAC_PROFILE,
+                MediaCodecInfo.CodecProfileLevel.AACObjectLC,
+            )
+            encoderFormat.setInteger(MediaFormat.KEY_BIT_RATE, AUDIO_BIT_RATE)
+            encoderFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16_384)
+
+            val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+            encoder.configure(encoderFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder.start()
+            record.startRecording()
+
+            audioRecord = record
+            audioCodec = encoder
+            audioRunning = true
+            audioThread = thread(name = "eftv-cast-audio-send", isDaemon = true) {
+                audioLoop(record, encoder, output)
+            }
+        } catch (e: Exception) {
+            // Sem permissao, aparelho sem captura de som ou encoder ocupado:
+            // o video continua; o cliente so nao ouve.
+            audioRunning = false
+            runCatching { audioRecord?.release() }
+            audioRecord = null
+            runCatching { audioCodec?.release() }
+            audioCodec = null
+        }
+    }
+
+    private fun audioLoop(record: AudioRecord, encoder: MediaCodec, output: DataOutputStream) {
+        // 4096 bytes ≈ 23 ms de PCM estereo 16-bit: um frame AAC.
+        val pcm = ByteArray(4_096)
+        val info = MediaCodec.BufferInfo()
+        val bytesPerSecond = AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * 2
+        var configSent = false
+        var ptsUs = 0L
+
+        while (audioRunning && running) {
+            val read = runCatching { record.read(pcm, 0, pcm.size) }.getOrDefault(-1)
+            if (read <= 0) continue
+            ptsUs += read * 1_000_000L / bytesPerSecond
+
+            val inputIndex = encoder.dequeueInputBuffer(10_000)
+            if (inputIndex >= 0) {
+                val buffer = encoder.getInputBuffer(inputIndex)
+                if (buffer != null) {
+                    buffer.clear()
+                    buffer.put(pcm, 0, read)
+                    encoder.queueInputBuffer(inputIndex, 0, read, ptsUs, 0)
+                } else {
+                    encoder.queueInputBuffer(inputIndex, 0, 0, ptsUs, 0)
+                }
+            }
+
+            var outputIndex = encoder.dequeueOutputBuffer(info, 0)
+            while (outputIndex >= 0) {
+                val buffer = encoder.getOutputBuffer(outputIndex)
+                if (buffer != null && info.size > 0) {
+                    buffer.position(info.offset)
+                    buffer.limit(info.offset + info.size)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
+                        if (!configSent) configSent = sendAudioConfig(output, buffer)
+                    } else if (configSent) {
+                        val data = ByteArray(info.size)
+                        buffer.get(data)
+                        send(
+                            output,
+                            CastProtocol.TYPE_AUDIO,
+                            CastProtocol.videoPayload(info.presentationTimeUs, data),
+                        )
+                    }
+                }
+                encoder.releaseOutputBuffer(outputIndex, false)
+                outputIndex = encoder.dequeueOutputBuffer(info, 0)
+            }
+        }
+    }
+
+    private fun sendAudioConfig(output: DataOutputStream, csd: java.nio.ByteBuffer): Boolean = try {
+        val data = ByteArray(csd.remaining())
+        csd.get(data)
+        send(
+            output,
+            CastProtocol.TYPE_AUDIO_CONFIG,
+            CastProtocol.audioConfigPayload(AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, data),
+        )
+        true
+    } catch (_: IOException) {
+        false
     }
 
     /**
@@ -212,7 +367,7 @@ class CastSender(
                     } else if (configSent) {
                         val data = ByteArray(info.size)
                         buffer.get(data)
-                        CastProtocol.write(
+                        send(
                             output,
                             CastProtocol.TYPE_VIDEO,
                             CastProtocol.videoPayload(info.presentationTimeUs, data),
@@ -227,7 +382,7 @@ class CastSender(
     private fun sendConfig(output: DataOutputStream, csd: java.nio.ByteBuffer): Boolean = try {
         val data = ByteArray(csd.remaining())
         csd.get(data)
-        CastProtocol.write(
+        send(
             output,
             CastProtocol.TYPE_CONFIG,
             CastProtocol.configPayload(encoderWidth, encoderHeight, data),
@@ -248,6 +403,8 @@ class CastSender(
 
     @Synchronized
     private fun cleanup() {
+        stopAudio()
+
         runCatching { virtualDisplay?.release() }
         virtualDisplay = null
         runCatching { inputSurface?.release() }
@@ -268,6 +425,18 @@ class CastSender(
         runCatching { projection.stop() }
     }
 
+    private fun stopAudio() {
+        audioRunning = false
+        runCatching { audioRecord?.stop() }
+        runCatching { audioThread?.join(400) }
+        audioThread = null
+        runCatching { audioRecord?.release() }
+        audioRecord = null
+        runCatching { audioCodec?.stop() }
+        runCatching { audioCodec?.release() }
+        audioCodec = null
+    }
+
     private fun friendlyMessage(e: Exception): String = when (e) {
         is UnknownHostException -> "TV não encontrada na rede"
         is ConnectException, is NoRouteToHostException ->
@@ -283,5 +452,10 @@ class CastSender(
         const val MAX_HEIGHT = 720
         const val BIT_RATE = 4_000_000
         const val FRAME_RATE = 30
+
+        /** Som: estereo 44,1 kHz a 128 kbps — suficiente para TV. */
+        const val AUDIO_SAMPLE_RATE = 44_100
+        const val AUDIO_CHANNELS = 2
+        const val AUDIO_BIT_RATE = 128_000
     }
 }

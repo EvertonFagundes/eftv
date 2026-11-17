@@ -63,6 +63,23 @@ class CastProtocolTest {
     }
 
     @Test
+    fun `audio config preserva taxa canais e csd`() {
+        val csd = byteArrayOf(0x12, 0x10)
+        val parsed = CastProtocol.parseAudioConfig(
+            CastProtocol.audioConfigPayload(44_100, 2, csd),
+        )
+
+        assertEquals(44_100, parsed?.first)
+        assertEquals(2, parsed?.second)
+        assertArrayEquals(csd, parsed?.third)
+    }
+
+    @Test
+    fun `audio config invalido e recusado`() {
+        assertNull(CastProtocol.parseAudioConfig(ByteArray(3)))
+    }
+
+    @Test
     fun `pin gerado tem quatro digitos`() {
         repeat(50) {
             val pin = CastProtocol.randomPin()

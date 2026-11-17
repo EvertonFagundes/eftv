@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.eftv.android.cast.AacPlayer
 import com.eftv.android.cast.CastProtocol
 import com.eftv.android.cast.CastServer
 import com.eftv.android.cast.CastSink
@@ -40,6 +41,7 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
     private var decoder: H264Decoder? = null
     private var surface: Surface? = null
     private var pendingConfig: Triple<Int, Int, ByteArray>? = null
+    private var audioPlayer: AacPlayer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -133,6 +135,23 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
         decoder?.video(data, ptsUs)
     }
 
+    override fun onAudioConfig(sampleRate: Int, channels: Int, csd: ByteArray) {
+        runOnUiThread {
+            audioPlayer?.release()
+            val player = AacPlayer(sampleRate, channels, csd) { message ->
+                // Som e imagem sao independentes: se o aparelho recusar o AAC,
+                // o video continua.
+                Timber.w("Audio da transmissao: %s", message)
+            }
+            player.start()
+            audioPlayer = player
+        }
+    }
+
+    override fun onAudio(data: ByteArray, ptsUs: Long) {
+        audioPlayer?.play(data, ptsUs)
+    }
+
     private fun openDecoderIfReady() {
         val config = pendingConfig ?: return
         val currentSurface = surface ?: return
@@ -159,6 +178,8 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
             decoder?.release()
             decoder = null
             pendingConfig = null
+            audioPlayer?.release()
+            audioPlayer = null
             binding.videoFrame.visibility = View.GONE
             binding.waitingPanel.visibility = View.VISIBLE
             binding.closeButton.requestFocus()
@@ -194,6 +215,8 @@ class CastReceiveActivity : AppCompatActivity(), CastSink {
         server = null
         decoder?.release()
         decoder = null
+        audioPlayer?.release()
+        audioPlayer = null
         runCatching { registration?.let { nsdManager?.unregisterService(it) } }
         registration = null
         super.onDestroy()

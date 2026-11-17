@@ -20,6 +20,8 @@ import kotlin.concurrent.thread
 interface CastSink {
     fun onConfig(width: Int, height: Int, csd: ByteArray)
     fun onVideo(data: ByteArray, ptsUs: Long)
+    fun onAudioConfig(sampleRate: Int, channels: Int, csd: ByteArray)
+    fun onAudio(data: ByteArray, ptsUs: Long)
 }
 
 class CastServer(
@@ -115,6 +117,16 @@ class CastServer(
                     CastProtocol.TYPE_VIDEO ->
                         CastProtocol.parseVideo(message.payload)?.let { (pts, data) ->
                             sink.onVideo(data, pts)
+                        }
+
+                    CastProtocol.TYPE_AUDIO_CONFIG ->
+                        CastProtocol.parseAudioConfig(message.payload)?.let { (rate, channels, csd) ->
+                            sink.onAudioConfig(rate, channels, csd)
+                        }
+
+                    CastProtocol.TYPE_AUDIO ->
+                        CastProtocol.parseVideo(message.payload)?.let { (pts, data) ->
+                            sink.onAudio(data, pts)
                         }
 
                     CastProtocol.TYPE_BYE -> return

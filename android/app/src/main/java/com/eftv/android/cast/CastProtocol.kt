@@ -39,6 +39,8 @@ object CastProtocol {
     const val TYPE_BYE = 4
     const val TYPE_OK = 5
     const val TYPE_ERROR = 6
+    const val TYPE_AUDIO_CONFIG = 7
+    const val TYPE_AUDIO = 8
 
     /** Teto de seguranca: um access unit 1080p raramente passa de 1 MB. */
     private const val MAX_PAYLOAD = 8 * 1024 * 1024
@@ -95,6 +97,32 @@ object CastProtocol {
         input.readFully(csd)
         if (width <= 0 || height <= 0) return null
         return Triple(width, height, csd)
+    }
+
+    /**
+     * Configuracao do audio: taxa de amostragem (4 bytes), canais (2 bytes) e
+     * o AudioSpecificConfig do AAC (csd-0). Vem antes das amostras de som.
+     */
+    fun audioConfigPayload(sampleRate: Int, channels: Int, csd: ByteArray): ByteArray {
+        val out = java.io.ByteArrayOutputStream(6 + csd.size)
+        val data = DataOutputStream(out)
+        data.writeInt(sampleRate)
+        data.writeShort(channels)
+        data.write(csd)
+        data.flush()
+        return out.toByteArray()
+    }
+
+    /** Devolve (taxa, canais, csd) ou null quando o AUDIO_CONFIG e invalido. */
+    fun parseAudioConfig(payload: ByteArray): Triple<Int, Int, ByteArray>? {
+        if (payload.size < 7) return null
+        val input = DataInputStream(payload.inputStream())
+        val sampleRate = input.readInt()
+        val channels = input.readUnsignedShort()
+        val csd = ByteArray(payload.size - 6)
+        input.readFully(csd)
+        if (sampleRate <= 0 || channels !in 1..2) return null
+        return Triple(sampleRate, channels, csd)
     }
 
     fun videoPayload(ptsUs: Long, data: ByteArray): ByteArray {

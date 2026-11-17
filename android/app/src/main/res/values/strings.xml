@@ -83,7 +83,7 @@
     <string name="cast_menu_send">Transmitir tela</string>
     <string name="cast_menu_receive">Receber tela</string>
     <string name="cast_send_title">Transmitir tela</string>
-    <string name="cast_send_intro">Mostre a tela do celular na TV. Funciona com qualquer Android no mesmo Wi-Fi, inclusive em aparelhos sem a opção nativa de espelhamento.</string>
+    <string name="cast_send_intro">Mostre a tela e o som do celular na TV. Funciona com qualquer Android no mesmo Wi-Fi, inclusive em aparelhos sem a opção nativa de espelhamento.</string>
     <string name="cast_pin_hint">Código da TV</string>
     <string name="cast_pin_helper">Os 4 dígitos aparecem na tela da TV</string>
     <string name="cast_pin_required">Digite o código de 4 dígitos que aparece na TV.</string>
@@ -96,7 +96,8 @@
     <string name="cast_address_invalid">Endereço inválido. Use IP:porta.</string>
     <string name="cast_connect">Conectar</string>
     <string name="cast_device_button">%1$s (%2$s)</string>
-    <string name="cast_send_note">A transmissão continua com o EFTV em segundo plano. O Android exibe um aviso de que a tela está sendo capturada — é o próprio sistema confirmando o envio. Mantenha o celular na posição em que começou: girar a tela no meio da transmissão distorce a imagem.</string>
+    <string name="cast_send_note">A transmissão continua com o EFTV em segundo plano. O Android exibe um aviso de que a tela está sendo capturada — é o próprio sistema confirmando o envio. O som da TV vem do áudio do celular quando o app de origem permite a captura (Android 10+); apps com DRM podem ficar mudos. Mantenha o celular na posição em que começou: girar a tela no meio da transmissão distorce a imagem.</string>
+    <string name="cast_audio_denied">Sem a permissão de áudio a transmissão segue só com a imagem.</string>
     <string name="cast_send_running_hint">Você pode sair do EFTV e abrir qualquer app: a TV continua mostrando a tela.</string>
     <string name="cast_send_streaming">Transmitindo a tela para a TV</string>
     <string name="cast_send_connecting">Conectando…</string>

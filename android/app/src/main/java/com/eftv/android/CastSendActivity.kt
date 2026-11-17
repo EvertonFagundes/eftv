@@ -1,11 +1,14 @@
 package com.eftv.android
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -15,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.eftv.android.cast.CastProtocol
 import com.eftv.android.cast.CastService
 import com.eftv.android.cast.CastStatus
@@ -38,6 +42,7 @@ class CastSendActivity : AppCompatActivity() {
 
     private val devices = LinkedHashMap<String, Device>()
     private var pendingDevice: Device? = null
+    private var withAudio = false
 
     private var nsdManager: NsdManager? = null
     private var discoveryListener: NsdManager.DiscoveryListener? = null
@@ -60,7 +65,15 @@ class CastSendActivity : AppCompatActivity() {
         pendingDevice = null
         val data = result.data
         if (result.resultCode == RESULT_OK && data != null && device != null) {
-            CastService.start(this, result.resultCode, data, device.host, device.port, currentPin())
+            CastService.start(
+                this,
+                result.resultCode,
+                data,
+                device.host,
+                device.port,
+                currentPin(),
+                withAudio,
+            )
             render()
             handler.removeCallbacks(ticker)
             handler.post(ticker)
@@ -68,6 +81,17 @@ class CastSendActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.cast_capture_denied), Toast.LENGTH_LONG).show()
             render()
         }
+    }
+
+    /** Pede o microfone uma vez; negado, transmite so a imagem. */
+    private val audioPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        withAudio = granted
+        if (!granted) {
+            Toast.makeText(this, getString(R.string.cast_audio_denied), Toast.LENGTH_LONG).show()
+        }
+        launchProjection()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -113,6 +137,21 @@ class CastSendActivity : AppCompatActivity() {
         binding.castError.visibility = View.GONE
         pendingDevice = device
 
+        val audioGranted = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO,
+            ) == PackageManager.PERMISSION_GRANTED
+        withAudio = audioGranted
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !audioGranted) {
+            // Android 10+ e o unico que captura o som de outros apps.
+            audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+        } else {
+            launchProjection()
+        }
+    }
+
+    private fun launchProjection() {
         val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         runCatching { captureLauncher.launch(manager.createScreenCaptureIntent()) }
             .onFailure {

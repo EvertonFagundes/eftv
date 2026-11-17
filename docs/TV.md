@@ -68,15 +68,17 @@ Backend do login por código já implementado e testado:
   o PIN, escolhe a TV encontrada (ou informa o endereço) e autoriza a captura no
   diálogo do Android.
 - Pipeline: `MediaProjection` → `MediaCodec` H.264 (720p, 4 Mbps, 30 fps) →
-  TCP → `MediaCodec` decodificando direto na `Surface` da TV.
+  TCP → `MediaCodec` decodificando direto na `Surface` da TV. O som vai no
+  mesmo socket em AAC-LC (44,1 kHz estéreo, 128 kbps) e toca num `AudioTrack`.
 - **Não usa Miracast nem Chromecast**: funciona em qualquer Android 5.0+,
   inclusive nos aparelhos sem a opção "Transmitir tela" nas configurações.
 - A captura roda em `CastService` (primeiro plano,
   `foregroundServiceType="mediaProjection"`), então continua com o EFTV em
   segundo plano: pode abrir YouTube, galeria, qualquer app.
-- Limites: mesma rede Wi-Fi (não passa pela internet); **sem áudio** nesta
-  versão; apps com DRM (Netflix, Globoplay) podem aparecer pretos; um celular
-  por vez; girar a tela no meio da transmissão distorce a imagem.
+- Limites: mesma rede Wi-Fi (não passa pela internet); **som** exige Android 10+
+  e a permissão de gravação (negada, transmite só imagem); apps com DRM
+  (Netflix, Globoplay) podem aparecer pretos ou mudos; um celular por vez; girar
+  a tela no meio da transmissão distorce a imagem.
 
 ### 4. Interface 10 pés — pendente
 - [ ] "Atualizar" no menu já existe; validar no controle.

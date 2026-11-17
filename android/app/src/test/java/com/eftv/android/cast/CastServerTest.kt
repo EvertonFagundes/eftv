@@ -16,6 +16,8 @@ class CastServerTest {
 
     private val configs = CopyOnWriteArrayList<Triple<Int, Int, ByteArray>>()
     private val videos = CopyOnWriteArrayList<Pair<Long, ByteArray>>()
+    private val audioConfigs = CopyOnWriteArrayList<Triple<Int, Int, ByteArray>>()
+    private val audios = CopyOnWriteArrayList<Pair<Long, ByteArray>>()
     private val connected = CopyOnWriteArrayList<Boolean>()
 
     private fun startServer(pin: String): CastServer {
@@ -28,6 +30,14 @@ class CastServerTest {
 
                 override fun onVideo(data: ByteArray, ptsUs: Long) {
                     videos += ptsUs to data
+                }
+
+                override fun onAudioConfig(sampleRate: Int, channels: Int, csd: ByteArray) {
+                    audioConfigs += Triple(sampleRate, channels, csd)
+                }
+
+                override fun onAudio(data: ByteArray, ptsUs: Long) {
+                    audios += ptsUs to data
                 }
             },
         ) { isConnected, _ -> connected += isConnected }
@@ -86,8 +96,23 @@ class CastServerTest {
                     CastProtocol.TYPE_VIDEO,
                     CastProtocol.videoPayload(1_000_000L, byteArrayOf(9, 8, 7, 6)),
                 )
+
+                val audioCsd = byteArrayOf(0x12, 0x10)
+                CastProtocol.write(
+                    out,
+                    CastProtocol.TYPE_AUDIO_CONFIG,
+                    CastProtocol.audioConfigPayload(44_100, 2, audioCsd),
+                )
+                CastProtocol.write(
+                    out,
+                    CastProtocol.TYPE_AUDIO,
+                    CastProtocol.videoPayload(2_000_000L, byteArrayOf(5, 4, 3)),
+                )
                 // O servidor processa na thread de aceite; espera os callbacks.
-                waitFor { configs.isNotEmpty() && videos.isNotEmpty() }
+                waitFor {
+                    configs.isNotEmpty() && videos.isNotEmpty() &&
+                        audioConfigs.isNotEmpty() && audios.isNotEmpty()
+                }
             }
             // O fechamento do socket tambem precisa avisar a tela.
             waitFor { connected.contains(false) }
@@ -100,6 +125,10 @@ class CastServerTest {
         assertTrue(configs.firstOrNull()?.third?.contentEquals(spsPps) == true)
         assertEquals(1_000_000L, videos.firstOrNull()?.first)
         assertTrue(videos.firstOrNull()?.second?.contentEquals(byteArrayOf(9, 8, 7, 6)) == true)
+        assertEquals(44_100, audioConfigs.firstOrNull()?.first)
+        assertEquals(2, audioConfigs.firstOrNull()?.second)
+        assertEquals(2_000_000L, audios.firstOrNull()?.first)
+        assertTrue(audios.firstOrNull()?.second?.contentEquals(byteArrayOf(5, 4, 3)) == true)
         assertTrue(connected.contains(true))
         assertTrue(connected.contains(false))
     }
