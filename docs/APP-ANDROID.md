@@ -257,7 +257,9 @@ longo) e publicar em Google Play / Amazon Appstore. Detalhes em `docs/TV.md`.
   dados móveis; em TV box ele sobe igual. Desde a 1.4.2 ele **não** é mais um
   serviço de primeiro plano, então não aparece notificação fixa — em troca, o
   Android pode encerrá-lo junto com o app muito tempo em segundo plano (ele
-  volta quando o app abre).
+  volta quando o app abre). Desde a 1.4.5 também **não segura wake lock**: as
+  telas que dependem dele mantêm a tela ligada, e manter a CPU acordada em
+  segundo plano só consumia bateria.
 - Desde a 1.4.3 o servidor embutido escuta **apenas em `127.0.0.1`**: outro
   aparelho na rede Wi-Fi não alcança mais o `:8124`. O que deixa de funcionar é
   abrir a EFTV no navegador de uma TV/PC apontando para o IP do celular — nesse

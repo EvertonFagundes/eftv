@@ -8,7 +8,6 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import com.chaquo.python.Python
 import timber.log.Timber
 import java.io.File
@@ -22,10 +21,13 @@ import kotlin.concurrent.thread
  * preco e que o Android pode encerrar o processo quando o app fica muito tempo
  * em segundo plano; nesse caso o servidor volta junto com o app, que e o unico
  * consumidor dele.
+ *
+ * Tambem nao segura wake lock: as telas que usam o servidor (catalogo, player,
+ * transmissao) mantem a tela ligada, entao segurar a CPU acordada em segundo
+ * plano so gastava bateria.
  */
 class EftvServerService : Service() {
 
-    private var wakeLock: PowerManager.WakeLock? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -33,7 +35,6 @@ class EftvServerService : Service() {
     override fun onCreate() {
         super.onCreate()
         clearLegacyChannel()
-        acquireWakeLock()
         startNetworkMonitoring()
         thread(name = "eftv-server-boot", isDaemon = true) {
             try {
@@ -75,7 +76,6 @@ class EftvServerService : Service() {
         } catch (e: Exception) {
             Timber.w(e, "Falha ao parar servidor EFTV")
         }
-        releaseWakeLock()
         super.onDestroy()
     }
 
@@ -125,17 +125,18 @@ class EftvServerService : Service() {
     /** Espera a rede assentar e reinicia o servidor se ele nao responder. */
     private fun verificarServidorAposMudancaDeRede() {
         thread(name = "eftv-server-netcheck", isDaemon = true) {
-            // A rede costuma levar alguns segundos para ficar realmente valida.
+            // A rede costuma levar alguns segundos para ficar realmente valida:
+            // tenta por ate 12 s antes de reiniciar (antes reiniciava no
+            // primeiro teste, derrubando um servidor que estava saudavel).
             repeat(6) {
                 Thread.sleep(2_000)
                 if (servidorRespondendo()) {
                     Timber.i("Servidor EFTV respondeu apos mudanca de rede")
                     return@thread
                 }
-                Timber.w("Servidor EFTV nao respondeu; reiniciando")
-                reiniciarServidor()
-                return@thread
             }
+            Timber.w("Servidor EFTV nao respondeu; reiniciando")
+            reiniciarServidor()
         }
     }
 
@@ -174,19 +175,6 @@ class EftvServerService : Service() {
         } catch (e: Exception) {
             Timber.e(e, "Falha ao reiniciar servidor EFTV")
         }
-    }
-
-    private fun acquireWakeLock() {
-        val manager = getSystemService(POWER_SERVICE) as? PowerManager ?: return
-        wakeLock = manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "EFTV:server").apply {
-            setReferenceCounted(false)
-            acquire()
-        }
-    }
-
-    private fun releaseWakeLock() {
-        wakeLock?.let { if (it.isHeld) it.release() }
-        wakeLock = null
     }
 
     private fun syncAssets(): File {

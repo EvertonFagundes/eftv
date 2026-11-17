@@ -112,10 +112,11 @@ Backend do login por código já implementado e testado:
   thread ficava presa no `read`), liberando a porta e o celular na hora.
 
 ### 4. Interface 10 pés — pendente
-- [ ] "Atualizar" no menu já existe; validar no controle.
-- [ ] Configurações hoje entram por **toque longo** no título: expor no menu.
+- [x] Configurações no menu (além do toque longo no título).
+- [ ] "Atualizar" no menu: validar no controle.
 - [ ] Revisar foco/ordem em telas 1280×720 (sem elementos cortados).
 - [ ] Banner 320×180 (`tv_banner`) conferido no launcher da TV.
+- [ ] Margem de segurança (overscan) para TVs que cortam as bordas.
 
 ### 5. Publicação — pendente
 - Google Play (mesmo app, com `LEANBACK_LAUNCHER`).
