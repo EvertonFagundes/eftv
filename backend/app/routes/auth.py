@@ -26,9 +26,10 @@ from app.schemas.auth import (
     VerifyEmailRequest,
 )
 from app.security.dependencies import (
+    check_login_failures,
     get_current_user,
-    login_rate_limit_dependency,
     rate_limit_dependency,
+    record_login_success,
 )
 from app.services.auth_service import (
     create_token_pair,
@@ -305,13 +306,14 @@ async def reset_password(
 @router.post("/login", response_model=Token)
 async def login(
     data: UserLogin,
-    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Login com email e senha."""
-    # Limite proprio: sem ele a senha podia ser martelada sem parar.
-    await login_rate_limit_dependency(request)
+    # Conta as tentativas POR CONTA antes de validar: sem isso a senha podia
+    # ser martelada sem parar. Limite por IP nao serve aqui porque atras do
+    # proxy do Render todos os clientes vem do mesmo IP.
+    check_login_failures(data.email)
 
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
@@ -328,6 +330,9 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Usuário desativado",
         )
+
+    # Senha certa: zera o contador de tentativas da conta.
+    record_login_success(data.email)
 
     # Gera tokens
     access_token, access_jti, refresh_token, refresh_jti = create_token_pair(str(user.id))

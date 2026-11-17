@@ -118,6 +118,10 @@ async def health_check(request: Request):
     return {
         "status": "ok",
         "client_ip": client_ip(request),
+        # Diagnostico do proxy: se vier nulo, o rate limit por IP enxerga o
+        # IP do proxy para todos os clientes (por isso o login usa limite
+        # por conta e nao por IP).
+        "x_forwarded_for": request.headers.get("x-forwarded-for"),
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "frontend_url": settings.FRONTEND_URL,

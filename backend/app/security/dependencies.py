@@ -213,6 +213,10 @@ class RateLimiter:
         self.requests[key].append(now)
         return True
 
+    def reset(self, key: str) -> None:
+        """Zera o contador de uma chave (ex.: login com sucesso)."""
+        self.requests.pop(key, None)
+
 
 # Instância global para dev (em produção usar Redis)
 rate_limiter = RateLimiter(
@@ -220,12 +224,35 @@ rate_limiter = RateLimiter(
     window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
 )
 
-# Bucket proprio do login: mais curto, para dificultar brute force sem
-# deixar um atacante esgotar o limite geral de todos os endpoints.
-login_rate_limiter = RateLimiter(
-    max_requests=settings.RATE_LIMIT_LOGIN_REQUESTS,
-    window_seconds=60,
+# Blindagem de login por CONTA, nao por IP: atras do proxy do Render todos
+# os clientes vem do mesmo IP, entao um limite por IP bloquearia o login de
+# todo mundo junto (ou seria contornavel trocando o X-Forwarded-For).
+login_failure_limiter = RateLimiter(
+    max_requests=settings.RATE_LIMIT_LOGIN_FAILURES,
+    window_seconds=settings.RATE_LIMIT_LOGIN_FAILURE_WINDOW_SECONDS,
 )
+
+
+def _login_key(email: str) -> str:
+    return f"loginfail:{(email or '').strip().lower()}"
+
+
+def check_login_failures(email: str) -> None:
+    """Conta as tentativas de login de uma conta; bloqueia apos o limite.
+
+    Chamada ANTES de validar a senha: cada tentativa conta, e um login com
+    sucesso zera o contador.
+    """
+    if not login_failure_limiter.is_allowed(_login_key(email)):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas de login para esta conta. "
+            "Aguarde alguns minutos ou redefina a senha.",
+        )
+
+
+def record_login_success(email: str) -> None:
+    login_failure_limiter.reset(_login_key(email))
 
 
 def client_ip(request: Request) -> str:
@@ -250,13 +277,4 @@ async def rate_limit_dependency(request: Request) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Muitas requisições. Tente novamente mais tarde.",
-        )
-
-
-async def login_rate_limit_dependency(request: Request) -> None:
-    """Limite proprio do login (tentativas por IP por minuto)."""
-    if not login_rate_limiter.is_allowed(f"login:{client_ip(request)}"):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Muitas tentativas de login. Tente novamente em instantes.",
         )
