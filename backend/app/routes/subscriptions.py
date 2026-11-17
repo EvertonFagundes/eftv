@@ -37,7 +37,8 @@ def _card_last_four(payment: Payment) -> str | None:
     """Ultimos 4 digitos do cartao, quando o Mercado Pago informa."""
     meta = payment.extra_metadata or {}
     payment_info = meta.get("payment") or {}
-    for source in (payment_info, meta):
+    sources = [payment_info, meta, payment_info.get("card") or {}]
+    for source in sources:
         last_four = source.get("last_four_digits") or source.get("card_last_four_digits")
         if last_four:
             return str(last_four)

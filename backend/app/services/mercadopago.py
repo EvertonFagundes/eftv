@@ -399,6 +399,27 @@ async def get_authorized_payment(authorized_payment_id: str) -> dict:
     return cast(dict, response.json())
 
 
+async def search_authorized_payments(preapproval_id: str) -> list[dict]:
+    """Busca as cobrancas recorrentes de uma assinatura no Mercado Pago.
+
+    Caminho de fallback quando o webhook nao chega (fluxo por plano nao
+    recebe ``notification_url``): a conciliacao busca as faturas aqui.
+    """
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            f"{MERCADOPAGO_BASE_URL}/authorized_payments/search",
+            params={"preapproval_id": preapproval_id, "limit": 10},
+            headers=_get_headers(),
+        )
+
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Erro ao buscar cobrancas da assinatura: {response.status_code} - {response.text}"
+        )
+
+    return cast(list, response.json().get("results") or [])
+
+
 def _parse_datetime(value: str | None) -> datetime | None:
     """Converte as datas ISO do Mercado Pago em ``datetime`` com timezone."""
     if not value:
@@ -615,12 +636,17 @@ async def sync_preapproval(subscription_id: UUID) -> bool:
             else:
                 # Checkout por plano: a assinatura so existe no Mercado Pago
                 # depois que o cliente paga. Procura pela referencia do app.
-                preapproval = await find_preapproval_for_user(
-                    user_id=subscription.user_id
-                )
+                preapproval = await find_preapproval_for_user(db, subscription.user_id)
                 if preapproval is None:
                     return False
                 await _handle_preapproval(str(preapproval["id"]), db)
+
+            # Mesmo sem webhook, grava a cobranca aprovada: e ela que mostra
+            # o cartao usado na tela de assinatura.
+            if subscription.mercadopago_subscription_id:
+                await sync_payments_for_subscription(
+                    str(subscription.mercadopago_subscription_id), db
+                )
             await db.commit()
             return True
         except Exception:
@@ -681,25 +707,72 @@ async def _handle_preapproval(preapproval_id: str, db) -> None:
 async def _handle_authorized_payment(authorized_payment_id: str, db) -> None:
     """Registra a cobranca recorrente e atualiza o acesso do assinante."""
     data = await get_authorized_payment(authorized_payment_id)
+    await _record_authorized_payment(data, db)
+
+
+async def sync_payments_for_subscription(preapproval_id: str, db) -> int:
+    """Grava as cobrancas aprovadas encontradas na busca, sem depender do webhook.
+
+    Ignora faturas ainda agendadas (nao cobradas) para nao rebaixar uma
+    assinatura que esta em dia. Retorna o numero de faturas registradas.
+    """
+    try:
+        invoices = await search_authorized_payments(preapproval_id)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Falha ao buscar cobrancas da assinatura %s", preapproval_id, exc_info=True
+        )
+        return 0
+
+    recorded = 0
+    for invoice in invoices:
+        if invoice.get("status") not in ("processed", "approved"):
+            continue
+        try:
+            if await _record_authorized_payment(invoice, db):
+                recorded += 1
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Falha ao registrar a cobranca %s da assinatura %s",
+                invoice.get("id"),
+                preapproval_id,
+                exc_info=True,
+            )
+    return recorded
+
+
+async def _record_authorized_payment(data: dict, db) -> bool:
+    """Grava uma cobranca recorrente a partir do payload ja buscado.
+
+    Idempotente: o Mercado Pago reenvia o mesmo evento se nao receber 200,
+    e a conciliacao roda a cada poucos minutos em paralelo ao webhook.
+    Retorna ``True`` quando uma cobranca nova foi gravada.
+    """
     preapproval_id = data.get("preapproval_id")
     subscription = await _find_subscription(db, preapproval_id, data.get("external_reference"))
 
     if subscription is None:
         logger.warning(
-            "Pagamento autorizado %s sem assinatura correspondente", authorized_payment_id
+            "Pagamento autorizado %s sem assinatura correspondente", data.get("id")
         )
-        return
+        return False
 
     payment_info = data.get("payment") or {}
-    mp_payment_id = str(payment_info.get("id") or authorized_payment_id)
+    # A busca devolve o id da fatura; o webhook costuma trazer o id do
+    # pagamento. Considera os dois para nao gravar a mesma cobranca duas vezes.
+    candidates = [
+        str(value)
+        for value in (payment_info.get("id"), data.get("id"))
+        if value is not None
+    ]
+    mp_payment_id = candidates[0]
     payment_status = data.get("status")
 
-    # Idempotencia: o Mercado Pago reenvia o mesmo evento se nao receber 200.
     existing = await db.execute(
-        select(Payment).where(Payment.mercadopago_payment_id == mp_payment_id)
+        select(Payment).where(Payment.mercadopago_payment_id.in_(candidates))
     )
     if existing.scalar_one_or_none() is not None:
-        return
+        return False
 
     approved = payment_status in ("processed", "approved")
     if approved:
@@ -745,3 +818,4 @@ async def _handle_authorized_payment(authorized_payment_id: str, db) -> None:
         subscription.auto_renew = False
     else:
         subscription.status = "past_due"
+    return True
