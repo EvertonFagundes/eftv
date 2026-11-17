@@ -20,8 +20,8 @@ android/app/src/main/java/com/eftv/android/
 ├── EmailVerificationActivity.kt
 ├── MainActivity.kt         # catálogo, abas, busca, categorias, atualização
 ├── CategoriesActivity.kt   # escolha de categoria com busca e contagem (1.2.1)
-├── CastSendActivity.kt     # transmitir a tela do celular para a TV (1.3.0)
-├── CastReceiveActivity.kt  # receber a tela na TV / outro aparelho (1.3.0)
+├── CastSendActivity.kt     # transmitir a tela do celular para a TV (1.4.1)
+├── CastReceiveActivity.kt  # receber a tela na TV / outro aparelho (1.4.1)
 ├── SeriesActivity.kt       # temporadas/episódios
 ├── PlayerActivity.kt       # player, sessão de stream, áudio/qualidade
 ├── SubscriptionActivity.kt # plano, status, assinar, cancelar
