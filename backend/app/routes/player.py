@@ -1,4 +1,6 @@
 # routes/player.py - Acesso do app nativo ao catalogo e a playlist
+import hashlib
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -16,6 +18,14 @@ from app.services.devices import (
     device_limit,
     revoke_all_devices,
     revoke_device,
+)
+from app.services.streams import (
+    StreamLimitError,
+    active_sessions,
+    heartbeat,
+    start_session,
+    stop_session,
+    stream_limit,
 )
 
 router = APIRouter(prefix="/player", tags=["Player"])
@@ -173,3 +183,111 @@ async def revoke_all_my_devices(
     return MessageResponse(
         message=f"{removed} aparelho(s) desvinculado(s). O proximo acesso vincula este."
     )
+
+
+# ----------------------------------------------------------------------
+# Limite de telas simultaneas
+# ----------------------------------------------------------------------
+
+class StreamPlayRequest(BaseModel):
+    channel_url: str
+    channel_name: str | None = None
+
+
+class StreamPlayResponse(BaseModel):
+    session_id: uuid.UUID
+    limit: int
+    active: int
+    heartbeat_in: int
+
+
+class StreamHeartbeatRequest(BaseModel):
+    session_id: uuid.UUID
+
+
+def _channel_ref(url: str) -> str:
+    """Identifica o canal sem guardar a URL do provedor (que tem credenciais)."""
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()[:32]
+
+
+@router.post("/play", response_model=StreamPlayResponse)
+async def start_playback(
+    payload: StreamPlayRequest,
+    subscription: Subscription = Depends(get_current_active_subscription),
+    device_id: str = Depends(get_device_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Autoriza o inicio da reproducao e aplica o limite de telas do plano.
+
+    O app chama ao abrir o player e repete o heartbeat enquanto assiste. Sem
+    isso o plano de 1 tela era apenas texto no contrato: a mesma conta podia
+    ser vista em quantos aparelhos quisesse ao mesmo tempo.
+    """
+    limit = stream_limit(subscription)
+    try:
+        session = await start_session(
+            db,
+            user_id=subscription.user_id,
+            subscription_id=subscription.id,
+            device_id=device_id,
+            channel_ref=_channel_ref(payload.channel_url),
+            channel_name=(payload.channel_name or "").strip()[:255] or None,
+            limit=limit,
+        )
+    except StreamLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "stream_limit",
+                "message": (
+                    f"Sua assinatura permite {limit} tela por vez. "
+                    "Feche o EFTV no outro aparelho para assistir aqui."
+                ),
+            },
+        ) from exc
+
+    active = await active_sessions(db, subscription.user_id)
+    return StreamPlayResponse(
+        session_id=session.id,
+        limit=limit,
+        active=len(active),
+        heartbeat_in=settings.STREAM_HEARTBEAT_SECONDS,
+    )
+
+
+@router.post("/heartbeat", response_model=MessageResponse)
+async def stream_heartbeat(
+    payload: StreamHeartbeatRequest,
+    subscription: Subscription = Depends(get_current_active_subscription),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mantem a sessao viva enquanto o video toca."""
+    session = await heartbeat(
+        db,
+        user_id=subscription.user_id,
+        session_id=payload.session_id,
+    )
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "session_closed",
+                "message": "Sessao encerrada. Abra o canal novamente.",
+            },
+        )
+    return MessageResponse(message="ok")
+
+
+@router.post("/stop", response_model=MessageResponse)
+async def stop_playback(
+    payload: StreamHeartbeatRequest,
+    subscription: Subscription = Depends(get_current_active_subscription),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fecha a sessao na hora em que o app sai do player (libera a vaga)."""
+    await stop_session(
+        db,
+        user_id=subscription.user_id,
+        session_id=payload.session_id,
+    )
+    return MessageResponse(message="ok")

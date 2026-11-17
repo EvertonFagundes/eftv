@@ -45,6 +45,13 @@ class Subscription(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     auto_renew: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Avisos enviados (evita mandar o mesmo email a cada execucao da tarefa).
+    trial_reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    payment_failed_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # "metadata" e reservado no SQLAlchemy Declarative; a coluna mantem o nome.
     extra_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

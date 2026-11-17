@@ -124,6 +124,20 @@ class Settings(BaseSettings):
     OFFLINE_GRACE_MINUTES: int = 720
     # Limite de aparelhos quando o plano nao define um valor proprio
     MAX_DEVICES_PER_SUBSCRIPTION: int = 2
+    # Limite de telas simultaneas: heartbeat do app enquanto assiste. A sessao
+    # expira sozinha se o aparelho sumir (rede caiu, app fechado a forca).
+    STREAM_SESSION_TIMEOUT_SECONDS: int = 120
+    STREAM_HEARTBEAT_SECONDS: int = 45
+
+    # Atualizacao do app distribuido por APK (fora da Play Store)
+    APP_LATEST_VERSION_CODE: int = 0
+    APP_LATEST_VERSION_NAME: str = ""
+    APP_APK_URL: str = ""
+    APP_UPDATE_NOTES: str = ""
+    APP_UPDATE_MANDATORY: bool = False
+
+    # Recebimento de erros/travamentos do app (telemetria propria)
+    CLIENT_ERRORS_ENABLED: bool = True
 
     # Email (Brevo em producao; Resend como alternativa)
     EMAIL_PROVIDER: str = "auto"  # auto, brevo, resend, dev

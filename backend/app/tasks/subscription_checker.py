@@ -150,6 +150,7 @@ async def cleanup_stale_playback_sessions(max_age_hours: int = 24) -> int:
     from datetime import timedelta
 
     from app.models.playback_session import PlaybackSession
+    from app.services.streams import close_stale_sessions
 
     cleaned = 0
     async with get_db_context() as db:
@@ -166,5 +167,9 @@ async def cleanup_stale_playback_sessions(max_age_hours: int = 24) -> int:
         for session in stale:
             session.ended_at = datetime.now(UTC)
             cleaned += 1
+
+    # Sessoes do app (limite de telas): expiram em minutos, nao em horas.
+    async with get_db_context() as db:
+        cleaned += await close_stale_sessions(db)
 
     return cleaned

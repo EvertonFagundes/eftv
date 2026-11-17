@@ -1,5 +1,6 @@
 # routes/__init__.py - Exporta todos os routers
 from app.routes.admin import router as admin_router
+from app.routes.app_client import router as app_router
 from app.routes.auth import router as auth_router
 from app.routes.categories import router as categories_router
 from app.routes.channels import router as channels_router
@@ -15,4 +16,5 @@ __all__ = [
     "subscriptions_router",
     "player_router",
     "admin_router",
+    "app_router",
 ]

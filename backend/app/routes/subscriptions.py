@@ -19,6 +19,7 @@ from app.schemas.payment import (
     SubscriptionResponse,
 )
 from app.security.dependencies import get_current_user
+from app.services.email_service import email_service
 from app.services.mercadopago import (
     cancel_preapproval,
     create_checkout_preference,
@@ -387,6 +388,25 @@ async def cancel_subscription(
 
     plan_result = await db.execute(select(Plan).where(Plan.id == subscription.plan_id))
     plan = plan_result.scalar_one()
+
+    # Confirma o cancelamento por email: o cliente precisa saber ate quando
+    # ainda tem acesso e que nao sera cobrado de novo. Falha de email nao
+    # desfaz o cancelamento.
+    try:
+        period_end = subscription.current_period_end
+        if period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=UTC)
+        await email_service.send_cancellation_email(
+            user.email,
+            period_end.strftime("%d/%m/%Y"),
+            user.full_name,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Cancelamento da assinatura %s feito, mas o email nao saiu",
+            subscription.id,
+            exc_info=True,
+        )
 
     return SubscriptionResponse(
         id=subscription.id,

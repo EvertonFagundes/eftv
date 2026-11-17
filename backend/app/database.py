@@ -107,6 +107,21 @@ async def init_db() -> None:
         if conn.dialect.name != "postgresql":
             return
 
+        # Rollout dos avisos por email (teste acabando / cartao recusado).
+        # Precisa rodar sempre, antes do bloco de usuarios abaixo.
+        await conn.execute(
+            text(
+                "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS "
+                "trial_reminder_sent_at TIMESTAMPTZ"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS "
+                "payment_failed_notified_at TIMESTAMPTZ"
+            )
+        )
+
         exists = await conn.execute(
             text(
                 "SELECT 1 FROM information_schema.columns "

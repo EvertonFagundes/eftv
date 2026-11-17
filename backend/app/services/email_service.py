@@ -133,6 +133,77 @@ class EmailService:
         html_body = f"<p>Olá{', ' + full_name if full_name else ''}!</p><p>Seu email foi confirmado e seus <strong>7 dias gratis</strong> foram ativados. Aproveite o EFTV!</p>"
         return await self._send(to_email, subject, text_body, html_body)
 
+    async def send_trial_ending_email(
+        self,
+        to_email: str,
+        trial_end: str,
+        full_name: str | None = None,
+    ) -> bool:
+        """Aviso de D-1 do teste gratis (retencao: sem isso o acesso so acaba)."""
+        subscribe_url = f"{self.frontend_url.rstrip('/')}/assinar.html"
+        subject = "Seu teste gratis termina amanha - EFTV"
+        text_body = (
+            f"Ola{', ' + full_name if full_name else ''}!\n"
+            f"Seu periodo de teste termina em {trial_end}.\n"
+            "Para continuar assistindo sem interrupcao, assine em:\n"
+            f"{subscribe_url}\n"
+            "Plano mensal de R$ 19,90 por cartao de credito.\n"
+        )
+        html_body = (
+            f"<p>Ola{', ' + full_name if full_name else ''}!</p>"
+            f"<p>Seu periodo de teste termina em <strong>{trial_end}</strong>.</p>"
+            "<p>Para continuar assistindo sem interrupcao, assine o plano mensal "
+            "de <strong>R$ 19,90</strong> no cartao de credito:</p>"
+            f"<p><a href=\"{subscribe_url}\">Assinar o EFTV</a></p>"
+        )
+        return await self._send(to_email, subject, text_body, html_body)
+
+    async def send_payment_failed_email(
+        self,
+        to_email: str,
+        full_name: str | None = None,
+    ) -> bool:
+        """Cobranca recusada: pede a troca/atualizacao do cartao."""
+        subscribe_url = f"{self.frontend_url.rstrip('/')}/assinar.html"
+        subject = "Nao conseguimos cobrar seu cartao - EFTV"
+        text_body = (
+            f"Ola{', ' + full_name if full_name else ''}!\n"
+            "A cobranca da sua assinatura nao foi aprovada pelo cartao.\n"
+            "Atualize a forma de pagamento para nao perder o acesso:\n"
+            f"{subscribe_url}\n"
+        )
+        html_body = (
+            f"<p>Ola{', ' + full_name if full_name else ''}!</p>"
+            "<p>A cobranca da sua assinatura <strong>nao foi aprovada</strong> "
+            "pelo cartao.</p>"
+            "<p>Atualize a forma de pagamento para nao perder o acesso:</p>"
+            f"<p><a href=\"{subscribe_url}\">Atualizar pagamento</a></p>"
+        )
+        return await self._send(to_email, subject, text_body, html_body)
+
+    async def send_cancellation_email(
+        self,
+        to_email: str,
+        access_until: str,
+        full_name: str | None = None,
+    ) -> bool:
+        """Confirma o cancelamento e deixa claro ate quando o acesso vale."""
+        subject = "Assinatura cancelada - EFTV"
+        text_body = (
+            f"Ola{', ' + full_name if full_name else ''}!\n"
+            "Sua assinatura foi cancelada e nao sera cobrada novamente.\n"
+            f"Voce continua com acesso ate {access_until}.\n"
+            "Se mudar de ideia, e so assinar de novo no app.\n"
+        )
+        html_body = (
+            f"<p>Ola{', ' + full_name if full_name else ''}!</p>"
+            "<p>Sua assinatura foi <strong>cancelada</strong> e nao sera cobrada "
+            "novamente.</p>"
+            f"<p>Voce continua com acesso ate <strong>{access_until}</strong>.</p>"
+            "<p>Se mudar de ideia, e so assinar de novo no app.</p>"
+        )
+        return await self._send(to_email, subject, text_body, html_body)
+
     async def _send(
         self,
         to_email: str,
@@ -299,3 +370,7 @@ class EmailService:
         </body>
         </html>
         """
+
+
+# Instancia unica: as tarefas agendadas e as rotas compartilham o provedor.
+email_service = EmailService()

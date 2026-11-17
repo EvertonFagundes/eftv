@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.category import Category
 from app.models.channel import Channel
+from app.models.client_error import ClientError
 from app.models.device import SubscriptionDevice
 from app.models.payment import Payment
 from app.models.subscription import Subscription
@@ -273,6 +274,43 @@ async def list_payments(
                 "created_at": payment.created_at,
             }
             for payment, payer_email in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/crashes")
+async def list_client_errors(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Erros e travamentos relatados pelo app ("o app fechou sozinho")."""
+    total = (await db.execute(select(func.count()).select_from(ClientError))).scalar_one()
+    rows = (
+        await db.execute(
+            select(ClientError)
+            .order_by(ClientError.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).scalars().all()
+
+    return {
+        "errors": [
+            {
+                "id": error.id,
+                "app_version": error.app_version,
+                "device": error.device,
+                "android": error.android,
+                "message": error.message,
+                "stacktrace": error.stacktrace,
+                "created_at": error.created_at,
+            }
+            for error in rows
         ],
         "total": total,
         "page": page,

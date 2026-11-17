@@ -11,6 +11,7 @@ from app.config import settings
 from app.database import close_db, init_db
 from app.routes import (
     admin_router,
+    app_router,
     auth_router,
     categories_router,
     channels_router,
@@ -20,6 +21,7 @@ from app.routes import (
 )
 from app.security.dependencies import client_ip
 from app.services.mercadopago import sync_pending_subscriptions
+from app.tasks.lifecycle_emails import send_lifecycle_emails
 from app.tasks.subscription_checker import (
     check_expired_subscriptions,
     cleanup_stale_playback_sessions,
@@ -39,6 +41,8 @@ async def lifespan(app: FastAPI):
     # Conciliacao do Mercado Pago: libera assinatura paga mesmo se o webhook
     # atrasar ou nao estiver cadastrado no painel.
     scheduler.add_job(sync_pending_subscriptions, "interval", minutes=5, id="sync_pending")
+    # Avisos por email: teste acabando e cartao recusado.
+    scheduler.add_job(send_lifecycle_emails, "interval", hours=6, id="lifecycle_emails")
     scheduler.start()
 
     yield
@@ -131,6 +135,10 @@ async def health_check(request: Request):
         "mercadopago_account": account,
         # Diagnostico do limite comercial (nao e segredo): plano de 2 aparelhos.
         "max_devices_per_subscription": settings.MAX_DEVICES_PER_SUBSCRIPTION,
+        # Versao publicada do app (atualizacao por APK).
+        "app_version_code": settings.APP_LATEST_VERSION_CODE,
+        "app_version_name": settings.APP_LATEST_VERSION_NAME,
+        "app_update_configured": bool(settings.APP_APK_URL),
     }
 
 
@@ -142,6 +150,7 @@ app.include_router(categories_router)
 app.include_router(subscriptions_router)
 app.include_router(player_router)
 app.include_router(admin_router)
+app.include_router(app_router)
 
 
 if __name__ == "__main__":
