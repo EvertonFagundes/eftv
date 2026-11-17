@@ -25,7 +25,11 @@ from app.schemas.auth import (
     UserUpdate,
     VerifyEmailRequest,
 )
-from app.security.dependencies import get_current_user, rate_limit_dependency
+from app.security.dependencies import (
+    get_current_user,
+    login_rate_limit_dependency,
+    rate_limit_dependency,
+)
 from app.services.auth_service import (
     create_token_pair,
     decode_token,
@@ -301,10 +305,14 @@ async def reset_password(
 @router.post("/login", response_model=Token)
 async def login(
     data: UserLogin,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Login com email e senha."""
+    # Limite proprio: sem ele a senha podia ser martelada sem parar.
+    await login_rate_limit_dependency(request)
+
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 

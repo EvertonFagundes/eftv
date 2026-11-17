@@ -220,12 +220,43 @@ rate_limiter = RateLimiter(
     window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
 )
 
+# Bucket proprio do login: mais curto, para dificultar brute force sem
+# deixar um atacante esgotar o limite geral de todos os endpoints.
+login_rate_limiter = RateLimiter(
+    max_requests=settings.RATE_LIMIT_LOGIN_REQUESTS,
+    window_seconds=60,
+)
+
+
+def client_ip(request: Request) -> str:
+    """IP do cliente real, atrás do proxy do Render.
+
+    ``request.client.host`` atras do proxy e o IP do proprio proxy: todos os
+    usuarios cairiam no mesmo balde de rate limit e um unico atacante
+    bloquearia o login de todo mundo. O X-Forwarded-For e o campo que o
+    proxy preenche com o IP de origem.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        first_hop = forwarded.split(",")[0].strip()
+        if first_hop:
+            return first_hop
+    return request.client.host if request.client else "unknown"
+
 
 async def rate_limit_dependency(request: Request) -> None:
     """Dependency para rate limiting por IP."""
-    ip = request.client.host if request.client else "unknown"
-    if not rate_limiter.is_allowed(f"ratelimit:{ip}"):
+    if not rate_limiter.is_allowed(f"ratelimit:{client_ip(request)}"):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Muitas requisições. Tente novamente mais tarde.",
+        )
+
+
+async def login_rate_limit_dependency(request: Request) -> None:
+    """Limite proprio do login (tentativas por IP por minuto)."""
+    if not login_rate_limiter.is_allowed(f"login:{client_ip(request)}"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas de login. Tente novamente em instantes.",
         )

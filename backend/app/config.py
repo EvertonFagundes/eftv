@@ -93,6 +93,8 @@ class Settings(BaseSettings):
     # Rate limiting
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # Tentativas de login por IP por minuto (blindagem contra brute force).
+    RATE_LIMIT_LOGIN_REQUESTS: int = 10
 
     # Redis (para rate limiting, cache, sessões)
     REDIS_URL: str | None = None
