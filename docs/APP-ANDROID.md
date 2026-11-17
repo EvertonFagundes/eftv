@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.2.0** (`versionCode 12`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.2.1** (`versionCode 13`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -19,7 +19,7 @@ android/app/src/main/java/com/eftv/android/
 ├── LoginActivity.kt        # login, cadastro, verificação de e-mail, recuperação
 ├── EmailVerificationActivity.kt
 ├── MainActivity.kt         # catálogo, abas, busca, categorias, atualização
-├── CategoriesActivity.kt   # escolha de categoria com busca e contagem (1.2.0)
+├── CategoriesActivity.kt   # escolha de categoria com busca e contagem (1.2.1)
 ├── SeriesActivity.kt       # temporadas/episódios
 ├── PlayerActivity.kt       # player, sessão de stream, áudio/qualidade
 ├── SubscriptionActivity.kt # plano, status, assinar, cancelar
@@ -30,6 +30,7 @@ android/app/src/main/java/com/eftv/android/
 │   ├── PlaylistRepository.kt
 │   ├── SessionStore.kt     # tokens (access/refresh) + e-mail
 │   ├── DeviceIdentity.kt   # id do aparelho (hash do ANDROID_ID)
+│   ├── FreeTv.kt           # categoria virtual "Abertos" (filtro por nome)
 │   └── LocalServer.kt / PlaylistConfig.kt
 ├── ui/                     # adapters e views
 └── res/                    # layouts, strings, tema
@@ -93,7 +94,8 @@ de TV pedir o código. Ver `docs/TV.md`.
   (aparece com 80+ itens, escondida na TV). Tocar/arrastar pula para a primeira
   letra via `CatalogStore.firstIndexForLetter` — resolve "rolar 2 mil canais".
   A lista reserva `paddingEnd="26dp"` e a barra tem fundo próprio para não cobrir
-  as estrelas de favorito.
+  as estrelas de favorito. Em 1.2.1 o SQL do salto foi corrigido (gerava
+  `WHERE WHERE` e derrubava o app) e o salto roda em `runCatching`.
 - **Continuar assistindo**: carrossel com filmes/séries em andamento
   (progresso salvo a cada 5 s).
 - **Favoritos** e **Recentes** aparecem como categorias quando têm itens.
