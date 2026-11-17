@@ -75,7 +75,7 @@ Authorization: Bearer <token de admin>
 
 ```json
 {
-  "expires_at": "2026-12-31T23:59:00Z",
+  "expires_at": "2026-12-31T23:59:00+00:00",
   "days_remaining": 44,
   "expired": false,
   "active": true,
