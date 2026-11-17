@@ -10,10 +10,12 @@ from app.database import get_db
 from app.models.category import Category
 from app.models.channel import Channel
 from app.models.device import SubscriptionDevice
+from app.models.payment import Payment
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.security.dependencies import get_current_user, require_admin
 from app.services.devices import revoke_all_devices
+from app.services.mercadopago import sync_preapproval
 from app.services.plans import get_or_create_plan
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -174,6 +176,14 @@ async def get_user(
     )
     devices = devices_result.scalars().all() if subscriptions else []
 
+    payments_result = await db.execute(
+        select(Payment)
+        .where(Payment.user_id == user.id)
+        .order_by(Payment.created_at.desc())
+        .limit(20)
+    )
+    payments = payments_result.scalars().all()
+
     return {
         "user": {
             "id": user.id,
@@ -195,6 +205,19 @@ async def get_user(
             }
             for s in subscriptions
         ],
+        "payments": [
+            {
+                "id": p.id,
+                "amount_cents": p.amount_cents,
+                "currency": p.currency,
+                "status": p.status,
+                "payment_method": p.payment_method,
+                "mercadopago_payment_id": p.mercadopago_payment_id,
+                "paid_at": p.paid_at,
+                "created_at": p.created_at,
+            }
+            for p in payments
+        ],
         "devices": [
             {
                 "device_id": d.device_id,
@@ -204,6 +227,87 @@ async def get_user(
             }
             for d in devices
         ],
+    }
+
+
+@router.get("/payments")
+async def list_payments(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    payment_status: str | None = Query(None, alias="status"),
+    email: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Cobrancas registradas (suporte: "o cliente pagou?")."""
+    query = (
+        select(Payment, User.email)
+        .join(User, User.id == Payment.user_id, isouter=True)
+        .order_by(Payment.created_at.desc())
+    )
+    if payment_status:
+        query = query.where(Payment.status == payment_status)
+    if email:
+        query = query.where(User.email.ilike(f"%{email.lower()}%"))
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_query)).scalar_one()
+
+    rows = (
+        await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+    ).all()
+
+    return {
+        "payments": [
+            {
+                "id": payment.id,
+                "user_id": payment.user_id,
+                "email": payer_email,
+                "subscription_id": payment.subscription_id,
+                "amount_cents": payment.amount_cents,
+                "currency": payment.currency,
+                "status": payment.status,
+                "payment_method": payment.payment_method,
+                "mercadopago_payment_id": payment.mercadopago_payment_id,
+                "paid_at": payment.paid_at,
+                "created_at": payment.created_at,
+            }
+            for payment, payer_email in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.post("/subscriptions/{subscription_id}/sync")
+async def sync_subscription(
+    subscription_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Concilia uma assinatura com o Mercado Pago na hora (suporte).
+
+    Caminho de emergencia quando o cliente pagou e o acesso nao liberou:
+    busca a assinatura na fonte, grava a cobranca e atualiza o periodo.
+    """
+    result = await db.execute(select(Subscription).where(Subscription.id == subscription_id))
+    subscription = result.scalar_one_or_none()
+    if subscription is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura não encontrada"
+        )
+
+    synced = await sync_preapproval(subscription_id)
+
+    await db.refresh(subscription)
+    return {
+        "synced": synced,
+        "id": subscription.id,
+        "status": subscription.status,
+        "current_period_end": subscription.current_period_end,
+        "mercadopago_subscription_id": subscription.mercadopago_subscription_id,
+        "has_access": subscription.has_access,
     }
 
 
