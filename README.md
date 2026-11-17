@@ -13,6 +13,7 @@
 | [`PAGAMENTOS.md`](PAGAMENTOS.md) | Runbook de pagamentos: fluxo do Mercado Pago, conciliação, cancelamento, limite de telas, avisos por e-mail e painel admin |
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | Deploy do backend |
 | [`docs/RENDER.md`](docs/RENDER.md) | Configuração do Render (variáveis de ambiente) |
+| [`docs/PLAYLIST-VENCIMENTO.md`](docs/PLAYLIST-VENCIMENTO.md) | Como descobrir o vencimento da playlist licenciada (API do provedor, arquivo, teste de stream) |
 | [`docs/PLANO-GRATUITO.md`](docs/PLANO-GRATUITO.md) | Operação no plano gratuito (limitações e contornos) |
 
 ## 📁 Estrutura do Projeto

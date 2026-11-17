@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -36,6 +37,9 @@ class CastService : Service() {
 
     private var sender: CastSender? = null
 
+    /** Quando a transmissao comecou, para saber se a captura durou pouco. */
+    private var startedAt = 0L
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -54,6 +58,7 @@ class CastService : Service() {
     }
 
     private fun startCasting(intent: Intent) {
+        startedAt = SystemClock.elapsedRealtime()
         startInForeground()
         Timber.i("CastService: primeiro plano ativo")
 
@@ -87,9 +92,21 @@ class CastService : Service() {
         projection.registerCallback(
             object : MediaProjection.Callback() {
                 override fun onStop() {
-                    Timber.i("Captura de tela encerrada pelo sistema")
+                    val aliveMs = SystemClock.elapsedRealtime() - startedAt
+                    Timber.i(
+                        "Captura de tela encerrada pelo sistema (%d ms, estado=%s)",
+                        aliveMs,
+                        status.state,
+                    )
                     sender?.stop()
-                    status = CastStatus.IDLE
+                    // Se o sistema derrubou a captura antes de qualquer imagem
+                    // chegar, o usuario precisa saber o motivo: no Android 14+
+                    // costuma ser o "um app so" escolhido no aviso.
+                    status = if (status.state != CastStatus.State.STREAMING) {
+                        CastStatus(CastStatus.State.ERROR, getString(R.string.cast_capture_stopped))
+                    } else {
+                        CastStatus.IDLE
+                    }
                     stopSelf()
                 }
             },

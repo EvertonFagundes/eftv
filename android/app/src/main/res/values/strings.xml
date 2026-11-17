@@ -104,6 +104,7 @@
     <string name="cast_stop">Parar transmissão</string>
     <string name="cast_capture_denied">Sem a permissão de captura não é possível transmitir.</string>
     <string name="cast_capture_unavailable">Este aparelho não tem captura de tela disponível.</string>
+    <string name="cast_capture_stopped">O Android encerrou a captura. Se apareceu a pergunta do que compartilhar, escolha "Tela inteira" (e não "um app só") e tente de novo.</string>
     <string name="cast_notification_title">EFTV — Transmitindo tela</string>
     <string name="cast_notification_text">A tela está sendo enviada para a TV</string>
     <string name="cast_notification_channel">Transmissão de tela</string>
