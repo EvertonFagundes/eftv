@@ -16,6 +16,7 @@ Nada aqui devolve usuario/senha: o resultado expoe apenas o host do provedor.
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 import time
@@ -26,6 +27,8 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 # A conta do provedor muda no maximo algumas vezes por dia; 6 h evita bater na
 # API a cada abertura do painel e ainda acusa renovacao no mesmo dia.
@@ -279,6 +282,15 @@ async def check_playlist_expiry(
         else min(FAILURE_CACHE_SECONDS, max(1, int(settings.PLAYLIST_EXPIRY_CACHE_SECONDS)))
     )
     _cache[cache_key] = (time.monotonic() + ttl, result)
+    if result.source == "unavailable":
+        logger.warning("Vencimento da playlist indisponivel: %s", result.error)
+    else:
+        logger.info(
+            "Vencimento da playlist (%s): %s, status=%s",
+            result.source,
+            result.expires_at.isoformat() if result.expires_at else "sem data",
+            result.status,
+        )
     return result
 
 
