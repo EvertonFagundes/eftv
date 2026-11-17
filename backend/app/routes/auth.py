@@ -455,6 +455,7 @@ class DeviceCodePollResponse(BaseModel):
     status: str
     access_token: str | None = None
     refresh_token: str | None = None
+    email: str | None = None
     expires_in: int | None = None
 
 
@@ -489,6 +490,7 @@ async def poll_device_code(
         status="approved",
         access_token=entry.access_token,
         refresh_token=entry.refresh_token,
+        email=entry.email,
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
@@ -501,7 +503,7 @@ async def approve_device_code(
 ):
     """O celular (conta ja logada) autoriza a TV digitando o codigo."""
     try:
-        await device_login.approve_code(db, code=payload.code, user_id=user.id)
+        await device_login.approve_code(db, code=payload.code, user_id=user.id, email=user.email)
     except ValueError as exc:
         if str(exc) == "expired":
             raise HTTPException(

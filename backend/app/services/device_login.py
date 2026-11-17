@@ -71,7 +71,7 @@ def _is_expired(entry: DeviceLoginCode, now: datetime | None = None) -> bool:
     return expires <= reference
 
 
-async def approve_code(db: AsyncSession, *, code: str, user_id) -> DeviceLoginCode:
+async def approve_code(db: AsyncSession, *, code: str, user_id, email: str | None = None) -> DeviceLoginCode:
     """Celular aprova o pedido da TV e gera a sessao que ela vai receber."""
     result = await db.execute(
         select(DeviceLoginCode).where(DeviceLoginCode.code == normalize_code(code))
@@ -86,6 +86,7 @@ async def approve_code(db: AsyncSession, *, code: str, user_id) -> DeviceLoginCo
 
     access_token, _access_jti, refresh_token, _refresh_jti = create_token_pair(str(user_id))
     entry.user_id = user_id
+    entry.email = email
     entry.access_token = access_token
     entry.refresh_token = refresh_token
     entry.status = "approved"

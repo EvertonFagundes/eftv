@@ -14,6 +14,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -253,6 +254,7 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.menu.findItem(R.id.action_open_web)?.isVisible = localMode
         binding.toolbar.menu.findItem(R.id.action_subscription)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_device)?.isVisible = !localMode
+        binding.toolbar.menu.findItem(R.id.action_authorize_tv)?.isVisible = !localMode
         binding.toolbar.menu.findItem(R.id.action_logout)?.isVisible = !localMode
 
         binding.toolbar.setOnMenuItemClickListener { item ->
@@ -284,6 +286,11 @@ class MainActivity : AppCompatActivity() {
 
                 R.id.action_logout -> {
                     logout()
+                    true
+                }
+
+                R.id.action_authorize_tv -> {
+                    showAuthorizeTvDialog()
                     true
                 }
 
@@ -407,8 +414,79 @@ class MainActivity : AppCompatActivity() {
             if (columns > 1) GridLayoutManager(this, columns) else LinearLayoutManager(this)
     }
 
-    private fun setupCategoryButton() {
-        binding.categoryButton.setOnClickListener {
+    /**
+     * "Autorizar TV": a TV mostra um codigo e o assinante confirma aqui, onde
+     * ja esta logado. Evita digitar e-mail e senha no controle remoto.
+     */
+    private fun showAuthorizeTvDialog() {
+        val input = EditText(this).apply {
+            hint = getString(R.string.authorize_tv_hint)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+            filters = arrayOf(android.text.InputFilter.LengthFilter(9))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.on_background))
+            setPadding(56, 32, 56, 16)
+            textSize = 22f
+            gravity = android.view.Gravity.CENTER
+        }
+        val container = android.widget.FrameLayout(this).apply { addView(input) }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.authorize_tv_title)
+            .setView(container)
+            .setPositiveButton(R.string.authorize_tv_confirm, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val code = input.text?.toString().orEmpty().replace(" ", "").trim()
+                if (code.length < 8) {
+                    input.error = getString(R.string.authorize_tv_invalid)
+                    return@setOnClickListener
+                }
+                lifecycleScope.launch {
+                    val token = validToken() ?: run {
+                        Toast.makeText(
+                            this@MainActivity,
+                            R.string.tv_login_unavailable,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        return@launch
+                    }
+                    try {
+                        val message = api.approveDeviceCode(token, code)
+                        dialog.dismiss()
+                        Toast.makeText(
+                            this@MainActivity,
+                            message.ifBlank { getString(R.string.authorize_tv_done) },
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    } catch (e: EftvApi.ApiException) {
+                        input.error = e.detail
+                    } catch (e: Exception) {
+                        Timber.w(e, "Falha ao autorizar a TV")
+                        Toast.makeText(
+                            this@MainActivity,
+                            R.string.tv_login_unavailable,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    /** Token valido (renova com o refresh se o curto expirou). */
+    private suspend fun validToken(): String? {
+        val token = session.accessToken() ?: return null
+        if (!session.isAccessTokenExpired()) return token
+        if (!tryRefresh()) return null
+        return session.accessToken()
+    }
+
+    private fun setupCategoryButton() {        binding.categoryButton.setOnClickListener {
             openCategoryPicker()
         }
         setupAlphabetBar()

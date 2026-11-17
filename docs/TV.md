@@ -41,38 +41,35 @@ Backend do login por código já implementado e testado:
 
 ---
 
-## Fase 1 — pendências no app (Android TV / Fire TV)
+## Fase 1 — o que já está implementado (1.2.0)
 
-### 1. Login sem teclado
-- `LoginActivity` detecta TV (`PackageManager.FEATURE_LEANBACK`/`FEATURE_TELEVISION`)
-  e mostra em destaque **"Entrar pelo celular"**: pede `/auth/device-code`,
-  exibe o código em fonte grande (`ABCD-EFGH`) e faz `poll` a cada 3 s.
-- No celular (conta já logada): opção **"Autorizar TV"** em ⋮ → digita o código →
+### 1. Login sem teclado ✅
+- `LoginActivity` detecta TV e mostra **"Entrar pelo celular"**
+  (`tvCodeButton`): pede `/auth/device-code`, exibe o código em fonte grande e
+  faz *poll* a cada 3 s até aprovar, expirar ou o cliente cancelar.
+- No celular: menu ⋮ → **"Autorizar TV"** → digita o código →
   `POST /auth/device-code/approve`.
-- Alternativa sem app no celular: aceitar o código na área do assinante na web.
-- Manter e-mail/senha como opção secundária (teclado virtual existe, mas é ruim).
+- O e-mail da conta volta junto com os tokens e a TV já abre logada.
+- E-mail/senha continuam disponíveis como opção secundária.
 
-### 2. Assinatura sem navegador
-- TV cria o checkout (`POST /subscriptions/checkout`), desenha o `init_point` em
-  **QR code** na tela e faz *polling* em `/subscriptions/current`.
-- Cliente escaneia com a câmera do celular e paga no navegador do próprio celular.
-- Ao detectar `has_access: true`, a TV libera sozinha.
-- Requer: gerar QR (biblioteca `com.google.zxing:core`, sem câmera) e um diálogo
-  de acompanhamento.
+### 2. Assinatura sem navegador ✅
+- Na TV, `SubscriptionActivity` cria o checkout, desenha o `init_point` em
+  **QR code** (`ui/QrCode.kt`, ZXing core, sem câmera) e consulta
+  `/subscriptions/current` a cada 5 s por até 10 min.
+- O cliente paga no celular; quando a assinatura fica `active`, o diálogo fecha
+  e a tela mostra o novo estado.
+- No celular continua abrindo o navegador como antes.
 
-### 3. Interface 10 pés
-- Foco visível em todos os itens (cartões com borda + escala).
-- Categorias já usam cartões focáveis (`CategoriesActivity`).
-- `SwipeRefresh` (gesto) não existe na TV: expor "Atualizar" no menu.
-- Configurações: hoje entram por **toque longo** no título; na TV precisa de item
-  no menu (⋮).
-- Fundo do app: manter 16:9, sem elementos cortados em telas 1280×720.
+### 3. Interface 10 pés — pendente
+- [ ] "Atualizar" no menu já existe; validar no controle.
+- [ ] Configurações hoje entram por **toque longo** no título: expor no menu.
+- [ ] Revisar foco/ordem em telas 1280×720 (sem elementos cortados).
+- [ ] Banner 320×180 (`tv_banner`) conferido no launcher da TV.
 
-### 4. Publicação
-- **Google Play**: mesmo app do celular com `LEANBACK_LAUNCHER` e banner 320×180
-  (já existe `tv_banner`); exige Play Console e revisão de TV.
-- **Amazon Appstore** (Fire TV): APK próprio, mesmo código.
-- Enquanto não houver loja: instalar por `adb install -r` no box.
+### 4. Publicação — pendente
+- Google Play (mesmo app, com `LEANBACK_LAUNCHER`).
+- Amazon Appstore (Fire TV).
+- Enquanto não houver loja: `adb install -r` no box.
 
 ---
 

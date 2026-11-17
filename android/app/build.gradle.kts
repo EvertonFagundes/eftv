@@ -244,5 +244,8 @@ dependencies {
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
 
+    // QR code da assinatura na TV (gera o desenho; nao usa camera)
+    implementation("com.google.zxing:core:3.5.3")
+
     testImplementation("junit:junit:4.13.2")
 }

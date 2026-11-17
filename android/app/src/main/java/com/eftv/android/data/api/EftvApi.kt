@@ -105,6 +105,20 @@ class EftvApi(
         val configured: Boolean,
     )
 
+    /** Codigo exibido na TV para o cliente confirmar no celular. */
+    data class DeviceCode(
+        val code: String,
+        val expiresInSeconds: Long,
+        val pollInSeconds: Long,
+    )
+
+    /** Resposta do polling da TV: `approved` traz os tokens (uma vez). */
+    data class DeviceCodePoll(
+        val status: String,
+        val tokens: TokenPair?,
+        val email: String?,
+    )
+
     class ApiException(
         val statusCode: Int,
         val detail: String,
@@ -262,6 +276,46 @@ class EftvApi(
             mandatory = json.optBoolean("mandatory", false),
             configured = json.optBoolean("update_available_from", false),
         )
+    }
+
+    // ------------------------------------------------------------------
+    // Login na TV por codigo
+    // ------------------------------------------------------------------
+
+    /** A TV pede um codigo para exibir na tela. */
+    suspend fun requestDeviceCode(deviceName: String?): DeviceCode {
+        val body = JSONObject()
+        deviceName?.takeIf { it.isNotBlank() }?.let { body.put("device_name", it.take(120)) }
+        val json = request("POST", "/auth/device-code", body = body)
+        return DeviceCode(
+            code = json.optString("code", ""),
+            expiresInSeconds = json.optLong("expires_in", 600L),
+            pollInSeconds = json.optLong("poll_in", 3L),
+        )
+    }
+
+    /** A TV pergunta se ja foi autorizada (os tokens vem uma unica vez). */
+    suspend fun pollDeviceCode(code: String): DeviceCodePoll {
+        val body = JSONObject().put("code", code)
+        val json = request("POST", "/auth/device-code/poll", body = body)
+        val status = json.optString("status", "invalid")
+        val tokens = if (status == "approved" && json.optString("access_token").isNotBlank()) {
+            tokenPair(json)
+        } else {
+            null
+        }
+        return DeviceCodePoll(
+            status = status,
+            tokens = tokens,
+            email = json.optString("email").takeIf { it.isNotBlank() },
+        )
+    }
+
+    /** O celular (conta logada) autoriza a TV digitando o codigo. */
+    suspend fun approveDeviceCode(accessToken: String, code: String): String {
+        val body = JSONObject().put("code", code.trim())
+        val json = request("POST", "/auth/device-code/approve", accessToken = accessToken, body = body)
+        return json.optString("message", "")
     }
 
     /** Envia um erro/travamento do app para o suporte (sem dados pessoais). */

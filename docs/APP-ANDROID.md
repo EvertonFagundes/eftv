@@ -186,11 +186,13 @@ adb exec-out screencap -p > tela.png
 Já habilitado no manifest: `LEANBACK_LAUNCHER`, `android:banner`, touchscreen
 opcional, `uses-feature` de TV. O mesmo APK serve celular e TV.
 
-O que ainda falta na TV (fase 1, ver `docs/TV.md`):
-1. tela de login com **código** em vez de teclado;
-2. assinatura por **QR code** (pagar no celular);
-3. revisão de foco/10-foot UI (cartões, listas, configurações acessíveis sem
-   toque longo).
+O que já está pronto na TV:
+1. login por **código** ("Entrar pelo celular") — implementado no app e no backend;
+2. assinatura por **QR code** (pagar no celular e a TV se libera) — implementado;
+3. foco/10-foot UI — parcial (cartões focáveis e OK do controle no player).
+
+Pendente: revisar foco em 1280×720, expor Configurações no menu (hoje é toque
+longo) e publicar em Google Play / Amazon Appstore. Detalhes em `docs/TV.md`.
 
 ---
 

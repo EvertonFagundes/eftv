@@ -81,12 +81,16 @@ async def test_approve_generates_tokens_for_the_tv():
     entry = make_code()
     db = FakeSession(entry)
 
-    approved = await device_login.approve_code(db, code="abcd-efgh", user_id=uuid4())
+    approved = await device_login.approve_code(
+        db, code="abcd-efgh", user_id=uuid4(), email="cliente@example.com"
+    )
 
     assert approved.status == "approved"
     assert approved.access_token
     assert approved.refresh_token
     assert approved.approved_at is not None
+    # A TV exibe a conta autorizada: o e-mail viaja junto com os tokens.
+    assert approved.email == "cliente@example.com"
 
 
 async def test_approve_rejects_expired_code():
@@ -153,7 +157,7 @@ async def test_approve_route_explains_invalid_code(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await auth_routes.approve_device_code(
             auth_routes.DeviceCodeApproveRequest(code="ZZZZZZZZ"),
-            user=type("U", (), {"id": uuid4()})(),
+            user=type("U", (), {"id": uuid4(), "email": "cliente@example.com"})(),
             db=FakeSession(),
         )
 
@@ -169,7 +173,7 @@ async def test_approve_route_explains_expired_code(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await auth_routes.approve_device_code(
             auth_routes.DeviceCodeApproveRequest(code="ABCDEFGH"),
-            user=type("U", (), {"id": uuid4()})(),
+            user=type("U", (), {"id": uuid4(), "email": "cliente@example.com"})(),
             db=FakeSession(),
         )
 

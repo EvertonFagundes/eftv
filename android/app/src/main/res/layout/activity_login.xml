@@ -191,6 +191,18 @@
             app:elevation="2dp" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/tvCodeButton"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/tv_login_button"
+            android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+            android:visibility="gone"
+            app:cornerRadius="16dp"
+            tools:visibility="visible" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/registerButton"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"

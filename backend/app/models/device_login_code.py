@@ -29,6 +29,8 @@ class DeviceLoginCode(Base):
     # pending -> approved -> consumed | expired
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # E-mail da conta: a TV precisa dele para exibir a conta logada.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     device_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -15,6 +15,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.SessionStore
 import com.eftv.android.data.api.EftvApi
 import com.eftv.android.databinding.ActivityLoginBinding
@@ -37,7 +38,15 @@ class LoginActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLoginBinding
     private val session by lazy { SessionStore(this) }
-    private val api by lazy { EftvApi() }
+    private val api by lazy { EftvApi(deviceId = DeviceIdentity(this).id) }
+
+    private val isTelevision: Boolean by lazy {
+        packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
+            packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEVISION)
+    }
+
+    @Volatile
+    private var deviceCodeActive = false
 
     // Modo cadastro ativado/desativado
     private var isRegisterMode = false
@@ -99,6 +108,7 @@ class LoginActivity : AppCompatActivity() {
         binding.loginButton.setOnClickListener { signInOrRegister() }
         binding.registerButton.setOnClickListener { toggleRegisterMode() }
         binding.forgotPassword.setOnClickListener { showForgotPasswordDialog() }
+        setupTelevisionLogin()
         binding.passwordInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 signInOrRegister()
@@ -117,6 +127,94 @@ class LoginActivity : AppCompatActivity() {
         }
 
         updateAuthModeUI()
+    }
+
+    /**
+     * TV: digitar e-mail e senha com o controle remoto e o principal motivo de
+     * desistencia. O botao "Entrar pelo celular" pede um codigo ao servidor,
+     * mostra na tela e espera a confirmacao do celular.
+     */
+    private fun setupTelevisionLogin() {
+        if (!isTelevision) return
+        binding.tvCodeButton.visibility = View.VISIBLE
+        binding.tvCodeButton.setOnClickListener { startDeviceCodeLogin() }
+    }
+
+    private fun startDeviceCodeLogin() {
+        if (deviceCodeActive) return
+        deviceCodeActive = true
+        binding.loginError.visibility = View.GONE
+
+        val codeText = android.widget.TextView(this).apply {
+            setPadding(0, 24, 0, 8)
+            textSize = 34f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(ContextCompat.getColor(this@LoginActivity, R.color.primary))
+            text = getString(R.string.tv_login_waiting)
+        }
+        val hint = android.widget.TextView(this).apply {
+            setPadding(0, 0, 0, 24)
+            textSize = 15f
+            gravity = android.view.Gravity.CENTER
+            text = getString(R.string.tv_login_instructions)
+        }
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 8, 48, 0)
+            addView(codeText)
+            addView(hint)
+        }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.tv_login_title)
+            .setView(container)
+            .setNegativeButton(R.string.tv_login_cancel) { _, _ -> deviceCodeActive = false }
+            .setCancelable(true)
+            .setOnDismissListener { deviceCodeActive = false }
+            .show()
+
+        lifecycleScope.launch {
+            val info = runCatching { api.requestDeviceCode(Build.MODEL) }.getOrNull()
+            if (info == null || info.code.isBlank()) {
+                dialog.dismiss()
+                deviceCodeActive = false
+                showError(getString(R.string.tv_login_unavailable))
+                return@launch
+            }
+            codeText.text = info.code
+            val deadline = System.currentTimeMillis() + info.expiresInSeconds * 1000
+            val interval = (info.pollInSeconds.coerceIn(2, 6)) * 1000
+
+            while (System.currentTimeMillis() < deadline && deviceCodeActive) {
+                kotlinx.coroutines.delay(interval)
+                if (!deviceCodeActive) break
+                val poll = runCatching { api.pollDeviceCode(info.code) }.getOrNull() ?: continue
+                if (poll.status == "approved" && poll.tokens != null) {
+                    session.save(
+                        poll.tokens,
+                        poll.email ?: session.email().orEmpty(),
+                        emailVerified = true,
+                    )
+                    deviceCodeActive = false
+                    dialog.dismiss()
+                    Toast.makeText(this@LoginActivity, R.string.tv_login_success, Toast.LENGTH_SHORT).show()
+                    openCatalog()
+                    return@launch
+                }
+                if (poll.status == "expired" || poll.status == "invalid") {
+                    deviceCodeActive = false
+                    dialog.dismiss()
+                    showError(getString(R.string.tv_login_expired))
+                    return@launch
+                }
+            }
+
+            if (deviceCodeActive) {
+                deviceCodeActive = false
+                dialog.dismiss()
+                showError(getString(R.string.tv_login_expired))
+            }
+        }
     }
 
     private fun toggleRegisterMode() {

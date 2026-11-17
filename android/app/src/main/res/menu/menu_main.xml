@@ -25,6 +25,10 @@
         android:title="@string/device_title"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_authorize_tv"
+        android:title="@string/authorize_tv_menu"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_logout"
         android:title="@string/logout"
         app:showAsAction="never" />

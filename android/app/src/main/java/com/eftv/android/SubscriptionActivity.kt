@@ -14,6 +14,7 @@ import com.eftv.android.data.api.EftvApi
 import com.eftv.android.databinding.ActivitySubscriptionBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -42,6 +43,12 @@ class SubscriptionActivity : AppCompatActivity() {
 
     /** Verdadeiro depois de abrir o checkout: ao voltar do navegador, atualiza. */
     private var awaitingPayment = false
+
+    /** TV box/Android TV: paga por QR no celular em vez de abrir navegador. */
+    private val isTelevision: Boolean by lazy {
+        packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
+            packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEVISION)
+    }
 
     /** Primeira execucao do onResume nao deve recarregar (o onCreate ja fez). */
     private var started = false
@@ -262,13 +269,20 @@ class SubscriptionActivity : AppCompatActivity() {
                 val checkout = withContext(Dispatchers.IO) {
                     api.createCheckout(token, current.planId)
                 }
-                openBrowser(checkout.initPoint)
-                awaitingPayment = true
-                MaterialAlertDialogBuilder(this@SubscriptionActivity)
-                    .setTitle(R.string.subscription_checkout_title)
-                    .setMessage(R.string.subscription_checkout_message)
-                    .setPositiveButton(R.string.close, null)
-                    .show()
+                if (isTelevision) {
+                    // TV: sem teclado e quase sempre sem navegador. O QR resolve
+                    // o pagamento no celular e a TV se libera sozinha.
+                    awaitingPayment = true
+                    showCheckoutQr(checkout.initPoint)
+                } else {
+                    openBrowser(checkout.initPoint)
+                    awaitingPayment = true
+                    MaterialAlertDialogBuilder(this@SubscriptionActivity)
+                        .setTitle(R.string.subscription_checkout_title)
+                        .setMessage(R.string.subscription_checkout_message)
+                        .setPositiveButton(R.string.close, null)
+                        .show()
+                }
             } catch (e: EftvApi.ApiException) {
                 if (e.statusCode == 409) {
                     // Ja existe assinatura paga ativa: so atualiza a tela.
@@ -287,6 +301,79 @@ class SubscriptionActivity : AppCompatActivity() {
             } finally {
                 binding.subscribeButton.isEnabled = true
                 binding.progress.visibility = View.GONE
+            }
+        }
+    }
+
+    /**
+     * Assinatura na TV por QR code.
+     *
+     * Mostra o checkout do Mercado Pago como QR, o cliente paga no celular e a
+     * tela consulta o servidor ate a assinatura ficar ativa (ou o prazo acabar).
+     */
+    private fun showCheckoutQr(initPoint: String) {
+        val qr = com.eftv.android.ui.QrCode.bitmap(initPoint, sizePx = 680)
+        if (qr == null) {
+            // Sem QR (raro): cai no navegador, se existir.
+            openBrowser(initPoint)
+            return
+        }
+
+        val density = resources.displayMetrics.density
+        val image = android.widget.ImageView(this).apply {
+            setImageBitmap(qr)
+            contentDescription = getString(R.string.subscription_qr_content_description)
+        }
+        val hint = android.widget.TextView(this).apply {
+            text = getString(R.string.subscription_qr_hint)
+            textSize = 16f
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, (16 * density).toInt(), 0, 0)
+        }
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setPadding((32 * density).toInt(), (8 * density).toInt(), (32 * density).toInt(), 0)
+            addView(
+                image,
+                android.widget.LinearLayout.LayoutParams(
+                    (240 * density).toInt(),
+                    (240 * density).toInt(),
+                ),
+            )
+            addView(hint)
+        }
+
+        var polling = true
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.subscription_qr_title)
+            .setView(container)
+            .setNegativeButton(R.string.close, null)
+            .setOnDismissListener { polling = false }
+            .create()
+        dialog.show()
+
+        lifecycleScope.launch {
+            val deadline = System.currentTimeMillis() + QR_POLL_TIMEOUT_MS
+            while (polling && System.currentTimeMillis() < deadline) {
+                delay(QR_POLL_INTERVAL_MS)
+                if (!polling) break
+                val token = session.accessToken() ?: break
+                val updated = runCatching { fetchOverview(token) }.getOrNull() ?: continue
+                if (updated.hasAccess && updated.status == "active") {
+                    polling = false
+                    overview = updated
+                    render(updated)
+                    if (!isFinishing && !isDestroyed) {
+                        dialog.dismiss()
+                        Toast.makeText(
+                            this@SubscriptionActivity,
+                            R.string.subscription_qr_activated,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    break
+                }
             }
         }
     }
@@ -432,5 +519,11 @@ class SubscriptionActivity : AppCompatActivity() {
         } catch (e: Exception) {
             null
         }
+    }
+
+    private companion object {
+        /** QR na TV: consulta a cada 5 s por ate 10 min. */
+        const val QR_POLL_INTERVAL_MS = 5_000L
+        const val QR_POLL_TIMEOUT_MS = 10 * 60 * 1000L
     }
 }
