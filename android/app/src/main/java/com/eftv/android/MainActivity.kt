@@ -134,6 +134,9 @@ class MainActivity : AppCompatActivity() {
         // com o app. Assim que ele responder, o player passa a abrir os canais
         // pelo proxy — necessario em operadoras que bloqueiam o DNS do
         // provedor nos dados moveis. Vale para todos os aparelhos.
+        // A chamada aqui tambem cobre o caso em que o Android recusou iniciar
+        // o servico com o app ainda em segundo plano.
+        EftvServerService.start(this)
         lifecycleScope.launch {
             LocalServer.waitUntilReady(timeoutMs = 30_000)
         }

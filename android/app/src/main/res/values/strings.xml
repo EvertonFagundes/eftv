@@ -223,9 +223,6 @@
         <item quantity="other">%d dias restantes</item>
     </plurals>
 
-    <string name="server_channel_name">Servidor local</string>
-    <string name="server_notification_title">EFTV</string>
-    <string name="server_notification_text">Servidor local na porta %1$d</string>
     <string name="server_not_ready">O servidor local ainda está iniciando. Tente novamente em alguns segundos.</string>
     <string name="server_no_playlist">Nenhuma playlist configurada.\n\nToque em ⋮ → Adicionar playlist e cole o link .m3u do seu provedor. Depois toque em Atualizar.</string>
     <string name="add_playlist">Adicionar playlist</string>

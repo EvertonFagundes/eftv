@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.4.1** (`versionCode 16`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.4.2** (`versionCode 17`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -15,7 +15,7 @@ Media3/ExoPlayer 1.3.1 · Kotlin.
 ```
 android/app/src/main/java/com/eftv/android/
 ├── EftvApplication.kt      # startup, Timber, crash reporter
-├── EftvServerService.kt    # servidor local em primeiro plano (proxy + catalogo)
+├── EftvServerService.kt    # servidor local (proxy + catálogo), sem notificação
 ├── LoginActivity.kt        # login, cadastro, verificação de e-mail, recuperação
 ├── EmailVerificationActivity.kt
 ├── MainActivity.kt         # catálogo, abas, busca, categorias, atualização
@@ -240,6 +240,9 @@ longo) e publicar em Google Play / Amazon Appstore. Detalhes em `docs/TV.md`.
 - Distribuição por APK: atualização automática depende de `APP_APK_URL` no Render.
 - Sem Play Store: sem cobrança pela loja e sem instalação automática.
 - O servidor local embutido (proxy) existe para contornar bloqueio de DNS em
-  dados móveis; em TV box ele sobe igual.
+  dados móveis; em TV box ele sobe igual. Desde a 1.4.2 ele **não** é mais um
+  serviço de primeiro plano, então não aparece notificação fixa — em troca, o
+  Android pode encerrá-lo junto com o app muito tempo em segundo plano (ele
+  volta quando o app abre).
 - Sem EPG, zapping por número, legendas embutidas do provedor e PIN infantil
   (dependem dos dados do provedor).
