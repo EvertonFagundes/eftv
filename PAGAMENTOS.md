@@ -45,6 +45,26 @@ Esperado: `status: "active"`, `has_access: true`, `payment_method`,
 5. Se ficou `pending` por mais de 5 minutos: botão **Atualizar status** e
    olhar os logs do Render (`sync`, `Webhook`, `conciliac`).
 
+## Cancelamento
+
+- App: Minha assinatura → **Cancelar** → `POST /subscriptions/{id}/cancel`.
+- O backend grava `cancel_at_period_end` **e cancela no Mercado Pago**
+  (`PUT /preapproval/{id}` com `status=cancelled`). Se a chamada ao MP falhar,
+  o cancelamento local segue valendo e o erro vai para os logs.
+- Quem cancelou **mantém o acesso até o fim do período pago** (não corta na
+  hora). Ao vencer, o verificador marca `cancelled` e **não renova**, mesmo
+  que o MP ainda diga `authorized`.
+- Webhook de preapproval `cancelled` também preserva o acesso restante.
+
+## Painel admin (suporte)
+
+| Endpoint | Uso |
+|---|---|
+| `GET /admin/payments` | "O cliente pagou?" — cobranças com e-mail, status e id do MP |
+| `GET /admin/users/{id}` | Usuário + assinaturas + **cobranças** + aparelhos |
+| `POST /admin/subscriptions/{id}/sync` | Concilia na hora com o MP (cliente pagou e não liberou) |
+| `GET /admin/stats` | Totais: usuários, assinaturas ativas |
+
 ## Checagens de saúde
 
 - `https://eftv.onrender.com/health` → `mercadopago_configured: true`,
