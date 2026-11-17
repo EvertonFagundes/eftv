@@ -57,9 +57,47 @@ descobre antes de nós.
 
 ---
 
-## Pendência de produto
+## No backend (`GET /admin/playlist/expiry`)
 
-Hoje nem o app nem o backend conhecem essa data. Ideia registrada: o backend
-consultar o `player_api.php` **uma vez por dia**, guardar `exp_date` e avisar o
-admin (e-mail/painel) alguns dias antes do vencimento, para renovar antes de o
-serviço cair. Enquanto isso não existe, a checagem é manual pelo item 1.
+Implementado em `app/services/playlist_expiry.py`. O endpoint:
+
+1. troca `get.php` por `player_api.php` mantendo usuário/senha e lê
+   `user_info.exp_date`, `status`, `max_connections` e `is_trial`;
+2. se a API de conta falhar, baixa o início do `.m3u` e procura
+   `VENCIMENTO`/`Validade: dd/mm/aaaa`;
+3. guarda o resultado em memória por **6 horas** (`?refresh=true` ignora);
+4. devolve apenas o host do provedor — nunca usuário, senha ou URL completa.
+
+```
+GET https://eftv.onrender.com/admin/playlist/expiry
+Authorization: Bearer <token de admin>
+```
+
+```json
+{
+  "expires_at": "2026-12-31T23:59:00Z",
+  "days_remaining": 44,
+  "expired": false,
+  "active": true,
+  "status": "Active",
+  "max_connections": 2,
+  "is_trial": false,
+  "source": "player_api",
+  "provider_host": "pthdtv.top",
+  "error": null,
+  "from_cache": false
+}
+```
+
+**Restrito** a `evertonfagundes1510@gmail.com` (ajustável por
+`PLAYLIST_EXPIRY_EMAILS`, lista separada por vírgula). Qualquer outro admin
+recebe `403`; sem `IPTV_PLAYLIST_URL` no servidor, `503`.
+
+## Pendência conhecida
+
+- O endpoint depende do `IPTV_PLAYLIST_URL` configurado no Render. Enquanto o
+  provedor estiver com DNS fora do ar, a resposta vem `source: "unavailable"`
+  com o motivo em `error` — é diagnóstico, não vencimento.
+- Aviso automático por e-mail alguns dias antes do vencimento ainda não existe:
+  por ora a data aparece no painel quando consultada.
+

@@ -90,7 +90,9 @@ O arquivo [`render.yaml`](../render.yaml) ja descreve a API e o banco.
 2. Confirme o servico `eftv-api` e o banco `eftv-db`.
 3. O Render vai pedir os valores marcados com `sync: false`:
    - `IPTV_PLAYLIST_URL` - URL licenciada do provedor;
-   - `IPTV_PLAYLIST_REFERER` - so se o provedor exigir.
+   - `IPTV_PLAYLIST_REFERER` - so se o provedor exigir;
+   - `PLAYLIST_EXPIRY_EMAILS` - opcional; contas que podem ver o vencimento no
+     painel admin (padrao `evertonfagundes1510@gmail.com`).
 4. Clique em **Apply**. O primeiro deploy roda `alembic upgrade head`
    automaticamente antes de subir a API.
 

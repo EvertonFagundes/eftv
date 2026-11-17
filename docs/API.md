@@ -102,12 +102,26 @@ Rotas de criação/edição de plano, canal e categoria exigem admin.
 | GET | `/admin/payments` | "o cliente pagou?" |
 | GET | `/admin/crashes` | travamentos relatados pelo app |
 | GET | `/admin/streams` | quem está assistindo agora (limite de telas) |
+| GET | `/admin/playlist/expiry` | vencimento da playlist licenciada (restrito ao dono) |
 | POST | `/admin/subscriptions/{id}/sync` | concilia na hora com o MP |
 | POST | `/admin/users/{id}/devices/revoke` | libera aparelhos do cliente |
 | PATCH | `/admin/users/{id}/toggle-admin` | promove/remove admin |
 | PATCH | `/admin/users/{id}/toggle-active` | bloqueia/desbloqueia conta |
 | POST | `/admin/users/{id}/make-owner` | transfere a propriedade |
 | POST | `/admin/claim-ownership` | primeiro admin |
+
+### `GET /admin/playlist/expiry`
+
+Consulta o `player_api.php` derivado de `IPTV_PLAYLIST_URL` e devolve
+`expires_at`, `days_remaining`, `status`, `max_connections` e `is_trial`.
+Se a API de conta falhar, tenta ler "VENCIMENTO/Validade" no próprio `.m3u`.
+Resposta com cache de 6 h; `?refresh=true` força nova consulta.
+
+**Restrito** às contas listadas em `PLAYLIST_EXPIRY_EMAILS` (padrão:
+`evertonfagundes1510@gmail.com`) — outro admin recebe `403`. Sem
+`IPTV_PLAYLIST_URL` a resposta é `503`. A URL do provedor (usuário/senha)
+nunca aparece: só `provider_host`. Detalhes em
+[`PLAYLIST-VENCIMENTO.md`](PLAYLIST-VENCIMENTO.md).
 
 ---
 

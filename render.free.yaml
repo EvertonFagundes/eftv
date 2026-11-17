@@ -52,6 +52,11 @@ services:
         sync: false
       - key: IPTV_PLAYLIST_REFRESH_SECONDS
         value: "300"
+      # Vencimento da playlist: consulta no provedor, visivel so para o dono.
+      - key: PLAYLIST_EXPIRY_EMAILS
+        value: evertonfagundes1510@gmail.com
+      - key: PLAYLIST_EXPIRY_CACHE_SECONDS
+        value: "21600"
       - key: OFFLINE_GRACE_MINUTES
         value: "720"
       - key: MAX_DEVICES_PER_SUBSCRIPTION

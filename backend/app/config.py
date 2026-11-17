@@ -120,6 +120,12 @@ class Settings(BaseSettings):
     IPTV_PLAYLIST_REFERER: str | None = None
     # De quanto em quanto tempo o app deve revalidar o acesso
     IPTV_PLAYLIST_REFRESH_SECONDS: int = 300
+    # Consulta do vencimento da playlist no provedor (painel admin). Restrita
+    # as contas abaixo: e dado do contrato, nao do assinante. Lista separada
+    # por virgula.
+    PLAYLIST_EXPIRY_EMAILS: str = "evertonfagundes1510@gmail.com"
+    PLAYLIST_EXPIRY_CACHE_SECONDS: int = 6 * 60 * 60
+    PLAYLIST_EXPIRY_TIMEOUT_SECONDS: float = 20.0
     # Tolerancia offline: usa o catalogo salvo mesmo sem falar com o servidor
     OFFLINE_GRACE_MINUTES: int = 720
     # Limite de aparelhos quando o plano nao define um valor proprio
@@ -215,6 +221,13 @@ class Settings(BaseSettings):
                     return _clean_origins([str(item) for item in values])
 
         return _clean_origins(raw.split(","))
+
+    @property
+    def playlist_expiry_emails(self) -> set[str]:
+        """Contas autorizadas a ver o vencimento da playlist licenciada."""
+        return {
+            item.strip().lower() for item in self.PLAYLIST_EXPIRY_EMAILS.split(",") if item.strip()
+        }
 
 
 @lru_cache

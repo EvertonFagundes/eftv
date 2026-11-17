@@ -20,6 +20,7 @@ from app.security.dependencies import get_current_user, require_admin
 from app.services.devices import revoke_all_devices
 from app.services.mercadopago import sync_preapproval
 from app.services.plans import get_or_create_plan
+from app.services.playlist_expiry import check_playlist_expiry
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -115,6 +116,41 @@ async def get_stats(db: AsyncSession = Depends(get_db), _: User = Depends(requir
         "channels": {"total": total_channels, "active": active_channels},
         "categories": total_categories,
     }
+
+
+@router.get("/playlist/expiry")
+async def get_playlist_expiry(
+    refresh: bool = Query(False, description="Ignora o cache e consulta o provedor agora"),
+    user: User = Depends(require_admin),
+):
+    """Vencimento da playlist licenciada no provedor.
+
+    Restrito de proposito: a data e a quantidade de conexoes fazem parte do
+    contrato do EFTV com o provedor, nao do painel do assinante. Para as
+    demais contas admin a rota responde 403. A URL da playlist (com usuario e
+    senha) nunca aparece na resposta.
+    """
+    email = (user.email or "").strip().lower()
+    if email not in settings.playlist_expiry_emails:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vencimento da playlist restrito ao responsavel pela conta",
+        )
+    if not settings.IPTV_PLAYLIST_URL:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Playlist ainda nao configurada no servidor",
+        )
+
+    result = await check_playlist_expiry(
+        settings.IPTV_PLAYLIST_URL,
+        user_agent=settings.IPTV_PLAYLIST_USER_AGENT,
+        referer=settings.IPTV_PLAYLIST_REFERER,
+        force=refresh,
+    )
+    payload = result.to_dict()
+    payload["cache_seconds"] = settings.PLAYLIST_EXPIRY_CACHE_SECONDS
+    return payload
 
 
 @router.get("/users")
