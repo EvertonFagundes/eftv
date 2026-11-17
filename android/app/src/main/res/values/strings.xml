@@ -43,6 +43,13 @@
     <string name="player_tracks_title">Escolher %1$s</string>
     <string name="player_no_audio_options">Este canal tem apenas um áudio.</string>
     <string name="player_no_quality_options">Este canal não permite trocar a qualidade.</string>
+    <string name="stream_limit_title">Limite de telas</string>
+    <string name="stream_limit_message">Sua assinatura permite 1 tela por vez. Feche o EFTV no outro aparelho para assistir aqui.</string>
+    <string name="stream_limit_ok">Entendi</string>
+    <string name="update_available_title">Nova versão disponível</string>
+    <string name="update_available_message">A versão %1$s do EFTV está disponível. Atualize para receber as correções e novidades.</string>
+    <string name="update_now">Atualizar</string>
+    <string name="update_later">Depois</string>
     <string name="player_error_title">Não foi possível reproduzir</string>
     <string name="player_error_detail">%1$s\n\n%2$s</string>
     <string name="reconnecting_attempt">Reconectando… (tentativa %1$d)</string>

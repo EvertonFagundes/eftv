@@ -122,6 +122,53 @@ class MainActivity : AppCompatActivity() {
         }
 
         startCatalog()
+        checkForUpdates()
+    }
+
+    /**
+     * Atualizacao do app distribuido por APK.
+     *
+     * Sem isso cada correcao exigia reinstalar aparelho por aparelho. A
+     * consulta e feita no maximo uma vez por dia e some quando o servidor
+     * ainda nao tem APK publicado.
+     */
+    private fun checkForUpdates() {
+        val prefs = getSharedPreferences(UPDATE_PREFS, MODE_PRIVATE)
+        val lastCheck = prefs.getLong(UPDATE_LAST_CHECK, 0L)
+        val now = System.currentTimeMillis()
+        if (now - lastCheck < UPDATE_CHECK_INTERVAL_MS) return
+        prefs.edit().putLong(UPDATE_LAST_CHECK, now).apply()
+
+        lifecycleScope.launch {
+            val info = runCatching { api.appVersion() }.getOrNull() ?: return@launch
+            if (!info.configured || info.apkUrl.isBlank()) return@launch
+            if (info.versionCode <= BuildConfig.VERSION_CODE) return@launch
+            if (isFinishing || isDestroyed) return@launch
+            showUpdateDialog(info)
+        }
+    }
+
+    private fun showUpdateDialog(info: EftvApi.AppVersionInfo) {
+        val message = buildString {
+            append(getString(R.string.update_available_message, info.versionName))
+            if (info.notes.isNotBlank()) {
+                append("\n\n")
+                append(info.notes)
+            }
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.update_available_title)
+            .setMessage(message)
+            .setCancelable(!info.mandatory)
+            .setPositiveButton(R.string.update_now) { _, _ ->
+                runCatching {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.apkUrl)))
+                }
+            }
+        if (!info.mandatory) {
+            dialog.setNegativeButton(R.string.update_later, null)
+        }
+        dialog.show()
     }
 
     override fun onResume() {
@@ -1226,6 +1273,11 @@ class MainActivity : AppCompatActivity() {
 
         /** Depois disso, o app tenta atualizar a lista em segundo plano. */
         private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
+
+        /** Atualizacao do app: consulta no maximo uma vez por dia. */
+        private const val UPDATE_PREFS = "eftv_updates"
+        private const val UPDATE_LAST_CHECK = "last_check"
+        private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }
 
     private class DeviceBlockedException(message: String) : Exception(message)

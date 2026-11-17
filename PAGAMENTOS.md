@@ -56,6 +56,63 @@ Esperado: `status: "active"`, `has_access: true`, `payment_method`,
   que o MP ainda diga `authorized`.
 - Webhook de preapproval `cancelled` também preserva o acesso restante.
 
+## Limite de telas (1 stream por conta)
+
+O plano vendido é de 2 aparelhos **e 1 tela por vez**. O limite é aplicado no
+servidor, não no app:
+
+| Momento | Rota | Efeito |
+|---|---|---|
+| Abre o player | `POST /player/play` | Abre/reaproveita a sessão do aparelho; 403 `stream_limit` se já houver outra tela ativa |
+| Enquanto assiste | `POST /player/heartbeat` (a cada ~45 s) | Mantém a vaga; 409 `session_closed` encerra |
+| Sai do player | `POST /player/stop` | Libera a vaga na hora |
+| Esqueceu aberto / perdeu rede | tarefa horária | Sessão sem heartbeat por 120 s expira sozinha |
+
+- Trocar de canal no **mesmo** aparelho reaproveita a sessão (não gasta vaga).
+- Se a API falhar (rede/erro interno), o app **não bloqueia** a reprodução:
+  preferimos entregar o canal a punir o pagante por um erro nosso.
+- O banco guarda apenas o **hash** da URL do canal (`channel_ref`), nunca a URL
+  com as credenciais do provedor.
+
+## Atualização do app (fora da Play Store)
+
+O app consulta `GET /app/version` uma vez por dia. Para publicar uma versão:
+
+1. Suba o APK em algum lugar público (GitHub Releases serve) e copie a URL.
+2. No Render → Environment, ajuste:
+
+| Variável | Exemplo | Uso |
+|---|---|---|
+| `APP_LATEST_VERSION_CODE` | `11` | Tem que ser **maior** que o `versionCode` instalado |
+| `APP_LATEST_VERSION_NAME` | `1.1.9` | Texto mostrado no diálogo |
+| `APP_APK_URL` | `https://github.com/.../app-release.apk` | Link direto do arquivo |
+| `APP_UPDATE_NOTES` | `Correções no player` | Aparece abaixo da mensagem |
+| `APP_UPDATE_MANDATORY` | `false` | `true` = sem botão "Depois" |
+
+Sem `APP_APK_URL` (ou com code `0`) o endpoint devolve
+`update_available_from: false` e o app não pergunta nada.
+
+## Avisos automáticos por e-mail
+
+`send_lifecycle_emails` roda a cada 6 h:
+
+- **Teste acabando** (24 h antes): manda o link de assinatura. Marca
+  `subscriptions.trial_reminder_sent_at` para não repetir.
+- **Cartão recusado** (`past_due`): pede atualização do cartão. Marca
+  `payment_failed_notified_at`.
+- **Cancelamento**: e-mail na hora da rota, com a data até quando o acesso vale.
+
+Se o provedor de e-mail falhar, a marca **não** é gravada: o aviso tenta de
+novo no próximo ciclo.
+
+## Erros e travamentos do app
+
+- App: handler global envia `POST /app/crashes` (versão, aparelho, Android,
+  stacktrace). Tempo máximo de espera: 2 s, para não travar o fechamento.
+- Backend: grava em `client_errors` e escreve um `WARNING` no log.
+- Suporte: `GET /admin/crashes?page=1&page_size=20` (admin).
+- Desligar sem deploy: `CLIENT_ERRORS_ENABLED=false`.
+
 ## Painel admin (suporte)
 
 | Endpoint | Uso |
@@ -64,6 +121,7 @@ Esperado: `status: "active"`, `has_access: true`, `payment_method`,
 | `GET /admin/users/{id}` | Usuário + assinaturas + **cobranças** + aparelhos |
 | `POST /admin/subscriptions/{id}/sync` | Concilia na hora com o MP (cliente pagou e não liberou) |
 | `GET /admin/stats` | Totais: usuários, assinaturas ativas |
+| `GET /admin/crashes` | Travamentos relatados pelo app (mais recentes primeiro) |
 
 ## Checagens de saúde
 

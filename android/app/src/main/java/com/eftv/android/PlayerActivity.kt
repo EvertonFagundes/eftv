@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
@@ -31,11 +32,18 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.ChannelKind
+import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.LocalServer
 import com.eftv.android.data.AppScope
+import com.eftv.android.data.SessionStore
+import com.eftv.android.data.api.EftvApi
 import com.eftv.android.databinding.ActivityPlayerBinding
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
@@ -69,6 +77,16 @@ class PlayerActivity : AppCompatActivity() {
     private var lastProgressSaveAt = 0L
 
     private val catalog by lazy { CatalogStore.get(this) }
+
+    /** Sessao do assinante e API central (limite de telas e progresso). */
+    private val session by lazy { SessionStore(this) }
+    private val device by lazy { DeviceIdentity(this) }
+    private val api by lazy { EftvApi(deviceId = device.id, deviceName = device.name) }
+
+    /** Sessao de stream aberta no servidor: mantem a vaga desta tela. */
+    private var streamSessionId: String? = null
+    private var heartbeatJob: Job? = null
+    private var limitDialogShown = false
 
     /** Se o conteudo atual e ao vivo (true) ou sob demanda (false). */
     private var isLive = false
@@ -168,6 +186,9 @@ class PlayerActivity : AppCompatActivity() {
         super.onStart()
         stopped = false
         if (::binding.isInitialized && this::streamUrl.isInitialized && !isFinishing && !isDestroyed) {
+            // Registra a tela no servidor antes de tocar: e o que aplica o
+            // limite de 1 stream do plano.
+            startStreamSession()
             // Sempre (re)comeca do ponto ao vivo ao abrir/voltar para a tela.
             startPlayback()
         }
@@ -185,6 +206,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         stopped = true
+        stopStreamSession()
         releasePlayer()
     }
 
@@ -820,6 +842,116 @@ class PlayerActivity : AppCompatActivity() {
         player = null
     }
 
+    // ------------------------------------------------------------------
+    // Limite de telas (sessao de stream no servidor)
+    // ------------------------------------------------------------------
+
+    /**
+     * Registra no servidor que esta tela vai tocar.
+     *
+     * Se a conta ja estiver com todas as telas do plano em uso, o player fecha
+     * com explicacao — antes o plano prometia 1 tela e entregava quantas
+     * quisessem.
+     */
+    private fun startStreamSession() {
+        if (limitDialogShown) return
+        lifecycleScope.launch {
+            val token = authorizedToken() ?: return@launch
+            try {
+                val info = api.playStream(token, streamUrl, channelName)
+                streamSessionId = info.sessionId
+                startHeartbeat(info.heartbeatInSeconds)
+            } catch (e: EftvApi.ApiException) {
+                if (e.statusCode == 403 && e.errorCode == "stream_limit") {
+                    showStreamLimitDialog(e.detail)
+                } else {
+                    // Servidor fora do ar, erro interno, etc: nao bloqueia.
+                    // O app tem tolerancia offline e nao pode virar refem da API.
+                    Timber.w(e, "Sem registrar a sessao de stream")
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Sem registrar a sessao de stream")
+            }
+        }
+    }
+
+    /** Token valido; renova com o refresh quando o curto expirou. */
+    private suspend fun authorizedToken(): String? {
+        val token = session.accessToken() ?: return null
+        if (!session.isAccessTokenExpired()) return token
+        val refresh = session.refreshToken() ?: return null
+        return runCatching {
+            val tokens = api.refresh(refresh)
+            session.save(tokens, session.email().orEmpty(), session.isEmailVerified())
+            tokens.accessToken
+        }.getOrNull()
+    }
+
+    /** Heartbeat periodico: mantem a vaga desta tela enquanto o video toca. */
+    private fun startHeartbeat(intervalSeconds: Long) {
+        heartbeatJob?.cancel()
+        val interval = intervalSeconds.coerceAtLeast(15L) * 1000
+        heartbeatJob = lifecycleScope.launch {
+            while (isActive) {
+                delay(interval)
+                val id = streamSessionId ?: return@launch
+                val token = authorizedToken() ?: continue
+                try {
+                    api.heartbeatStream(token, id)
+                } catch (e: EftvApi.ApiException) {
+                    if (e.statusCode == 409) {
+                        // O servidor encerrou a sessao: nao insiste.
+                        streamSessionId = null
+                        return@launch
+                    }
+                } catch (_: Exception) {
+                    // Rede oscilou: o proximo ciclo tenta de novo.
+                }
+            }
+        }
+    }
+
+    /** Fecha a sessao e libera a vaga na hora em que o player fecha. */
+    private fun stopStreamSession() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+        val id = streamSessionId ?: return
+        streamSessionId = null
+        val token = session.accessToken() ?: return
+        AppScope.io.launch {
+            runCatching { api.stopStream(token, id) }
+        }
+    }
+
+    private fun showStreamLimitDialog(message: String) {
+        if (limitDialogShown || isFinishing || isDestroyed) return
+        limitDialogShown = true
+        player?.playWhenReady = false
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.stream_limit_title)
+            .setMessage(message.ifBlank { getString(R.string.stream_limit_message) })
+            .setCancelable(false)
+            .setPositiveButton(R.string.stream_limit_ok) { _, _ -> finish() }
+            .show()
+    }
+
+    /**
+     * Android TV / controle remoto: OK mostra os controles quando estao
+     * escondidos. Sem isso o assinante de TV fica sem menu nenhum.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isEnter = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+            event.keyCode == KeyEvent.KEYCODE_ENTER
+        if (event.action == KeyEvent.ACTION_DOWN && isEnter &&
+            binding.bottomControls.visibility != View.VISIBLE
+        ) {
+            showOverlay()
+            scheduleHideOverlay()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     private fun hideSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, binding.root)
@@ -835,6 +967,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         stopped = true
+        stopStreamSession()
         releasePlayer()
         super.onDestroy()
     }

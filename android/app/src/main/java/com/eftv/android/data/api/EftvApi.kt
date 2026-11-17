@@ -87,6 +87,24 @@ class EftvApi(
         val initPoint: String,
     )
 
+    /** Sessao de reproducao: quantas telas o plano permite e quando renovar. */
+    data class StreamSessionInfo(
+        val sessionId: String,
+        val limit: Int,
+        val active: Int,
+        val heartbeatInSeconds: Long,
+    )
+
+    /** Ultima versao publicada do app (atualizacao por APK). */
+    data class AppVersionInfo(
+        val versionCode: Int,
+        val versionName: String,
+        val apkUrl: String,
+        val notes: String,
+        val mandatory: Boolean,
+        val configured: Boolean,
+    )
+
     class ApiException(
         val statusCode: Int,
         val detail: String,
@@ -199,6 +217,68 @@ class EftvApi(
     suspend fun revokeAllDevices(accessToken: String): String {
         val json = request("POST", "/player/device/revoke-all", accessToken = accessToken)
         return json.optString("message", "")
+    }
+
+    /**
+     * Registra o inicio da reproducao e aplica o limite de telas do plano.
+     *
+     * Lanca `ApiException(403)` com `errorCode = "stream_limit"` quando a
+     * conta ja esta com todas as telas em uso.
+     */
+    suspend fun playStream(
+        accessToken: String,
+        channelUrl: String,
+        channelName: String?,
+    ): StreamSessionInfo {
+        val body = JSONObject().put("channel_url", channelUrl)
+        channelName?.takeIf { it.isNotBlank() }?.let { body.put("channel_name", it) }
+        val json = request("POST", "/player/play", accessToken = accessToken, body = body)
+        return StreamSessionInfo(
+            sessionId = json.optString("session_id"),
+            limit = json.optInt("limit", 1),
+            active = json.optInt("active", 1),
+            heartbeatInSeconds = json.optLong("heartbeat_in", 45L),
+        )
+    }
+
+    suspend fun heartbeatStream(accessToken: String, sessionId: String) {
+        val body = JSONObject().put("session_id", sessionId)
+        request("POST", "/player/heartbeat", accessToken = accessToken, body = body)
+    }
+
+    suspend fun stopStream(accessToken: String, sessionId: String) {
+        val body = JSONObject().put("session_id", sessionId)
+        request("POST", "/player/stop", accessToken = accessToken, body = body)
+    }
+
+    /** Ultima versao publicada (consulta sem login: o app pode estar bloqueado). */
+    suspend fun appVersion(): AppVersionInfo {
+        val json = request("GET", "/app/version")
+        return AppVersionInfo(
+            versionCode = json.optInt("version_code", 0),
+            versionName = json.optString("version_name", ""),
+            apkUrl = json.optString("apk_url", ""),
+            notes = json.optString("notes", ""),
+            mandatory = json.optBoolean("mandatory", false),
+            configured = json.optBoolean("update_available_from", false),
+        )
+    }
+
+    /** Envia um erro/travamento do app para o suporte (sem dados pessoais). */
+    suspend fun reportCrash(
+        message: String,
+        stacktrace: String,
+        appVersion: String,
+        device: String,
+        android: String,
+    ) {
+        val body = JSONObject()
+            .put("message", message.take(500))
+            .put("stacktrace", stacktrace.take(8000))
+            .put("app_version", appVersion)
+            .put("device", device)
+            .put("android", android)
+        request("POST", "/app/crashes", body = body)
     }
 
     /**
