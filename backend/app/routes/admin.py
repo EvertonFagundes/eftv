@@ -6,12 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.category import Category
 from app.models.channel import Channel
 from app.models.client_error import ClientError
 from app.models.device import SubscriptionDevice
 from app.models.payment import Payment
+from app.models.stream_session import StreamSession
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.security.dependencies import get_current_user, require_admin
@@ -315,6 +317,55 @@ async def list_client_errors(
         "total": total,
         "page": page,
         "page_size": page_size,
+    }
+
+
+@router.get("/streams")
+async def list_stream_sessions(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Quem esta assistindo agora (limite de telas).
+
+    Suporte usa para responder "esta dizendo que o plano e de 1 tela" sem
+    adivinhar: mostra a conta, o aparelho e o canal de cada sessao ativa.
+    """
+    now = datetime.now(UTC)
+    rows = (
+        await db.execute(
+            select(StreamSession, User)
+            .join(User, User.id == StreamSession.user_id)
+            .where(StreamSession.ended_at.is_(None))
+            .order_by(StreamSession.last_heartbeat.desc())
+            .limit(200)
+        )
+    ).all()
+
+    active = []
+    for session, user in rows:
+        last_heartbeat = session.last_heartbeat
+        if last_heartbeat.tzinfo is None:
+            last_heartbeat = last_heartbeat.replace(tzinfo=UTC)
+        alive = (now - last_heartbeat).total_seconds() <= settings.STREAM_SESSION_TIMEOUT_SECONDS
+        active.append(
+            {
+                "session_id": session.id,
+                "user_id": user.id,
+                "email": user.email,
+                "device_id": session.device_id,
+                "channel": session.channel_name,
+                "channel_ref": session.channel_ref,
+                "started_at": session.started_at,
+                "last_heartbeat": session.last_heartbeat,
+                # True = contando para o limite de telas agora.
+                "active": alive,
+            }
+        )
+
+    return {
+        "sessions": active,
+        "active_count": sum(1 for item in active if item["active"]),
+        "limit_seconds": settings.STREAM_SESSION_TIMEOUT_SECONDS,
     }
 
 
