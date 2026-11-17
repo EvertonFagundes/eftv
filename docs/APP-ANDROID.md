@@ -1,0 +1,204 @@
+# EFTV Android — documentação técnica
+
+App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
+Versão atual: **1.2.0** (`versionCode 12`) · `minSdk 24` · `targetSdk 34` ·
+Media3/ExoPlayer 1.3.1 · Kotlin.
+
+> Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
+> da playlist licenciada que o backend entrega. Trocar a URL do provedor não
+> exige novo APK.
+
+---
+
+## 1. Estrutura do código
+
+```
+android/app/src/main/java/com/eftv/android/
+├── EftvApplication.kt      # startup, Timber, crash reporter
+├── EftvServerService.kt    # servidor local em primeiro plano (proxy + catalogo)
+├── LoginActivity.kt        # login, cadastro, verificação de e-mail, recuperação
+├── EmailVerificationActivity.kt
+├── MainActivity.kt         # catálogo, abas, busca, categorias, atualização
+├── CategoriesActivity.kt   # escolha de categoria com busca e contagem (1.2.0)
+├── SeriesActivity.kt       # temporadas/episódios
+├── PlayerActivity.kt       # player, sessão de stream, áudio/qualidade
+├── SubscriptionActivity.kt # plano, status, assinar, cancelar
+├── SettingsActivity.kt     # configurações (inclui conteúdo adulto)
+├── data/
+│   ├── api/EftvApi.kt      # cliente HTTP do backend (sem libs externas)
+│   ├── CatalogStore.kt     # SQLite do catálogo, favoritos, histórico, progresso
+│   ├── PlaylistRepository.kt
+│   ├── SessionStore.kt     # tokens (access/refresh) + e-mail
+│   ├── DeviceIdentity.kt   # id do aparelho (hash do ANDROID_ID)
+│   └── LocalServer.kt / PlaylistConfig.kt
+├── ui/                     # adapters e views
+└── res/                    # layouts, strings, tema
+```
+
+Bibliotecas: `core-ktx`, `appcompat`, Material 3, `recyclerview`, `swiperefresh`,
+`media3` (exoplayer + hls + ui), Coil (capas), coroutines, Timber, Chaquopy
+(Python embutido no servidor local).
+
+---
+
+## 2. Login e sessão
+
+1. `LoginActivity` → `POST /auth/login` → guarda **access** (15 min) e **refresh**
+   (dias) em `SessionStore` (SharedPreferences privado).
+2. E-mail novo → `POST /auth/register` → 7 dias de teste após confirmar o e-mail
+   (`verify-email.html` ou deep link `eftv://verify-email?token=...`).
+3. Quando o access expira, o app renova sozinho com `POST /auth/refresh`
+   (`tryRefresh()` em `MainActivity`, `SubscriptionActivity` e `PlayerActivity`).
+4. Recuperação de senha: `POST /auth/forgot-password` + `POST /auth/reset-password`
+   com código por e-mail.
+
+**Aparelhos:** toda requisição autenticada leva `X-Device-Id`
+(hash do `ANDROID_ID` — estável entre reinstalações, sem IMEI). O plano permite
+2 aparelhos; `GET /player/device` mostra o status e há "desvincular aparelhos"
+(`POST /player/device/revoke-all`).
+
+**TV:** o backend já expõe login por código (`/auth/device-code`,
+`/auth/device-code/poll`, `/auth/device-code/approve`) para o dia em que a tela
+de TV pedir o código. Ver `docs/TV.md`.
+
+---
+
+## 3. Catálogo e navegação
+
+- `PlaylistRepository.refresh()` baixa o catálogo autorizado e grava no SQLite
+  (`CatalogStore`) — útil offline e para abrir o app rápido.
+- Cache válido por 6 h; depois o app atualiza em segundo plano
+  (`swipeRefresh` para puxar na hora).
+- **Abas**: Ao Vivo / Filmes / Séries. Canais em lista; filmes e séries em grade
+  de capas.
+- **Busca**: nome do canal **e** nome do grupo, sem acento/maiúsculas
+  (`name_key`, `group_key`), com *debounce* de 250 ms.
+- **Categorias (1.2.0)**: o botão abre `CategoriesActivity` — cartões com ícone,
+  nome e **quantidade de itens**, busca dentro das categorias, destaque da atual.
+  Substituiu o menu suspenso que empilhava dezenas de grupos sem contexto.
+- **Barra A-Z (1.2.0)**: `AlphabetIndexView` na lateral da lista ao vivo
+  (aparece com 80+ itens, escondida na TV). Tocar/arrastar pula para a primeira
+  letra via `CatalogStore.firstIndexForLetter` — resolve "rolar 2 mil canais".
+- **Continuar assistindo**: carrossel com filmes/séries em andamento
+  (progresso salvo a cada 5 s).
+- **Favoritos** e **Recentes** aparecem como categorias quando têm itens.
+- **Conteúdo adulto**: liberado em Configurações; enquanto desligado, grupos e
+  itens adultos são filtrados no SQL e nas categorias
+  (`ChannelKind.ADULT_GROUP_KEYWORDS`).
+
+---
+
+## 4. Player
+
+`PlayerActivity` (Media3/ExoPlayer, HLS):
+
+- Buffer 15–40 s; até 6 recarregamentos e 2 *soft recoveries*.
+- Ao vivo: retoma no ponto ao vivo (offset 8 s) em vez de voltar ao início.
+- Filmes/séries: "Continuar assistindo" (não retoma nos primeiros 5 s nem nos
+  últimos 10 s) e grava progresso a cada 5 s.
+- Controles: play/pause, seek 10 s, faixa de progresso, **áudio** e
+  **qualidade** (`TrackSelectionDialogBuilder`), legenda quando o stream oferece.
+- Controle remoto de TV: **OK** mostra os controles quando estão escondidos.
+- Fechar o player não trava a interface: a liberação da vaga de stream roda fora
+  da thread principal.
+
+### Limite de 1 tela (aplicado no servidor)
+
+| Momento | Chamada | Efeito |
+|---|---|---|
+| Abre o player | `POST /player/play` | abre/reaproveita a sessão do aparelho; se outra tela está ativa → **403 `stream_limit`** e diálogo explicativo |
+| Assistindo | `POST /player/heartbeat` (~45 s) | renova a vaga; `409 session_closed` encerra |
+| Sai do player | `POST /player/stop` | libera a vaga na hora |
+| Esqueceu aberto | tarefa horária no backend | expira em 120 s sem heartbeat |
+
+Se a API falhar (rede/erro), o app **não bloqueia** a reprodução.
+O banco guarda só o hash da URL do canal, nunca a URL do provedor.
+
+---
+
+## 5. Assinatura e pagamento
+
+- `SubscriptionActivity` = "Minha assinatura": status, dias restantes,
+  pagamento (bandeira + últimos 4), **Assinar**, **Cancelar**, "Atualizar status".
+- Checkout: `POST /subscriptions/checkout` → abre `init_point` no navegador.
+  Só **cartão de crédito**; R$ 19,90/mês; 2 aparelhos e 1 tela.
+- Volta do navegador: deep link **`eftv://open`** reabre o app.
+- Conciliação do Mercado Pago roda a cada 5 min no backend e também ao abrir a
+  tela — o webhook é otimização, não dependência.
+- Cancelamento mantém o acesso até o fim do período pago.
+
+Ver `PAGAMENTOS.md` para o runbook completo.
+
+---
+
+## 6. Atualização e telemetria
+
+**Atualização (fora da Play Store):** `GET /app/version` é consultado no máximo
+1×/dia (SharedPreferences `eftv_updates`). Se `APP_APK_URL` estiver configurado no
+Render e o `versionCode` for maior, aparece o diálogo (obrigatório ou com
+"Depois"). Sem `APP_APK_URL` o app não pergunta nada.
+
+**Erros/travamentos:** handler global em `EftvApplication` envia
+`POST /app/crashes` (versão, aparelho, Android, stacktrace; espera máx. 2 s).
+Suporte lê em `GET /admin/crashes`.
+
+---
+
+## 7. Build, assinatura e instalação
+
+Pré-requisitos: JDK 17, Android SDK 34, Python 3 (Chaquopy).
+
+```bat
+cd C:\Users\evert\eftv\android
+.\gradlew.bat assembleRelease
+```
+
+- APK: `android\app\build\outputs\apk\release\app-release.apk`
+- Conferir versão: `aapt dump badging app-release.apk | findstr version`
+- Ao publicar: **suba `versionCode` e `versionName`** em `app/build.gradle.kts`.
+
+**Keystore (nunca no Git):** `android/eftv-release.jks` + `android/keystore.properties`.
+Backup em `Documents\EFTV-keystore-backup*` **e na nuvem** — sem essa chave não há
+como atualizar quem já instalou.
+
+**Instalar por USB:**
+
+```bat
+adb devices
+adb install -r android\app\build\outputs\apk\release\app-release.apk
+adb shell dumpsys package com.eftv.android | findstr version
+```
+
+`INSTALL_FAILED_USER_RESTRICTED` (Xiaomi): aceitar no aparelho e repetir o
+`adb install -r`.
+
+**Logs/erros:**
+
+```bat
+adb logcat -d -b crash
+adb exec-out screencap -p > tela.png
+```
+
+---
+
+## 8. Android TV / Fire TV
+
+Já habilitado no manifest: `LEANBACK_LAUNCHER`, `android:banner`, touchscreen
+opcional, `uses-feature` de TV. O mesmo APK serve celular e TV.
+
+O que ainda falta na TV (fase 1, ver `docs/TV.md`):
+1. tela de login com **código** em vez de teclado;
+2. assinatura por **QR code** (pagar no celular);
+3. revisão de foco/10-foot UI (cartões, listas, configurações acessíveis sem
+   toque longo).
+
+---
+
+## 9. Limitações conhecidas
+
+- Distribuição por APK: atualização automática depende de `APP_APK_URL` no Render.
+- Sem Play Store: sem cobrança pela loja e sem instalação automática.
+- O servidor local embutido (proxy) existe para contornar bloqueio de DNS em
+  dados móveis; em TV box ele sobe igual.
+- Sem EPG, zapping por número, legendas embutidas do provedor e PIN infantil
+  (dependem dos dados do provedor).

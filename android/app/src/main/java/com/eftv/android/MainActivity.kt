@@ -13,9 +13,9 @@ import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
-import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
@@ -34,7 +34,7 @@ import com.eftv.android.data.SessionStore
 import com.eftv.android.data.api.EftvApi
 import com.eftv.android.data.normalizedForSearch
 import com.eftv.android.databinding.ActivityMainBinding
-import com.eftv.android.ui.CategoryAdapter
+import com.eftv.android.ui.CategoryGridAdapter
 import com.eftv.android.ui.ChannelAdapter
 import com.eftv.android.ui.ContinueAdapter
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -65,13 +65,29 @@ class MainActivity : AppCompatActivity() {
     private val continueAdapter = ContinueAdapter(::openPlayer)
 
     private var selectedKind = ChannelKind.LIVE
-    private var selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL)
+    private var selectedCategory = CategoryGridAdapter.Selection(label = "")
     private var selectedMode = ChannelMode.ALL
     private var selectedGroup: String? = null
     private var catalogMetadata: CatalogStore.Metadata? = null
 
-    // Categorias para o dropdown
-    private var categoryItems: List<CategoryAdapter.Category> = emptyList()
+    /** Tela de categorias: devolve a escolha (grupo/modo) para a lista. */
+    private val categoryPicker = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        val data = result.data ?: return@registerForActivityResult
+        val label = data.getStringExtra(CategoriesActivity.RESULT_LABEL) ?: return@registerForActivityResult
+        val mode = data.getStringExtra(CategoriesActivity.RESULT_MODE)
+            ?.let { runCatching { ChannelMode.valueOf(it) }.getOrNull() }
+            ?: ChannelMode.ALL
+        onCategorySelected(
+            CategoryGridAdapter.Selection(
+                label = label,
+                mode = mode,
+                group = data.getStringExtra(CategoriesActivity.RESULT_GROUP),
+            ),
+        )
+    }
 
     /** Aparelho barrado pelo servidor: nao mostra nem usa o catalogo local. */
     private var deviceBlocked = false
@@ -189,7 +205,7 @@ class MainActivity : AppCompatActivity() {
         adultEnabled = enabled
 
         if (adultChanged) {
-            // Preferencia mudou: reconstroi o dropdown e recarrega a lista
+            // Preferencia mudou: recarrega a lista (e o filtro de categorias)
             // sem reiniciar o app.
             lifecycleScope.launch {
                 val kind = selectedKind
@@ -197,7 +213,6 @@ class MainActivity : AppCompatActivity() {
                     repository.catalogStore.groups(kind)
                 }
                 if (selectedKind != kind) return@launch
-                rebuildCategoryItems(groups)
 
                 // A opcao so tem efeito se a playlist trouxer canais adultos.
                 if (enabled && groups.none { ChannelKind.isAdultGroup(it) }) {
@@ -364,15 +379,9 @@ class MainActivity : AppCompatActivity() {
                 binding.categoryButton.text = selectedCategory.label
 
                 if (!::repository.isInitialized || !hasCatalog) return
-                lifecycleScope.launch {
-                    val groups = withContext(Dispatchers.IO) {
-                        repository.catalogStore.groups(kind)
-                    }
-                    if (selectedKind != kind) return@launch
-                    rebuildCategoryItems(groups)
-                    binding.categoryButton.text = selectedCategory.label
-                    filterChannels(debounce = 0)
-                }
+                // O botao mostra a categoria (sempre "Todos" ao trocar de aba).
+                binding.categoryButton.text = selectedCategory.label
+                filterChannels(debounce = 0)
                 refreshContinueWatching()
             }
 
@@ -399,18 +408,70 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupCategoryButton() {
-        binding.categoryButton.setOnClickListener { view ->
-            val popup = PopupMenu(this, view)
-            categoryItems.forEachIndexed { index, category ->
-                popup.menu.add(0, index, index, category.label)
-            }
-            popup.setOnMenuItemClickListener { item ->
-                val category = categoryItems[item.itemId]
-                onCategorySelected(category)
-                true
-            }
-            popup.show()
+        binding.categoryButton.setOnClickListener {
+            openCategoryPicker()
         }
+        setupAlphabetBar()
+    }
+
+    /**
+     * Barra A-Z: em 2 mil canais, achar "S" arrastando a lista nao funciona.
+     * So aparece na lista de canais ao vivo, fora da TV (la quem navega e o
+     * controle remoto, e o foco ja resolve).
+     */
+    private fun setupAlphabetBar() {
+        binding.alphabetBar.onLetterPicked = ::jumpToLetter
+    }
+
+    private fun jumpToLetter(letter: Char) {
+        if (!::repository.isInitialized) return
+        if (letter == '#') {
+            binding.channelList.scrollToPosition(0)
+            return
+        }
+        val group = selectedGroup
+        val query = searchQuery.normalizedForSearch()
+        val mode = selectedMode
+        val kind = selectedKind
+        val excludeAdults = shouldExcludeAdults()
+
+        lifecycleScope.launch {
+            val index = withContext(Dispatchers.IO) {
+                repository.catalogStore.firstIndexForLetter(
+                    group = group,
+                    query = query,
+                    mode = mode,
+                    kind = kind,
+                    excludeAdults = excludeAdults,
+                    letter = letter.lowercaseChar(),
+                )
+            }
+            if (index >= 0) {
+                (binding.channelList.layoutManager as? LinearLayoutManager)
+                    ?.scrollToPositionWithOffset(index, 0)
+                    ?: binding.channelList.scrollToPosition(index)
+            }
+        }
+    }
+
+    private fun updateAlphabetBar(total: Int) {
+        val groupedSeries = selectedKind == ChannelKind.SERIES && selectedMode == ChannelMode.ALL
+        val visible = !isTelevision &&
+            selectedKind == ChannelKind.LIVE &&
+            !groupedSeries &&
+            binding.channelList.layoutManager is LinearLayoutManager &&
+            total >= ALPHABET_MIN_ITEMS
+        binding.alphabetBar.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    /** Abre a tela de categorias do tipo ativo (canais, filmes ou series). */
+    private fun openCategoryPicker() {
+        if (!hasCatalog) return
+        val intent = Intent(this, CategoriesActivity::class.java)
+            .putExtra(CategoriesActivity.EXTRA_KIND, selectedKind.name)
+            .putExtra(CategoriesActivity.EXTRA_MODE, selectedMode.name)
+            .putExtra(CategoriesActivity.EXTRA_GROUP, selectedGroup)
+        categoryPicker.launch(intent)
     }
 
     private fun setupSearch() {
@@ -727,10 +788,6 @@ class MainActivity : AppCompatActivity() {
         deviceBlocked = false
         subscriptionBlocked = false
 
-        val groups = withContext(Dispatchers.IO) {
-            repository.catalogStore.groups(selectedKind)
-        }
-        rebuildCategoryItems(groups)
         resetCategorySelection()
 
         binding.categoryButton.text = selectedCategory.label
@@ -745,29 +802,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Monta as categorias do dropdown do tipo ativo.
-     * Grupos adultos so entram quando liberados nas configuracoes.
+     * Reinicia a selecao de categoria.
+     * Grupos adultos so aparecem quando liberados nas configuracoes.
      */
-    private fun rebuildCategoryItems(groups: List<String>) {
-        val showAdult = SettingsActivity.isAdultContentEnabled(this)
-        val favoritesLabel = getString(R.string.favorites)
-        val recentsLabel = getString(R.string.recents)
-
-        categoryItems = buildList {
-            add(CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL))
-            add(CategoryAdapter.Category(favoritesLabel, ChannelMode.FAVORITES))
-            add(CategoryAdapter.Category(recentsLabel, ChannelMode.RECENTS))
-            groups.forEach { title ->
-                if (!showAdult && ChannelKind.isAdultGroup(title)) {
-                    return@forEach
-                }
-                add(CategoryAdapter.Category(title, ChannelMode.ALL, title))
-            }
-        }
-    }
-
     private fun resetCategorySelection() {
-        selectedCategory = CategoryAdapter.Category(CategoryAdapter.ALL, ChannelMode.ALL)
+        selectedCategory = CategoryGridAdapter.Selection(
+            label = getString(R.string.categories_all),
+            mode = ChannelMode.ALL,
+            group = null,
+        )
         selectedMode = ChannelMode.ALL
         selectedGroup = null
     }
@@ -818,7 +861,7 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun onCategorySelected(category: CategoryAdapter.Category) {
+    private fun onCategorySelected(category: CategoryGridAdapter.Selection) {
         selectedCategory = category
         selectedMode = category.mode
         selectedGroup = category.group
@@ -859,6 +902,7 @@ class MainActivity : AppCompatActivity() {
             channelAdapter.setKind(kind)
             channelAdapter.reset(total)
             binding.channelList.scrollToPosition(0)
+            updateAlphabetBar(total)
             binding.toolbar.subtitle = buildSubtitle(total)
             if (selectedCategory.mode != ChannelMode.ALL) {
                 // Contagem de favoritos/historico sempre atualizada.
@@ -1273,6 +1317,9 @@ class MainActivity : AppCompatActivity() {
 
         /** Depois disso, o app tenta atualizar a lista em segundo plano. */
         private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
+
+        /** Abaixo disso a barra A-Z so atrapalha (a lista ja cabe na tela). */
+        private const val ALPHABET_MIN_ITEMS = 80
 
         /** Atualizacao do app: consulta no maximo uma vez por dia. */
         private const val UPDATE_PREFS = "eftv_updates"

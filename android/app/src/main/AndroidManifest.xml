@@ -73,6 +73,12 @@
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
 
         <activity
+            android:name=".CategoriesActivity"
+            android:exported="false"
+            android:theme="@style/Theme.EFTV.NoActionBar"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+
+        <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|uiMode"
             android:exported="false"

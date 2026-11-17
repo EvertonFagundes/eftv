@@ -159,6 +159,19 @@
             android:paddingBottom="16dp" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
+    <!-- Pula direto para a letra escolhida (lista longa de canais). -->
+    <com.eftv.android.ui.AlphabetIndexView
+        android:id="@+id/alphabetBar"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_marginVertical="8dp"
+        android:contentDescription="@string/alphabet_bar_description"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@id/swipeRefresh"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/swipeRefresh"
+        tools:visibility="visible" />
+
     <LinearLayout
         android:id="@+id/stateContainer"
         android:layout_width="0dp"

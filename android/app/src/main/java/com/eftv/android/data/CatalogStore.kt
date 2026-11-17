@@ -76,6 +76,61 @@ class CatalogStore private constructor(context: Context) {
         return result
     }
 
+    data class GroupCount(val title: String, val count: Int)
+
+    /**
+     * Grupos do tipo informado com a quantidade de itens de cada um.
+     *
+     * A tela de categorias mostra a quantidade para o cliente saber o que vale
+     * a pena abrir e para nao exibir grupo vazio (a lista fixa antiga oferecia
+     * categorias que a playlist nem tinha).
+     */
+    fun groupsWithCounts(kind: ChannelKind): List<GroupCount> {
+        val result = ArrayList<GroupCount>()
+        db.rawQuery(
+            """
+            SELECT group_title, COUNT(*) AS total
+            FROM channels
+            WHERE kind = ?
+            GROUP BY group_title
+            HAVING total > 0
+            ORDER BY total DESC, group_title COLLATE NOCASE
+            """.trimIndent(),
+            arrayOf(kind.name),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                result.add(GroupCount(cursor.getString(0), cursor.getInt(1)))
+            }
+        }
+        return result
+    }
+
+    /**
+     * Posicao do primeiro item cujo nome comeca com [letter].
+     *
+     * Alimenta a barra A-Z: com 2.261 canais, arrastar a lista ate "S" e
+     * inviavel. Retorna -1 quando nao ha nenhum item com a letra.
+     */
+    fun firstIndexForLetter(
+        group: String?,
+        query: String,
+        mode: ChannelMode,
+        kind: ChannelKind?,
+        excludeAdults: Boolean,
+        letter: Char,
+    ): Int {
+        val prefix = letter.lowercaseChar().toString()
+        val (where, args) = buildFilter(group, query, excludeAdults = excludeAdults, kind = kind)
+        val extra = if (where.isEmpty()) "WHERE" else "WHERE $where AND"
+        val sql = "SELECT COUNT(*) FROM ${fromClause(mode)} $extra c.name_key < ?"
+
+        val totalBefore = db.rawQuery(sql, (args + prefix).toTypedArray()).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
+        val totalAll = countInternal(group, query, mode, kind, excludeAdults)
+        return if (totalBefore >= totalAll) -1 else totalBefore
+    }
+
     /** O catalogo tem algum grupo de conteudo adulto? */
     fun hasAdultGroup(): Boolean =
         allGroups().any { ChannelKind.isAdultGroup(it) }

@@ -2,6 +2,19 @@
 
 > Transformação da EFTV de player local M3U para SaaS de streaming com catálogo centralizado, usuários, assinaturas e pagamentos.
 
+## 📚 Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [`docs/APP-ANDROID.md`](docs/APP-ANDROID.md) | App Android (celular, tablet e TV box): telas, login, catálogo, player, limite de 1 tela, assinatura, atualização, crash reporter, build, keystore e instalação por ADB |
+| [`docs/APP-WEB.md`](docs/APP-WEB.md) | Versão web: páginas estáticas no GitHub Pages (landing, checkout, verificação de e-mail, player) e SPA `frontend/` (Vite / Cloudflare Pages) |
+| [`docs/API.md`](docs/API.md) | Referência dos endpoints do backend (auth, player, assinaturas, app, admin) |
+| [`docs/TV.md`](docs/TV.md) | Android TV / Fire TV: o que já funciona, login por código, assinatura por QR e plano para Samsung/LG |
+| [`PAGAMENTOS.md`](PAGAMENTOS.md) | Runbook de pagamentos: fluxo do Mercado Pago, conciliação, cancelamento, limite de telas, avisos por e-mail e painel admin |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Deploy do backend |
+| [`docs/RENDER.md`](docs/RENDER.md) | Configuração do Render (variáveis de ambiente) |
+| [`docs/PLANO-GRATUITO.md`](docs/PLANO-GRATUITO.md) | Operação no plano gratuito (limitações e contornos) |
+
 ## 📁 Estrutura do Projeto
 
 ```
