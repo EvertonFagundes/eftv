@@ -129,6 +129,11 @@ class LoginActivity : AppCompatActivity() {
         updateAuthModeUI()
     }
 
+    override fun onResume() {
+        super.onResume()
+        TvScreen.apply(this)
+    }
+
     /**
      * TV: digitar e-mail e senha com o controle remoto e o principal motivo de
      * desistencia. O botao "Entrar pelo celular" pede um codigo ao servidor,

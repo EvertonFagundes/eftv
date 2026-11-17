@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
@@ -41,11 +42,34 @@ class SettingsActivity : AppCompatActivity() {
             .commit()
     }
 
+    override fun onResume() {
+        super.onResume()
+        TvScreen.apply(this)
+    }
+
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.preferences, rootKey)
 
             findPreference<Preference>("pref_version")?.summary = BuildConfig.VERSION_NAME
+
+            // Margem de seguranca da TV: so faz sentido (e so aparece) em
+            // Android TV / TV box. O valor real fica em TvScreen.
+            val tvCategory = findPreference<Preference>("category_tv")
+            if (!TvScreen.isTelevision(requireContext())) {
+                tvCategory?.isVisible = false
+            } else {
+                findPreference<ListPreference>(TvScreen.PREF_OVERSCAN_DP)?.apply {
+                    isPersistent = false
+                    value = TvScreen.overscanDp(requireContext()).toString()
+                    setOnPreferenceChangeListener { _, newValue ->
+                        val dp = (newValue as? String)?.toIntOrNull()
+                            ?: TvScreen.DEFAULT_OVERSCAN_DP
+                        TvScreen.setOverscanDp(requireContext(), dp)
+                        true
+                    }
+                }
+            }
 
             // Termos e politica: paginas publicadas no site oficial.
             findPreference<Preference>("pref_terms")?.setOnPreferenceClickListener {

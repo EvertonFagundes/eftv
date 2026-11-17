@@ -193,6 +193,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        TvScreen.apply(this)
 
         // Voltou da tela de assinatura: se pagou, o catalogo precisa carregar
         // sem o usuario reiniciar o app.

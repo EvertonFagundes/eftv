@@ -3,6 +3,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
+        android:key="category_tv"
+        android:title="@string/settings_category_tv"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            android:defaultValue="24"
+            android:entries="@array/tv_overscan_entries"
+            android:entryValues="@array/tv_overscan_values"
+            android:key="pref_tv_overscan"
+            android:summary="%s"
+            android:title="@string/settings_overscan_title"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:key="category_privacy"
         android:title="@string/settings_category_privacy"
         app:iconSpaceReserved="false">

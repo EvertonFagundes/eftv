@@ -75,6 +75,7 @@ class SeriesActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        TvScreen.apply(this)
         // Ao voltar do player, atualiza "min restantes" dos episodios.
         val urls = episodesBySeason.values.flatten().map { it.url }
         if (urls.isEmpty()) return

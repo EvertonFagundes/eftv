@@ -111,12 +111,17 @@ Backend do login por código já implementado e testado:
 - Fechar a tela da TV agora derruba também a conexão em andamento (antes a
   thread ficava presa no `read`), liberando a porta e o celular na hora.
 
-### 4. Interface 10 pés — pendente
+### 4. Interface 10 pés
 - [x] Configurações no menu (além do toque longo no título).
 - [ ] "Atualizar" no menu: validar no controle.
 - [ ] Revisar foco/ordem em telas 1280×720 (sem elementos cortados).
-- [ ] Banner 320×180 (`tv_banner`) conferido no launcher da TV.
-- [ ] Margem de segurança (overscan) para TVs que cortam as bordas.
+- [ ] Banner 320×180 (`tv_banner`) conferido no launcher da TV. Hoje ele é um
+  `layer-list` (gradiente + ícone de 96 dp), sem tamanho intrínseco: os
+  launchers costumam esticar até a área do banner, mas só o teste no aparelho
+  confirma. Para as lojas, o ideal é um PNG/WebP 320×180 com o nome do app.
+- [x] Margem de segurança (overscan) ajustável em Configurações → TV e tela
+  (1.4.6): Nenhuma / Pequena (24 dp) / Média (48 dp) / Grande (64 dp). O padrão
+  em TV é 24 dp; no celular não muda nada.
 
 ### 5. Publicação — pendente
 - Google Play (mesmo app, com `LEANBACK_LAUNCHER`).

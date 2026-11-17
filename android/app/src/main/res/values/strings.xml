@@ -238,6 +238,8 @@
     <!-- Configuracoes -->
     <string name="settings_title">Configurações</string>
     <string name="settings_category_privacy">Privacidade e conteúdo</string>
+    <string name="settings_category_tv">TV e tela</string>
+    <string name="settings_overscan_title">Margem da tela (TV)</string>
     <string name="settings_adult_title">Mostrar conteúdo adulto</string>
     <string name="settings_adult_summary">Mostra os canais adultos da playlist na lista, quando existirem. Desativado por padrão.</string>
     <string name="adult_no_channels">Sua playlist não tem canais adultos no momento.</string>
@@ -291,4 +293,18 @@
     <string name="forgot_password_short">A nova senha precisa ter pelo menos 8 caracteres.</string>
     <string name="forgot_password_success">Senha alterada. Entre com a nova senha.</string>
     <string name="forgot_password_network">Não foi possível agora. Tente novamente.</string>
+
+    <string-array name="tv_overscan_entries">
+        <item>Nenhuma (tela inteira)</item>
+        <item>Pequena (24 dp)</item>
+        <item>Média (48 dp)</item>
+        <item>Grande (64 dp)</item>
+    </string-array>
+
+    <string-array name="tv_overscan_values">
+        <item>0</item>
+        <item>24</item>
+        <item>48</item>
+        <item>64</item>
+    </string-array>
 </resources>

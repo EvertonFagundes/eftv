@@ -74,6 +74,7 @@ class SubscriptionActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        TvScreen.apply(this)
         if (!started) {
             started = true
             return

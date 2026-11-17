@@ -72,6 +72,11 @@ class CategoriesActivity : AppCompatActivity() {
         loadCategories()
     }
 
+    override fun onResume() {
+        super.onResume()
+        TvScreen.apply(this)
+    }
+
     private fun loadCategories() {
         val adultEnabled = SettingsActivity.isAdultContentEnabled(this)
         val selectedMode = intent.getStringExtra(EXTRA_MODE)

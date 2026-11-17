@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.4.5** (`versionCode 20`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.4.6** (`versionCode 21`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -231,10 +231,13 @@ opcional, `uses-feature` de TV. O mesmo APK serve celular e TV.
 O que já está pronto na TV:
 1. login por **código** ("Entrar pelo celular") — implementado no app e no backend;
 2. assinatura por **QR code** (pagar no celular e a TV se libera) — implementado;
-3. foco/10-foot UI — parcial (cartões focáveis e OK do controle no player).
+3. foco/10-foot UI — parcial (cartões focáveis e OK do controle no player);
+4. Configurações no menu (1.4.5) e margem de segurança para TVs com overscan
+   em Configurações → **TV e tela** (1.4.6): nenhuma / 24 dp / 48 dp / 64 dp.
 
-Pendente: revisar foco em 1280×720, expor Configurações no menu (hoje é toque
-longo) e publicar em Google Play / Amazon Appstore. Detalhes em `docs/TV.md`.
+Pendente: revisar foco em 1280×720, validar o menu "Atualizar" no controle,
+conferir o banner no launcher e publicar em Google Play / Amazon Appstore.
+Detalhes em `docs/TV.md`.
 
 ---
 
