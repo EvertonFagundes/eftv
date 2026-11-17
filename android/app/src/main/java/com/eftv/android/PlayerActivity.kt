@@ -8,23 +8,27 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.ui.TrackSelectionDialogBuilder
 import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.ChannelKind
 import com.eftv.android.data.LocalServer
@@ -125,6 +129,21 @@ class PlayerActivity : AppCompatActivity() {
         binding.btnPlayPause.setOnClickListener { togglePlayPause() }
         binding.btnRewind.setOnClickListener { seekBy(-SEEK_STEP_MS) }
         binding.btnForward.setOnClickListener { seekBy(SEEK_STEP_MS) }
+        // Faixas do stream: idioma do audio (dual-audio) e qualidade do video.
+        binding.btnAudio.setOnClickListener {
+            showTrackSelectionDialog(
+                C.TRACK_TYPE_AUDIO,
+                R.string.player_audio,
+                R.string.player_no_audio_options,
+            )
+        }
+        binding.btnQuality.setOnClickListener {
+            showTrackSelectionDialog(
+                C.TRACK_TYPE_VIDEO,
+                R.string.player_quality,
+                R.string.player_no_quality_options,
+            )
+        }
 
         // Barra de progresso: procura ao soltar o dedo (estilo Netflix/Prime)
         binding.progressSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
@@ -297,7 +316,7 @@ class PlayerActivity : AppCompatActivity() {
                         // por 3 segundos, depois esconde para ficar so o conteudo
                         binding.playerChannelName.visibility = View.VISIBLE
                         binding.liveBadge.visibility = if (isLive) View.VISIBLE else View.GONE
-                        binding.qualityBadgePlayer.visibility = View.VISIBLE
+                        updateQualityBadge()
 
                         // Atualiza os controles de acordo com o tipo de conteudo
                         startUiUpdates()
@@ -334,6 +353,12 @@ class PlayerActivity : AppCompatActivity() {
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                 updateLiveBadge()
             }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                // Faixas chegam depois do READY: o badge de qualidade passa a
+                // mostrar a resolucao real em vez do "HD" fixo.
+                updateQualityBadge(tracks)
+            }
         })
 
         binding.playerView.player = exoPlayer
@@ -365,6 +390,85 @@ class PlayerActivity : AppCompatActivity() {
     private fun updateLiveBadge() {
         binding.liveBadge.visibility =
             if (isLive || player?.isCurrentMediaItemLive == true) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Badge de qualidade com a resolução real do vídeo em reprodução
+     * ("1080p", "720p") em vez do "HD" fixo. Sem vídeo (rádio) o badge some.
+     */
+    private fun updateQualityBadge(tracks: Tracks? = player?.currentTracks) {
+        val videoGroup = tracks?.groups
+            ?.firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+
+        if (videoGroup == null) {
+            binding.qualityBadgePlayer.visibility = View.GONE
+            return
+        }
+
+        var height = 0
+        for (index in 0 until videoGroup.length) {
+            if (videoGroup.isTrackSelected(index)) {
+                height = videoGroup.getTrackFormat(index).height
+                break
+            }
+        }
+
+        binding.qualityBadgePlayer.visibility = View.VISIBLE
+        binding.qualityBadgePlayer.text = if (height > 0) "${height}p" else "HD"
+    }
+
+    /**
+     * Abre o seletor de faixas do stream: idioma do áudio (dual-audio) e
+     * qualidade do vídeo. Muitos canais IPTV trazem mais de um áudio e várias
+     * resoluções, e sem isto o assinante fica preso ao que o servidor escolhe.
+     *
+     * O diálogo é o padrão do Media3 (o mesmo das configurações do ExoPlayer):
+     * ele lista cada faixa com nome legível e devolve o que foi marcado.
+     */
+    @androidx.annotation.OptIn(UnstableApi::class)
+    private fun showTrackSelectionDialog(
+        trackType: Int,
+        titleRes: Int,
+        emptyMessageRes: Int,
+    ) {
+        val current = player ?: return
+        val groups = current.currentTracks.groups.filter {
+            it.type == trackType && it.length > 0 && it.isSupported
+        }
+
+        // Em HLS as qualidades todas cabem em um grupo só, entao o aviso
+        // olha a soma das faixas e nao a quantidade de grupos.
+        val trackCount = groups.sumOf { it.length }
+        if (trackCount <= 1) {
+            Toast.makeText(this, emptyMessageRes, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val builder = TrackSelectionDialogBuilder(
+            this,
+            getString(titleRes),
+            groups,
+        ) { _, overrides ->
+            // Mesmo caminho do construtor oficial do Media3: zera as faixas
+            // do tipo e grava só o que o assinante marcou.
+            if (current.isCommandAvailable(Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS)) {
+                val parameters = current.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(trackType, false)
+                    .clearOverridesOfType(trackType)
+                overrides.values.forEach { parameters.addOverride(it) }
+                current.trackSelectionParameters = parameters.build()
+                updateQualityBadge()
+            }
+        }
+        builder
+            .setShowDisableOption(false)
+            .setAllowMultipleOverrides(false)
+            // Uma qualidade por vez: o assinante escolhe e o stream trava
+            // nela, em vez de o Adaptive abarotar entre resoluções.
+            .setAllowAdaptiveSelections(false)
+            .setOverrides(current.trackSelectionParameters.overrides)
+            .build()
+            .show()
     }
 
     /**

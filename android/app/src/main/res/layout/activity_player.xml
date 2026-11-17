@@ -185,6 +185,27 @@
                 android:text="00:00"
                 android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
                 android:textColor="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/btnAudio"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/player_audio"
+                android:padding="12dp"
+                android:src="@drawable/ic_audio"
+                app:tint="@android:color/white" />
+
+            <ImageButton
+                android:id="@+id/btnQuality"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/player_quality"
+                android:padding="12dp"
+                android:src="@drawable/ic_quality"
+                app:tint="@android:color/white" />
         </LinearLayout>
 
         <!-- Progresso VOD: assistido e restante (aparece apenas para conteudo sob demanda) -->
