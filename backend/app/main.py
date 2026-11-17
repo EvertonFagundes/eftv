@@ -18,6 +18,7 @@ from app.routes import (
     player_router,
     subscriptions_router,
 )
+from app.security.dependencies import client_ip
 from app.services.mercadopago import sync_pending_subscriptions
 from app.tasks.subscription_checker import (
     check_expired_subscriptions,
@@ -109,12 +110,14 @@ async def mercadopago_account_info() -> dict | None:
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     # Diagnostico seguro: nada de segredo, so a configuracao que afeta o
-    # checkout (a back_url precisa ser HTTPS e valida).
+    # checkout (a back_url precisa ser HTTPS e valida). "client_ip" mostra
+    # qual IP o rate limit enxerga atras do proxy (o proprio chamador).
     account = await mercadopago_account_info()
     return {
         "status": "ok",
+        "client_ip": client_ip(request),
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "frontend_url": settings.FRONTEND_URL,
