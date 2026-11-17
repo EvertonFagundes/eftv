@@ -917,8 +917,10 @@ class PlayerActivity : AppCompatActivity() {
         heartbeatJob = null
         val id = streamSessionId ?: return
         streamSessionId = null
-        val token = session.accessToken() ?: return
+        // Fora da thread principal: liberar a vaga nao pode atrasar o
+        // fechamento do player (era o que gerava o "app nao responde").
         AppScope.io.launch {
+            val token = authorizedToken() ?: session.accessToken() ?: return@launch
             runCatching { api.stopStream(token, id) }
         }
     }
