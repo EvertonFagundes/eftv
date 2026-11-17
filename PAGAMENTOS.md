@@ -73,6 +73,10 @@ servidor, não no app:
   preferimos entregar o canal a punir o pagante por um erro nosso.
 - O banco guarda apenas o **hash** da URL do canal (`channel_ref`), nunca a URL
   com as credenciais do provedor.
+- Suporte: `GET /admin/streams` lista quem está assistindo agora (e-mail,
+  aparelho, canal, último heartbeat) e separa o que conta para o limite
+  (`active: true`) do que já expirou. É a resposta para "o plano é de 1 tela"
+  sem adivinhação.
 
 ## Atualização do app (fora da Play Store)
 
@@ -122,6 +126,7 @@ novo no próximo ciclo.
 | `POST /admin/subscriptions/{id}/sync` | Concilia na hora com o MP (cliente pagou e não liberou) |
 | `GET /admin/stats` | Totais: usuários, assinaturas ativas |
 | `GET /admin/crashes` | Travamentos relatados pelo app (mais recentes primeiro) |
+| `GET /admin/streams` | Quem está assistindo agora (limite de telas) |
 
 ## Checagens de saúde
 
