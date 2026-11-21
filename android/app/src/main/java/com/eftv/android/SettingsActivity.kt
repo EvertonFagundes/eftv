@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.ListPreference
@@ -11,10 +12,15 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
 import com.eftv.android.data.CatalogStore
+import com.eftv.android.data.DeviceIdentity
+import com.eftv.android.data.SessionStore
+import com.eftv.android.data.api.EftvApi
 import com.eftv.android.databinding.ActivitySettingsBinding
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * Tela de configuracoes do app.
@@ -25,6 +31,8 @@ import kotlinx.coroutines.withContext
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
+    private val session by lazy { SessionStore(this) }
+    private val api by lazy { EftvApi(deviceId = DeviceIdentity(this).id) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,11 +55,67 @@ class SettingsActivity : AppCompatActivity() {
         TvScreen.apply(this)
     }
 
+    /** Confirmacao antes de apagar a conta (acao irreversivel). */
+    fun confirmDeleteAccount() {
+        if (session.accessToken().isNullOrBlank()) {
+            Toast.makeText(this, R.string.settings_delete_account_login, Toast.LENGTH_LONG).show()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_delete_account_title)
+            .setMessage(R.string.settings_delete_account_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.settings_delete_account_confirm) { _, _ ->
+                deleteAccount()
+            }
+            .show()
+    }
+
+    private fun deleteAccount() {
+        val token = session.accessToken()
+        if (token.isNullOrBlank()) {
+            Toast.makeText(this, R.string.settings_delete_account_login, Toast.LENGTH_LONG).show()
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                api.deleteAccount(token)
+                session.clear()
+                Toast.makeText(
+                    this@SettingsActivity,
+                    R.string.settings_delete_account_done,
+                    Toast.LENGTH_LONG,
+                ).show()
+                startActivity(
+                    Intent(this@SettingsActivity, LoginActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    }
+                )
+                finish()
+            } catch (e: EftvApi.ApiException) {
+                Toast.makeText(this@SettingsActivity, e.detail, Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Timber.w(e, "Falha ao excluir a conta")
+                Toast.makeText(
+                    this@SettingsActivity,
+                    R.string.settings_delete_account_error,
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.preferences, rootKey)
 
             findPreference<Preference>("pref_version")?.summary = BuildConfig.VERSION_NAME
+
+            // Exclusao de conta (Play Store / LGPD).
+            findPreference<Preference>("pref_delete_account")?.setOnPreferenceClickListener {
+                (activity as? SettingsActivity)?.confirmDeleteAccount()
+                true
+            }
 
             // Margem de seguranca da TV: so faz sentido (e so aparece) em
             // Android TV / TV box. O valor real fica em TvScreen.

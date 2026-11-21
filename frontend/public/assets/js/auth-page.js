@@ -6,7 +6,7 @@ import { utils } from './utils.js'
 // Verifica se já logado e redireciona
 auth.init().then(loggedIn => {
   if (loggedIn) {
-    const redirect = utils.getQueryParam('redirect') || 'account.html'
+    const redirect = utils.safeRedirect(utils.getQueryParam('redirect'))
     window.location.href = redirect
   }
 })
@@ -25,7 +25,7 @@ if (loginForm) {
 
     try {
       await auth.login(formData.get('email'), formData.get('password'))
-      const redirect = utils.getQueryParam('redirect') || 'account.html'
+      const redirect = utils.safeRedirect(utils.getQueryParam('redirect'))
       window.location.href = redirect
     } catch (error) {
       showError(loginForm, error.message)
@@ -50,24 +50,28 @@ if (registerForm) {
       const response = await api.getPlans({ active_only: 'true' })
       const urlPlanId = utils.getQueryParam('plan_id')
 
-      planOptions.innerHTML = response.plans.map(plan => `
-        <label class="plan-option ${plan.id === urlPlanId ? 'selected' : ''}" data-plan-id="${plan.id}">
-          <input type="radio" name="plan" value="${plan.id}" ${plan.id === urlPlanId ? 'checked' : ''}>
+      planOptions.innerHTML = response.plans.map(plan => {
+        const features = plan.features || {}
+        const streams = Number(plan.max_simultaneous_streams) || 1
+        const devices = Number(plan.max_devices) || 1
+        return `
+        <label class="plan-option ${plan.id === urlPlanId ? 'selected' : ''}" data-plan-id="${utils.escapeHtml(plan.id)}">
+          <input type="radio" name="plan" value="${utils.escapeHtml(plan.id)}" ${plan.id === urlPlanId ? 'checked' : ''}>
           <div class="plan-option-content">
             <div class="plan-option-header">
               <strong>${utils.escapeHtml(plan.name)}</strong>
               <span class="plan-option-price">${utils.formatPrice(plan.price_cents, plan.currency)}/${plan.interval === 'year' ? 'ano' : 'mês'}</span>
             </div>
             <ul class="plan-option-features">
-              ${plan.features.hd ? '<li>HD</li>' : ''}
-              ${plan.features.full_hd ? '<li>Full HD</li>' : ''}
-              ${plan.features['4k'] ? '<li>4K</li>' : ''}
-              <li>${plan.max_simultaneous_streams} stream${plan.max_simultaneous_streams > 1 ? 's' : ''}</li>
-              <li>${plan.max_devices} dispositivos</li>
+              ${features.hd ? '<li>HD</li>' : ''}
+              ${features.full_hd ? '<li>Full HD</li>' : ''}
+              ${features['4k'] ? '<li>4K</li>' : ''}
+              <li>${streams} stream${streams > 1 ? 's' : ''}</li>
+              <li>${devices} dispositivo${devices > 1 ? 's' : ''}</li>
             </ul>
           </div>
-        </label>
-      `).join('')
+        </label>`
+      }).join('')
 
       // Seleção de plano
       planOptions.querySelectorAll('.plan-option').forEach(opt => {

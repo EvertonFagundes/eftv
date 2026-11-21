@@ -14,6 +14,9 @@
 # Keep Kotlin metadata
 -keep class kotlin.Metadata { *; }
 
+# QR code (assinatura na TV): evita que o R8 remova classes usadas em runtime
+-keep class com.google.zxing.** { *; }
+
 # Keep aiohttp classes
 -keep class org.apache.http.** { *; }
 -keep class org.apache.commons.logging.** { *; }

@@ -32,6 +32,7 @@ import com.eftv.android.data.ChannelKind
 import com.eftv.android.data.ChannelMode
 import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.LocalServer
+import com.eftv.android.data.LogUtils
 import com.eftv.android.data.PlaylistRepository
 import com.eftv.android.data.PlaylistSource
 import com.eftv.android.data.SessionStore
@@ -53,7 +54,9 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.text.DateFormat
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -146,6 +149,23 @@ class MainActivity : AppCompatActivity() {
 
         startCatalog()
         checkForUpdates()
+
+        // Voltou pelo link eftv://open (checkout): abre direto a assinatura
+        // para o cliente conferir se o pagamento foi reconhecido.
+        if (intent.getBooleanExtra(EXTRA_OPEN_SUBSCRIPTION, false)) {
+            openSubscription()
+        } else {
+            maybeShowTrialNudge()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // MainActivity ja estava aberta quando o link eftv://open chegou.
+        if (intent.getBooleanExtra(EXTRA_OPEN_SUBSCRIPTION, false)) {
+            openSubscription()
+        }
     }
 
     /**
@@ -166,6 +186,16 @@ class MainActivity : AppCompatActivity() {
             val info = runCatching { api.appVersion() }.getOrNull() ?: return@launch
             if (!info.configured || info.apkUrl.isBlank()) return@launch
             if (info.versionCode <= BuildConfig.VERSION_CODE) return@launch
+            // O link vem do backend: só abre HTTPS em host público. Sem isso,
+            // uma resposta adulterada poderia mandar o cliente baixar um APK
+            // por HTTP (ou de um endereço local) sem qualquer aviso.
+            if (!LogUtils.isSafeUpdateUrl(info.apkUrl)) {
+                Timber.w(
+                    "Atualizacao ignorada: URL nao segura (%s)",
+                    LogUtils.redactUrl(info.apkUrl),
+                )
+                return@launch
+            }
             if (isFinishing || isDestroyed) return@launch
             showUpdateDialog(info)
         }
@@ -184,14 +214,84 @@ class MainActivity : AppCompatActivity() {
             .setMessage(message)
             .setCancelable(!info.mandatory)
             .setPositiveButton(R.string.update_now) { _, _ ->
-                runCatching {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.apkUrl)))
-                }
+                startApkUpdate(info)
             }
         if (!info.mandatory) {
             dialog.setNegativeButton(R.string.update_later, null)
         }
         dialog.show()
+    }
+
+    /**
+     * Baixa o APK dentro do app e abre o instalador do Android.
+     *
+     * Antes o botao mandava para o navegador; o cliente muitas vezes nao
+     * encontrava o arquivo baixado. Aqui a barra de progresso fica na propria
+     * tela e o instalador abre apontando para o APK recem-baixado.
+     */
+    private fun startApkUpdate(info: EftvApi.AppVersionInfo) {
+        if (!UpdateInstaller.canInstall(this)) {
+            Toast.makeText(this, R.string.update_allow_install, Toast.LENGTH_LONG).show()
+            UpdateInstaller.requestInstallPermission(this)
+            return
+        }
+
+        val density = resources.displayMetrics.density
+        val padding = (24 * density).toInt()
+        val label = TextView(this).apply {
+            text = getString(R.string.update_downloading)
+        }
+        val bar = android.widget.ProgressBar(
+            this,
+            null,
+            android.R.attr.progressBarStyleHorizontal,
+        ).apply {
+            max = 100
+            progress = 0
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, padding / 2, padding, 0)
+            addView(label)
+            addView(
+                bar,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = padding / 2 },
+            )
+        }
+
+        val progressDialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.update_downloading_title)
+            .setView(content)
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
+        lifecycleScope.launch {
+            try {
+                val file = UpdateInstaller.download(this@MainActivity, info.apkUrl) { percent ->
+                    runOnUiThread {
+                        if (percent < 0) {
+                            bar.isIndeterminate = true
+                        } else {
+                            bar.progress = percent
+                        }
+                    }
+                }
+                progressDialog.dismiss()
+                UpdateInstaller.install(this@MainActivity, file)
+            } catch (e: Exception) {
+                progressDialog.dismiss()
+                Timber.w(e, "Falha ao baixar a atualizacao")
+                Toast.makeText(
+                    this@MainActivity,
+                    R.string.update_download_failed,
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
     }
 
     override fun onResume() {
@@ -205,7 +305,6 @@ class MainActivity : AppCompatActivity() {
             startCatalog()
             return
         }
-
         if (!::repository.isInitialized || !hasCatalog) return
 
         val enabled = SettingsActivity.isAdultContentEnabled(this)
@@ -767,6 +866,8 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Falha inesperada ao resolver source")
             throw CatalogErrorException(getString(R.string.catalog_network_error))
@@ -1393,6 +1494,50 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Lembrete de fim do teste grátis.
+     *
+     * O backend manda email, mas boa parte dos clientes não abre. O aviso
+     * dentro do app (no máximo uma vez por dia, nos últimos dias do teste)
+     * aumenta a conversão para o plano de R$ 19,90 e evita a surpresa de
+     * descobrir o vencimento só quando o canal para de abrir.
+     */
+    private fun maybeShowTrialNudge() {
+        if (localMode || !session.hasSession()) return
+        val prefs = getSharedPreferences(NUDGE_PREFS, MODE_PRIVATE)
+        val today = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        if (prefs.getString(NUDGE_LAST_DAY, null) == today) return
+
+        lifecycleScope.launch {
+            val token = validToken() ?: return@launch
+            val overview = runCatching {
+                withContext(Dispatchers.IO) { api.subscriptionOverview(token) }
+            }.getOrNull() ?: return@launch
+
+            if (isFinishing || isDestroyed) return@launch
+            if (!overview.hasAccess || overview.status != "trial") return@launch
+            if (overview.daysRemaining > TRIAL_NUDGE_DAYS) return@launch
+
+            prefs.edit().putString(NUDGE_LAST_DAY, today).apply()
+            val days = resources.getQuantityString(
+                R.plurals.subscription_days_remaining,
+                overview.daysRemaining,
+                overview.daysRemaining,
+            )
+            val price = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
+                .format(overview.priceCents / 100.0)
+
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(R.string.trial_nudge_title)
+                .setMessage(getString(R.string.trial_nudge_message, days, price))
+                .setPositiveButton(R.string.subscription_subscribe_now) { _, _ ->
+                    openSubscription()
+                }
+                .setNegativeButton(R.string.trial_nudge_later, null)
+                .show()
+        }
+    }
+
     private fun openSubscription() {
         startActivity(Intent(this@MainActivity, SubscriptionActivity::class.java))
     }
@@ -1473,6 +1618,14 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_SKIP_AUTH = "extra_skip_auth"
+
+        /** Abre a tela "Minha assinatura" ao entrar (retorno do checkout). */
+        const val EXTRA_OPEN_SUBSCRIPTION = "extra_open_subscription"
+
+        /** Aviso de fim do teste: uma vez por dia nos últimos 3 dias. */
+        private const val TRIAL_NUDGE_DAYS = 3
+        private const val NUDGE_PREFS = "eftv_nudge"
+        private const val NUDGE_LAST_DAY = "last_day"
 
         /** Depois disso, o app tenta atualizar a lista em segundo plano. */
         private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L

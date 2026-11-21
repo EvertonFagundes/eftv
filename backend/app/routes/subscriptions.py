@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.payment import Payment
 from app.models.plan import Plan
@@ -257,6 +258,14 @@ async def create_checkout(
 
     # Cria a assinatura no Mercado Pago
     try:
+        # O app Android precisa voltar para a pagina com app=1; nela o
+        # checkout.html reabre o app pelo deep link eftv://open. Sem isso o
+        # cliente terminava o pagamento no navegador e nao voltava.
+        back_urls = data.back_urls
+        if data.app_platform == "android":
+            frontend = settings.FRONTEND_URL.rstrip("/")
+            back_urls = {"success": f"{frontend}/checkout.html?app=1"}
+
         preference = await create_checkout_preference(
             user=user,
             plan=plan,
@@ -264,7 +273,7 @@ async def create_checkout(
             payer_name=data.payer_name or user.full_name,
             payer_phone=data.payer_phone or user.phone,
             payer_cpf=data.payer_cpf,
-            back_urls=data.back_urls,
+            back_urls=back_urls,
             db=db,
         )
     except RuntimeError as exc:

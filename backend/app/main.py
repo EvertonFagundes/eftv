@@ -20,7 +20,6 @@ from app.routes import (
     subscriptions_router,
 )
 from app.routes.app_client import apk_download
-from app.security.dependencies import client_ip
 from app.services.mercadopago import sync_pending_subscriptions
 from app.tasks.lifecycle_emails import send_lifecycle_emails
 from app.tasks.subscription_checker import (
@@ -116,26 +115,20 @@ async def mercadopago_account_info() -> dict | None:
 
 @app.get("/health")
 async def health_check(request: Request):
-    # Diagnostico seguro: nada de segredo, so a configuracao que afeta o
-    # checkout (a back_url precisa ser HTTPS e valida). "client_ip" mostra
-    # qual IP o rate limit enxerga atras do proxy (o proprio chamador).
+    # Diagnostico publico: so o que ajuda monitoramento, sem expor IP do
+    # chamador, URLs internas ou id da conta do Mercado Pago.
     account = await mercadopago_account_info()
     return {
         "status": "ok",
-        "client_ip": client_ip(request),
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
-        "frontend_url": settings.FRONTEND_URL,
-        "checkout_back_url": f"{settings.FRONTEND_URL.rstrip('/')}/checkout.html",
-        "api_base_url": settings.API_BASE_URL,
         "mercadopago_configured": bool(settings.MERCADOPAGO_ACCESS_TOKEN),
         "mercadopago_token_kind": mercadopago_token_kind(),
         "mercadopago_sandbox": settings.MERCADOPAGO_SANDBOX,
-        # Conta de teste nao consegue cobrar cliente real: precisa das
-        # credenciais de producao da conta Mercado Pago de verdade.
-        "mercadopago_account": account,
+        "mercadopago_test_account": bool(account and account.get("is_test_user")),
         # Diagnostico do limite comercial (nao e segredo): plano de 2 aparelhos.
         "max_devices_per_subscription": settings.MAX_DEVICES_PER_SUBSCRIPTION,
+        "max_streams_per_subscription": settings.MAX_STREAMS_PER_SUBSCRIPTION,
         # Versao publicada do app (atualizacao por APK).
         "app_version_code": settings.APP_LATEST_VERSION_CODE,
         "app_version_name": settings.APP_LATEST_VERSION_NAME,

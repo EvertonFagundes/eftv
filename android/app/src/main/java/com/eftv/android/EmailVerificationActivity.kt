@@ -7,6 +7,7 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.SessionStore
 import com.eftv.android.data.api.EftvApi
 import com.eftv.android.databinding.ActivityEmailVerificationBinding
@@ -28,11 +29,15 @@ class EmailVerificationActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_EMAIL = "extra_email"
+        const val EXTRA_TOKEN = "extra_token"
     }
 
     private lateinit var binding: ActivityEmailVerificationBinding
     private val session by lazy { SessionStore(this) }
-    private val api by lazy { EftvApi() }
+    private val device by lazy { DeviceIdentity(this) }
+    // O header X-Device-Id e o que amarra o teste gratis ao aparelho: sem ele
+    // o backend nao sabe que este celular ja consumiu o trial em outra conta.
+    private val api by lazy { EftvApi(deviceId = device.id, deviceName = device.name) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,7 +48,8 @@ class EmailVerificationActivity : AppCompatActivity() {
         binding.emailDisplay.text = getString(R.string.verify_email_for, email)
 
         // Se vier token via intent (deep link do email), preenche automaticamente
-        val token = intent.data?.getQueryParameter("token")
+        val token = intent.getStringExtra(EXTRA_TOKEN)
+            ?: intent.data?.getQueryParameter("token")
         if (token != null) {
             binding.tokenInput.setText(token)
         }

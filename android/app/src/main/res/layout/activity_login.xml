@@ -237,17 +237,6 @@
             tools:text="Credenciais inválidas"
             tools:visibility="visible" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/offlineButton"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:layout_gravity="center_horizontal"
-            android:text="@string/login_offline"
-            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-            android:textColor="@color/on_surface_variant" />
-
         <TextView
             android:id="@+id/legalText"
             android:layout_width="match_parent"

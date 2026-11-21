@@ -70,9 +70,13 @@
       background: #ffb020; box-shadow: 0 0 0 3px rgba(255, 176, 32, 0.18);
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
-  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+  <!--
+    As bibliotecas ficam no próprio site (embed/vendor) e são carregadas sob
+    demanda, conforme o tipo do stream. Antes vinham de três CDNs externos,
+    incluindo um "latest" sem versão fixa: qualquer mudança lá podia quebrar
+    o player (ou servir código diferente), e o Android ficava dependente da
+    rede/CDN mesmo tendo o arquivo no APK.
+  -->
 </head>
 <body>
   <div id="wrapper">
@@ -476,16 +480,48 @@
         video.addEventListener("error", () => falhar("Falha ao carregar o arquivo de vídeo."), { once: true });
       }
 
+      /* Carrega a biblioteca do player só quando o stream precisa dela.
+         Fica em cache do service worker depois do primeiro uso. */
+      const bibliotecas = {};
+      function carregarBiblioteca(arquivo) {
+        if (bibliotecas[arquivo]) return bibliotecas[arquivo];
+        bibliotecas[arquivo] = new Promise((resolver, rejeitar) => {
+          const script = document.createElement("script");
+          script.src = "vendor/" + arquivo;
+          script.async = true;
+          script.onload = () => resolver();
+          script.onerror = () => rejeitar(new Error("Falha ao carregar " + arquivo));
+          document.head.appendChild(script);
+        });
+        return bibliotecas[arquivo];
+      }
+
       function tocarFonte() {
         if (tipoAtual === "dash" || /\.mpd(\?|$)/i.test(srcAtual)) {
-          tocarDash();
-        } else if (tipoAtual === "mp4" || /\.mp4(\?|$)/i.test(srcAtual)) {
-          tocarMp4();
-        } else if (tipoAtual === "ts" || /\.ts(\?|$)/i.test(srcAtual)) {
-          tocarTs();
-        } else {
-          tocarHls();
+          carregarBiblioteca("dash.all.min.js").then(tocarDash).catch(() => {
+            falhar("Não foi possível carregar o suporte a DASH neste dispositivo.");
+          });
+          return;
         }
+        if (tipoAtual === "mp4" || /\.mp4(\?|$)/i.test(srcAtual)) {
+          tocarMp4();
+          return;
+        }
+        if (tipoAtual === "ts" || /\.ts(\?|$)/i.test(srcAtual)) {
+          carregarBiblioteca("mpegts.js").then(tocarTs).catch(() => {
+            falhar("Não foi possível carregar o suporte a MPEG-TS neste dispositivo.");
+          });
+          return;
+        }
+        // HLS nativo (Safari/iOS) não precisa baixar 400 KB de hls.js.
+        if (video.canPlayType("application/vnd.apple.mpegurl") && !window.Hls) {
+          tocarHls();
+          return;
+        }
+        carregarBiblioteca("hls.min.js").then(tocarHls).catch(() => {
+          // Sem hls.js ainda vale tentar o suporte nativo do navegador.
+          tocarHls();
+        });
       }
 
       if (!src) {

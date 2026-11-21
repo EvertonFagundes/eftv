@@ -62,7 +62,9 @@ class PlaylistRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Timber.e(e, "Falha ao baixar/processar a playlist")
+            // A mensagem de algumas exceções HTTP traz a URL completa, com
+            // usuário/senha do provedor. O stack trace é registrado mascarado.
+            Timber.e("Falha ao baixar/processar a playlist: %s", LogUtils.redactThrowable(e))
             val cached = cached()
             if (cached != null) {
                 Result(cached, fromCache = true, error = e)

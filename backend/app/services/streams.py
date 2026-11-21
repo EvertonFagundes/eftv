@@ -22,10 +22,20 @@ class StreamLimitError(Exception):
 
 
 def stream_limit(subscription: Subscription) -> int:
-    """Quantas telas o plano permite ao mesmo tempo."""
+    """Quantas telas o plano permite ao mesmo tempo.
+
+    O plano diz o que o produto promete; ``MAX_STREAMS_PER_SUBSCRIPTION`` e o
+    teto operacional. Sem ele, um plano criado por engano com 10 telas furaria
+    a regra comercial (mesmo padrao ja usado no limite de aparelhos).
+    """
+    cap = max(1, settings.MAX_STREAMS_PER_SUBSCRIPTION)
     plan = getattr(subscription, "plan", None)
     limit = getattr(plan, "max_simultaneous_streams", None)
-    return max(int(limit or 1), 1)
+    try:
+        value = int(limit or 1)
+    except (TypeError, ValueError):
+        value = 1
+    return max(1, min(value, cap))
 
 
 def _cutoff(now: datetime | None = None) -> datetime:

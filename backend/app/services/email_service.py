@@ -158,6 +158,32 @@ class EmailService:
         )
         return await self._send(to_email, subject, text_body, html_body)
 
+    async def send_trial_expired_email(
+        self,
+        to_email: str,
+        full_name: str | None = None,
+    ) -> bool:
+        """Winback: o teste acabou e o acesso foi interrompido."""
+        subscribe_url = f"{self.frontend_url.rstrip('/')}/assinar.html"
+        subject = "Seu teste gratis terminou - volte quando quiser"
+        text_body = (
+            f"Ola{', ' + full_name if full_name else ''}!\n"
+            "Seu periodo de teste da EFTV terminou e o acesso foi pausado.\n"
+            "Para voltar a assistir, assine o plano mensal de R$ 19,90:\n"
+            f"{subscribe_url}\n"
+            "Se ja assinou, entre no app e toque em Minha assinatura.\n"
+        )
+        html_body = (
+            f"<p>Ola{', ' + full_name if full_name else ''}!</p>"
+            "<p>Seu periodo de teste da EFTV <strong>terminou</strong> e o "
+            "acesso foi pausado.</p>"
+            "<p>Para voltar a assistir, assine o plano mensal de "
+            "<strong>R$ 19,90</strong>:</p>"
+            f"<p><a href=\"{subscribe_url}\">Assinar o EFTV</a></p>"
+            "<p>Se ja assinou, entre no app e toque em Minha assinatura.</p>"
+        )
+        return await self._send(to_email, subject, text_body, html_body)
+
     async def send_payment_failed_email(
         self,
         to_email: str,

@@ -34,7 +34,8 @@ class FakeSession:
     async def execute(self, *args, **kwargs):
         if self.results:
             return FakeResult(self.results.pop(0))
-        return FakeResult(None)
+        # Consultas extras (ex.: trials vencidos) vem vazias.
+        return FakeResult([])
 
     async def commit(self) -> None:
         self.committed = True

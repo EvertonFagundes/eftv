@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark">
   <title>Pagamento — EFTV</title>
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <style>
@@ -86,7 +88,7 @@
   </style>
 </head>
 <body>
-  <main>
+  <main aria-live="polite">
     <div class="brand">EF<span>TV</span></div>
 
     <section id="success" hidden>
@@ -126,35 +128,75 @@
 
   <script>
     (function () {
-      var status = new URLSearchParams(window.location.search).get("status");
+      var params = new URLSearchParams(window.location.search);
+      // O Mercado Pago usa nomes diferentes conforme o produto: "status" no
+      // checkout e "collection_status" em alguns retornos antigos.
+      var status = (params.get("status") || params.get("collection_status") || "").toLowerCase();
       var sections = {
         success: document.getElementById("success"),
         pending: document.getElementById("pending"),
         failure: document.getElementById("failure"),
         return: document.getElementById("return")
       };
+      // Antes só "success/pending/failure" eram reconhecidos: um pagamento
+      // recusado ("rejected") caía em "enviado" e o cliente ficava esperando.
+      var porStatus = {
+        approved: "success",
+        success: "success",
+        pending: "pending",
+        in_process: "pending",
+        authorized: "pending",
+        rejected: "failure",
+        failure: "failure",
+        cancelled: "failure",
+        canceled: "failure",
+        refunded: "failure",
+        charged_back: "failure"
+      };
       // O /preapproval devolve para a mesma back_url, sem status na URL.
-      var target = sections[status] || sections.return;
+      var target = sections[porStatus[status]] || sections.return;
       target.hidden = false;
     })();
 
     // "Voltar ao app": abre o EFTV pela deep link eftv://open. Se o app nao
     // estiver instalado, cai na pagina de download do APK.
     (function () {
+      var fallbackPadrao = "https://github.com/EvertonFagundes/eftv/releases/latest";
       var links = document.querySelectorAll("a.app-link");
+
+      function abrirApp(fallback) {
+        var left = false;
+        var onHide = function () {
+          if (document.hidden) left = true;
+        };
+        document.addEventListener("visibilitychange", onHide);
+        window.location.href = "eftv://open";
+        setTimeout(function () {
+          document.removeEventListener("visibilitychange", onHide);
+          if (!left) window.location.href = fallback;
+        }, 1500);
+      }
+
       for (var i = 0; i < links.length; i++) {
         links[i].addEventListener("click", function (event) {
-          var fallback = this.getAttribute("href");
           event.preventDefault();
-          var left = false;
-          document.addEventListener("visibilitychange", function () {
-            if (document.hidden) left = true;
-          });
-          window.location.href = "eftv://open";
-          setTimeout(function () {
-            if (!left) window.location.href = fallback;
-          }, 1500);
+          abrirApp(this.getAttribute("href") || fallbackPadrao);
         });
+      }
+
+      // Quem pagou pelo app chega aqui com app=1: volta sozinho para o app,
+      // sem precisar procurar o botao (o Android pergunta se pode abrir).
+      // O Mercado Pago pode anexar os parametros de retorno com "?" em vez de
+      // "&"; por isso comparamos so o comeco do valor.
+      //
+      // O fallback por plano do Mercado Pago (preapproval_plan) nao repassa a
+      // back_url do app, entao o retorno chega sem app=1. Para nao prender o
+      // cliente no navegador, qualquer retorno em Android tenta abrir o app;
+      // se ele nao estiver instalado, cai no download do APK. No desktop a
+      // pagina de sucesso continua normal (o app=1 sozinho nao redireciona).
+      var android = /Android/i.test(navigator.userAgent || "");
+      if (android) {
+        setTimeout(function () { abrirApp(fallbackPadrao); }, 1400);
       }
     })();
   </script>

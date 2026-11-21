@@ -126,12 +126,21 @@ class SubscriptionActivity : AppCompatActivity() {
         } catch (e: EftvApi.ApiException) {
             if (e.statusCode != 401) throw e
             // Access token curto: renova e tenta de novo uma vez.
-            val refreshToken = session.refreshToken()
-            if (refreshToken.isNullOrBlank()) throw e
-            val tokens = api.refresh(refreshToken)
-            session.save(tokens, session.email().orEmpty(), session.isEmailVerified())
-            api.subscriptionOverview(tokens.accessToken)
+            val renew = freshToken(forceRefresh = true) ?: throw e
+            api.subscriptionOverview(renew)
         }
+    }
+
+    /** Token valido; renova com o refresh quando o curto expirou. */
+    private suspend fun freshToken(forceRefresh: Boolean = false): String? {
+        val token = session.accessToken() ?: return null
+        if (!forceRefresh && !session.isAccessTokenExpired()) return token
+        val refresh = session.refreshToken() ?: return null
+        return runCatching {
+            val tokens = api.refresh(refresh)
+            session.save(tokens, session.email().orEmpty(), session.isEmailVerified())
+            tokens.accessToken
+        }.getOrNull()
     }
 
     // ------------------------------------------------------------------
@@ -267,8 +276,17 @@ class SubscriptionActivity : AppCompatActivity() {
         binding.progress.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
+                val access = freshToken()
+                if (access.isNullOrBlank()) {
+                    finish()
+                    return@launch
+                }
                 val checkout = withContext(Dispatchers.IO) {
-                    api.createCheckout(token, current.planId)
+                    // "android" faz o Mercado Pago voltar para a pagina com
+                    // app=1, que reabre o app em eftv://open. Sem isso o
+                    // cliente terminava o pagamento no navegador e ficava
+                    // sem saber se a assinatura tinha sido liberada.
+                    api.createCheckout(access, current.planId, appPlatform = "android")
                 }
                 if (isTelevision) {
                     // TV: sem teclado e quase sempre sem navegador. O QR resolve

@@ -2105,3 +2105,51 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* ---------------------------------------------------------------- acessibilidade
+   Atalho de teclado, texto apenas para leitores de tela e âncoras que não
+   ficam escondidas atrás do cabeçalho fixo. */
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 9999;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #2f9bff;
+  color: #04101f;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid #d7ecff;
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+:where(section[id], main[id]) {
+  scroll-margin-top: 88px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
+}

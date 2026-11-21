@@ -424,17 +424,39 @@
     const fechar = document.querySelector("[data-search-close]");
     if (!overlay || !input || !results) return;
 
+    // Fecha para o leitor de tela e para o teclado, não só visualmente.
+    // `inert` também impede que o Tab entre nos resultados com a busca fechada.
+    const definirInerte = (valor) => {
+      try {
+        overlay.inert = valor;
+      } catch (_) {
+        // Navegador antigo: o CSS display:none já resolve.
+      }
+      if (valor) overlay.setAttribute("aria-hidden", "true");
+      else overlay.setAttribute("aria-hidden", "false");
+    };
+    definirInerte(true);
+
+    let ultimoFoco = null;
+    const estaAberta = () => overlay.classList.contains("open");
+
     const abrir = () => {
+      ultimoFoco = document.activeElement;
       overlay.classList.add("open");
-      overlay.setAttribute("aria-hidden", "false");
+      definirInerte(false);
       document.body.classList.add("search-open");
       setTimeout(() => input.focus(), 80);
     };
 
     const fecharOverlay = () => {
+      if (!estaAberta()) return;
       overlay.classList.remove("open");
-      overlay.setAttribute("aria-hidden", "true");
+      definirInerte(true);
       document.body.classList.remove("search-open");
+      if (ultimoFoco && typeof ultimoFoco.focus === "function") {
+        ultimoFoco.focus();
+      }
+      ultimoFoco = null;
     };
 
     aberturas.forEach((el) => el.addEventListener("click", abrir));
@@ -451,13 +473,37 @@
       if (e.target === overlay) fecharOverlay();
     });
 
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") fecharOverlay();
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+    // Mantém o foco dentro do diálogo enquanto ele está aberto.
+    overlay.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab") return;
+      const focaveis = [...overlay.querySelectorAll("a[href], button, input")]
+        .filter((el) => !el.disabled && el.getClientRects().length > 0);
+      if (!focaveis.length) return;
+      const primeiro = focaveis[0];
+      const ultimo = focaveis[focaveis.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) {
         e.preventDefault();
-        abrir();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primeiro.focus();
       }
     });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && estaAberta()) fecharOverlay();
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        if (estaAberta()) fecharOverlay();
+        else abrir();
+      }
+    });
+
+    // No macOS o atalho é ⌘K; o HTML estático mostra Ctrl K.
+    const atalho = document.querySelector("[data-search-open] kbd");
+    if (atalho && /Mac|iPhone|iPad/.test(navigator.platform || "")) {
+      atalho.textContent = "⌘ K";
+    }
 
     let timer;
     input.addEventListener("input", () => {

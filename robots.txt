@@ -1,0 +1,7 @@
+# EFTV — robots.txt
+# Páginas de conta/checkout são noindex por meta tag; o catálogo do usuário
+# (canal.html) também. Aqui liberamos apenas o conteúdo público.
+User-agent: *
+Allow: /
+
+Sitemap: https://evertonfagundes.github.io/eftv/sitemap.xml

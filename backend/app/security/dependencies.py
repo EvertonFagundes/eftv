@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.services import rate_limit
 from app.services.auth_service import decode_token, get_token_type, is_token_expired
 from app.services.devices import InvalidDeviceError, normalize_device_id
 
@@ -189,83 +190,37 @@ async def get_device_fingerprint(request: Request) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
-class RateLimiter:
-    """Rate limiter simples em memória (para dev). Em produção usar Redis."""
-
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self.requests: dict[str, list[float]] = {}
-
-    def is_allowed(self, key: str) -> bool:
-        import time
-
-        now = time.time()
-        if key not in self.requests:
-            self.requests[key] = []
-
-        # Limpa requests antigos
-        self.requests[key] = [ts for ts in self.requests[key] if now - ts < self.window_seconds]
-
-        if len(self.requests[key]) >= self.max_requests:
-            return False
-
-        self.requests[key].append(now)
-        return True
-
-    def reset(self, key: str) -> None:
-        """Zera o contador de uma chave (ex.: login com sucesso)."""
-        self.requests.pop(key, None)
-
-
-# Instância global para dev (em produção usar Redis)
-rate_limiter = RateLimiter(
-    max_requests=settings.RATE_LIMIT_REQUESTS,
-    window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
-)
-
-# Blindagem de login por CONTA, nao por IP: atras do proxy do Render todos
-# os clientes vem do mesmo IP, entao um limite por IP bloquearia o login de
-# todo mundo junto (ou seria contornavel trocando o X-Forwarded-For).
-login_failure_limiter = RateLimiter(
-    max_requests=settings.RATE_LIMIT_LOGIN_FAILURES,
-    window_seconds=settings.RATE_LIMIT_LOGIN_FAILURE_WINDOW_SECONDS,
-)
-
-
-def _login_key(email: str) -> str:
-    return f"loginfail:{(email or '').strip().lower()}"
-
-
-def check_login_failures(email: str) -> None:
+async def check_login_failures(db: AsyncSession, email: str) -> None:
     """Conta as tentativas de login de uma conta; bloqueia apos o limite.
 
     Chamada ANTES de validar a senha: cada tentativa conta, e um login com
-    sucesso zera o contador.
+    sucesso zera o contador. O estado fica no banco (nao em memoria): assim
+    nao some a cada deploy nem se perde entre workers.
     """
-    if not login_failure_limiter.is_allowed(_login_key(email)):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Muitas tentativas de login para esta conta. "
-            "Aguarde alguns minutos ou redefina a senha.",
-        )
+    await rate_limit.hit(
+        db,
+        key=rate_limit.scoped_key("loginfail", email),
+        limit=settings.RATE_LIMIT_LOGIN_FAILURES,
+        window_seconds=settings.RATE_LIMIT_LOGIN_FAILURE_WINDOW_SECONDS,
+        detail=(
+            "Muitas tentativas de login para esta conta. "
+            "Aguarde alguns minutos ou redefina a senha."
+        ),
+    )
 
 
-def record_login_success(email: str) -> None:
-    login_failure_limiter.reset(_login_key(email))
+async def record_login_success(db: AsyncSession, email: str) -> None:
+    await rate_limit.reset(db, key=rate_limit.scoped_key("loginfail", email))
 
 
 def client_ip(request: Request) -> str:
-    """O que o rate limit enxerga como IP do cliente.
+    """O que a telemetria enxerga como IP do cliente.
 
     No Render o IP real do cliente NAO chega: ``request.client.host`` e o
     proxy e o ``X-Forwarded-For`` vem com a cadeia de proxies do proprio
-    Render (170.84.x, 10.x), sem o cliente. Ou seja, atras desse proxy
-    todos os clientes parecem o mesmo IP, entao limites que precisam de
-    granularidade fina (como o login) sao feitos por CONTA, nao por IP.
-
-    Mantido para os limites grossos (cadastro, reenvio de e-mail), onde um
-    balde compartilhado por hora de janela e aceitavel.
+    Render (170.84.x, 10.x), sem o cliente. Por isso as protecoes por conta
+    (login, recuperacao de senha) usam identidade, nao IP -- ver
+    ``app/services/rate_limit.py``.
     """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -273,12 +228,3 @@ def client_ip(request: Request) -> str:
         if first_hop:
             return first_hop
     return request.client.host if request.client else "unknown"
-
-
-async def rate_limit_dependency(request: Request) -> None:
-    """Dependency para rate limiting por IP."""
-    if not rate_limiter.is_allowed(f"ratelimit:{client_ip(request)}"):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Muitas requisições. Tente novamente mais tarde.",
-        )

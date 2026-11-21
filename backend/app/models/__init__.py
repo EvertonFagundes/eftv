@@ -7,8 +7,11 @@ from app.models.device_login_code import DeviceLoginCode
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.playback_session import PlaybackSession
+from app.models.rate_limit import RateLimitCounter
+from app.models.refresh_token import RefreshToken
 from app.models.stream_session import StreamSession
 from app.models.subscription import Subscription
+from app.models.trial_device import TrialDevice
 from app.models.user import User
 
 __all__ = [
@@ -23,4 +26,7 @@ __all__ = [
     "ClientError",
     "DeviceLoginCode",
     "SubscriptionDevice",
+    "RefreshToken",
+    "TrialDevice",
+    "RateLimitCounter",
 ]

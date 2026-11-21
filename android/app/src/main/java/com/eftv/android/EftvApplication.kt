@@ -5,6 +5,7 @@ import android.os.Build
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.eftv.android.data.DeviceIdentity
+import com.eftv.android.data.LogUtils
 import com.eftv.android.data.api.EftvApi
 import kotlinx.coroutines.runBlocking
 import timber.log.Timber
@@ -50,8 +51,11 @@ class EftvApplication : Application() {
             runCatching {
                 runBlocking {
                     api.reportCrash(
-                        message = throwable.toString(),
-                        stacktrace = throwable.stackTraceToString(),
+                        // Um crash ao abrir um canal pode carregar a URL do
+                        // stream (com usuário/senha) na mensagem: o relatório
+                        // enviado ao backend vai sempre mascarado.
+                        message = LogUtils.redactText(throwable.toString()),
+                        stacktrace = LogUtils.redactThrowable(throwable),
                         appVersion = BuildConfig.VERSION_NAME,
                         device = device.name,
                         android = Build.VERSION.RELEASE.orEmpty(),

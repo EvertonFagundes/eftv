@@ -90,13 +90,22 @@ class Settings(BaseSettings):
         "https://app.eftv.com.br,https://evertonfagundes.github.io"
     )
 
-    # Rate limiting
+    # Rate limiting (por identidade, ver services/rate_limit.py)
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
     # Tentativas de login por conta (blindagem contra brute force). Por
     # conta, nao por IP: atras do proxy todos os clientes vem do mesmo IP.
     RATE_LIMIT_LOGIN_FAILURES: int = 10
     RATE_LIMIT_LOGIN_FAILURE_WINDOW_SECONDS: int = 300
+    # Cadastro e emails por conta: cada criacao de conta nova custa um e-mail.
+    RATE_LIMIT_REGISTER_PER_HOUR: int = 5
+    RATE_LIMIT_EMAIL_PER_HOUR: int = 3
+    # Codigo de recuperacao de senha: 6 digitos so sao seguros com limite de
+    # tentativas por conta.
+    RATE_LIMIT_PASSWORD_RESET_ATTEMPTS: int = 5
+    RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS: int = 900
+    # Telemetria de travamento do app (endpoint publico).
+    RATE_LIMIT_CRASHES_PER_MINUTE: int = 60
 
     # Redis (para rate limiting, cache, sessões)
     REDIS_URL: str | None = None
@@ -130,6 +139,8 @@ class Settings(BaseSettings):
     OFFLINE_GRACE_MINUTES: int = 720
     # Limite de aparelhos quando o plano nao define um valor proprio
     MAX_DEVICES_PER_SUBSCRIPTION: int = 2
+    # Teto operacional de telas simultaneas (o plano nao pode prometer mais)
+    MAX_STREAMS_PER_SUBSCRIPTION: int = 2
     # Limite de telas simultaneas: heartbeat do app enquanto assiste. A sessao
     # expira sozinha se o aparelho sumir (rede caiu, app fechado a forca).
     STREAM_SESSION_TIMEOUT_SECONDS: int = 120

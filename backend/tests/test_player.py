@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.testclient import TestClient
 
 from app.config import settings
+from app.database import get_db
 from app.routes.player import router
 from app.security.dependencies import get_current_active_subscription
 from app.services.devices import DeviceLimitError
@@ -17,8 +18,13 @@ DEVICE_HEADERS = {
 
 class FakeSubscription:
     def __init__(self, days: int = 20) -> None:
+        self.id = "sub-1"
+        self.user_id = "user-1"
         self.status = "active"
         self.current_period_end = datetime.now(UTC) + timedelta(days=days)
+        # Sem linha propria no provedor: usa a playlist compartilhada.
+        self.provider_playlist_url = None
+        self.provider_revoked_at = None
 
 
 def build_client(days: int = 20) -> TestClient:
@@ -99,3 +105,101 @@ def test_playlist_requires_active_subscription():
     response = TestClient(app).get("/player/playlist", headers=DEVICE_HEADERS)
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+class FakeDB:
+    async def commit(self) -> None:
+        return None
+
+
+def build_trial_client(subscription, monkeypatch):
+    async def noop_bind(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.routes.player.bind_device", noop_bind)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_active_subscription] = lambda: subscription
+    app.dependency_overrides[get_db] = lambda: FakeDB()
+    return TestClient(app)
+
+
+def test_playlist_revokes_trial_when_device_used_elsewhere(monkeypatch):
+    """Fecha o caminho de quem confirma o e-mail pelo navegador."""
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/list.m3u")
+
+    async def already_used(db, device_id, user_id):
+        return True
+
+    revoked = {}
+
+    def fake_revoke(subscription):
+        revoked["done"] = True
+        subscription.status = "cancelled"
+
+    monkeypatch.setattr("app.routes.player.trials.device_already_used", already_used)
+    monkeypatch.setattr("app.routes.player.trials.revoke_trial", fake_revoke)
+
+    subscription = FakeSubscription()
+    subscription.status = "trial"
+    client = build_trial_client(subscription, monkeypatch)
+
+    response = client.get("/player/playlist", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["detail"]["code"] == "trial_device_used"
+    assert revoked["done"] is True
+
+
+def test_playlist_claims_device_on_valid_trial(monkeypatch):
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/list.m3u")
+    async def not_used(db, device_id, user_id):
+        return False
+
+    claimed = {}
+
+    async def fake_claim(db, **kwargs):
+        claimed.update(kwargs)
+
+    monkeypatch.setattr("app.routes.player.trials.device_already_used", not_used)
+    monkeypatch.setattr("app.routes.player.trials.claim", fake_claim)
+
+    subscription = FakeSubscription()
+    subscription.status = "trial"
+    client = build_trial_client(subscription, monkeypatch)
+
+    response = client.get("/player/playlist", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert claimed["device_id"] == DEVICE_HEADERS["X-Device-Id"]
+    assert claimed["user_id"] == subscription.user_id
+
+
+def test_playlist_prefers_the_subscriber_own_provider_line(client, monkeypatch):
+    """Linha propria permite revogar um cliente sem trocar a de todos."""
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/shared.m3u")
+
+    subscription = FakeSubscription()
+    subscription.provider_playlist_url = "https://provider.example/linha-do-cliente.m3u"
+    client.app.dependency_overrides[get_current_active_subscription] = lambda: subscription
+
+    response = client.get("/player/playlist", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["playlist_url"] == "https://provider.example/linha-do-cliente.m3u"
+
+
+def test_playlist_ignores_a_revoked_provider_line(client, monkeypatch):
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/shared.m3u")
+
+    from datetime import UTC, datetime
+
+    subscription = FakeSubscription()
+    subscription.provider_playlist_url = "https://provider.example/linha-revogada.m3u"
+    subscription.provider_revoked_at = datetime.now(UTC)
+    client.app.dependency_overrides[get_current_active_subscription] = lambda: subscription
+
+    response = client.get("/player/playlist", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["playlist_url"] == "https://provider.example/shared.m3u"

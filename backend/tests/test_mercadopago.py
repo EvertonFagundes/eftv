@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import time
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
@@ -66,8 +67,9 @@ def sign(secret: str, data_id: str, request_id: str, ts: str) -> str:
 
 def test_signature_accepts_valid_header(monkeypatch):
     monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", "segredo")
+    ts = str(int(time.time()))
     headers = {
-        "x-signature": sign("segredo", "123", "req-1", "1700000000"),
+        "x-signature": sign("segredo", "123", "req-1", ts),
         "x-request-id": "req-1",
     }
 
@@ -92,7 +94,7 @@ def test_signature_rejects_missing_header(monkeypatch):
 
 def test_signature_omits_absent_request_id(monkeypatch):
     monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", "segredo")
-    ts = "1700000000"
+    ts = str(int(time.time()))
     manifest = f"id:123;ts:{ts};"
     digest = hmac.new(b"segredo", manifest.encode(), hashlib.sha256).hexdigest()
     headers = {"x-signature": f"ts={ts},v1={digest}"}
@@ -293,3 +295,30 @@ async def test_checkout_creates_pending_preapproval_with_static_back_url(monkeyp
     # Campos do Checkout Pro nao existem no /preapproval.
     assert "back_urls" not in payload
     assert "payer" not in payload
+
+
+def test_webhook_without_secret_is_rejected_in_production(monkeypatch):
+    """Sem segredo o endpoint seria publico: qualquer um forca renovacao."""
+    monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", None)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+
+    assert mercadopago.validate_webhook_signature({}, "123") is False
+
+
+def test_webhook_without_secret_is_allowed_in_development(monkeypatch):
+    """Em dev/teste continua opcional para facilitar a simulacao local."""
+    monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", None)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+
+    assert mercadopago.validate_webhook_signature({}, "123") is True
+
+
+def test_webhook_rejects_replayed_timestamp(monkeypatch):
+    monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", "segredo")
+    ts = str(int(time.time()) - 4 * 24 * 60 * 60)
+    headers = {
+        "x-signature": sign("segredo", "123", "req-1", ts),
+        "x-request-id": "req-1",
+    }
+
+    assert mercadopago.validate_webhook_signature(headers, "123") is False

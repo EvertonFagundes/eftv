@@ -3,7 +3,7 @@
    porque o catálogo contém dados da playlist do usuário; a única exceção é o
    api/modo.js, que é público e pequeno. */
 
-const CACHE = "eftv-v6";
+const CACHE = "eftv-v7";
 
 const CORE = [
   "./",
@@ -18,6 +18,7 @@ const CORE = [
   "./assets/js/static-store.js",
   "./assets/js/local-server.js",
   "./assets/js/app.js",
+  "./assets/js/boot.js",
   "./assets/js/canal.js",
   "./assets/js/playlists.js",
   "./assets/js/pwa.js",
@@ -63,6 +64,23 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
 });
+
+/* Arquivos estáticos (CSS, JS, ícones, player): mostra a versão em cache na
+   hora e atualiza em segundo plano. Antes era network-first, então cada
+   abertura esperava a rede mesmo com tudo já guardado. */
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE);
+  const salvo = await cache.match(request);
+  const rede = fetch(request)
+    .then((resposta) => {
+      if (resposta && resposta.ok) {
+        cache.put(request, resposta.clone()).catch(() => {});
+      }
+      return resposta;
+    })
+    .catch(() => null);
+  return salvo || (await rede) || Response.error();
+}
 
 async function networkFirst(request, fallback) {
   const cache = await caches.open(CACHE);
@@ -113,5 +131,5 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(networkFirst(request));
+  event.respondWith(staleWhileRevalidate(request));
 });

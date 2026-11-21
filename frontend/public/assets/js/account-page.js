@@ -4,13 +4,31 @@ import { auth } from './auth.js'
 import { account } from './account.js'
 import { utils } from './utils.js'
 
-// Verifica autenticação
-if (!auth.requireAuth()) {
-  // auth.requireAuth já redireciona se não logado
-}
+// Atualiza a saudação assim que a sessão for restaurada pelo cookie HttpOnly.
+auth.subscribe(user => {
+  const greeting = document.getElementById('user-greeting')
+  if (greeting && user) {
+    greeting.textContent = `Olá, ${utils.escapeHtml(user.full_name || user.email.split('@')[0])}`
+  }
+})
 
-// Inicializa account
-account.load()
+// A sessão é restaurada de forma assíncrona (POST /auth/refresh usa o cookie).
+// Antes o requireAuth() rodava antes disso e mandava todo mundo para o login.
+auth.init()
+  .then(logado => {
+    if (!logado) {
+      auth.requireAuth()
+      return
+    }
+    account.load().catch(erro => {
+      console.error('Erro ao carregar a conta:', erro)
+      const card = document.getElementById('subscription-card')
+      if (card) {
+        card.innerHTML = '<div class="empty-subscription"><h3>Não foi possível carregar sua conta</h3><p>Tente recarregar a página em instantes.</p></div>'
+      }
+    })
+  })
+  .catch(() => auth.requireAuth())
 
 // Tabs
 document.querySelectorAll('.account-tab').forEach(tab => {
@@ -24,14 +42,6 @@ document.querySelectorAll('.account-tab').forEach(tab => {
 
 // Logout
 document.getElementById('logout-btn').addEventListener('click', () => auth.logout())
-
-// Atualiza saudação
-auth.subscribe(user => {
-  const greeting = document.getElementById('user-greeting')
-  if (greeting && user) {
-    greeting.textContent = `Olá, ${utils.escapeHtml(user.full_name || user.email.split('@')[0])}`
-  }
-})
 
 // Renderiza subscription card
 account.subscribe(state => {

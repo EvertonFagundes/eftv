@@ -70,9 +70,8 @@
       background: #ffb020; box-shadow: 0 0 0 3px rgba(255, 176, 32, 0.18);
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
-  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+  <!-- Bibliotecas fixadas por versão + SRI; carregadas sob demanda pelo script
+       abaixo (antes vinham as três em todo acesso, com dashjs em "latest"). -->
 </head>
 <body>
   <div id="wrapper">
@@ -476,16 +475,64 @@
         video.addEventListener("error", () => falhar("Falha ao carregar o arquivo de vídeo."), { once: true });
       }
 
+      /* Carrega a biblioteca só quando o tipo do stream precisa dela. Versões
+         fixas e SRI: um CDN comprometido não consegue trocar o conteúdo. */
+      const BIBLIOTECAS = {
+        "hls.min.js": {
+          url: "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js",
+          integrity: "sha384-9v3HcdYrO3D+OPDTjZ40RXocgE4GtXVCd3/mCS62JsM93JXgI1afJVuwjFvsu6ni",
+        },
+        "mpegts.js": {
+          url: "https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js",
+          integrity: "sha384-Z2H/TjKWDNZA/2luGOnjLx9pcva7cK4VSWC+hZn78Kr5uG8YbMpxdz+wWXBMO6N/",
+        },
+        "dash.all.min.js": {
+          url: "https://cdn.jsdelivr.net/npm/dashjs@5.3.0/dist/modern/umd/dash.all.min.js",
+          integrity: "sha384-zJdwI0qToBQJPUcEHqnveWGDxsPJoRq2tZW+SlOnDIWJHSaTxGGWj511YXK2U1li",
+        },
+      };
+      const bibliotecas = {};
+
+      function carregarBiblioteca(nome) {
+        if (bibliotecas[nome]) return bibliotecas[nome];
+        const info = BIBLIOTECAS[nome];
+        bibliotecas[nome] = new Promise((resolver, rejeitar) => {
+          const script = document.createElement("script");
+          script.src = info.url;
+          script.integrity = info.integrity;
+          script.crossOrigin = "anonymous";
+          script.async = true;
+          script.onload = () => resolver();
+          script.onerror = () => rejeitar(new Error("Falha ao carregar " + nome));
+          document.head.appendChild(script);
+        });
+        return bibliotecas[nome];
+      }
+
       function tocarFonte() {
         if (tipoAtual === "dash" || /\.mpd(\?|$)/i.test(srcAtual)) {
-          tocarDash();
-        } else if (tipoAtual === "mp4" || /\.mp4(\?|$)/i.test(srcAtual)) {
-          tocarMp4();
-        } else if (tipoAtual === "ts" || /\.ts(\?|$)/i.test(srcAtual)) {
-          tocarTs();
-        } else {
-          tocarHls();
+          carregarBiblioteca("dash.all.min.js").then(tocarDash).catch(() => {
+            falhar("Não foi possível carregar o suporte a DASH neste dispositivo.");
+          });
+          return;
         }
+        if (tipoAtual === "mp4" || /\.mp4(\?|$)/i.test(srcAtual)) {
+          tocarMp4();
+          return;
+        }
+        if (tipoAtual === "ts" || /\.ts(\?|$)/i.test(srcAtual)) {
+          carregarBiblioteca("mpegts.js").then(tocarTs).catch(() => {
+            falhar("Não foi possível carregar o suporte a MPEG-TS neste dispositivo.");
+          });
+          return;
+        }
+        if (video.canPlayType("application/vnd.apple.mpegurl") && !window.Hls) {
+          tocarHls();
+          return;
+        }
+        carregarBiblioteca("hls.min.js").then(tocarHls).catch(() => {
+          tocarHls();
+        });
       }
 
       if (!src) {
@@ -495,5 +542,6 @@
       }
     })();
   </script>
+  <script src="assets/js/pwa.js"></script>
 </body>
 </html>

@@ -72,6 +72,8 @@ class CheckoutRequest(BaseModel):
     payer_cpf: str | None = Field(None, pattern=r"^\d{11}$")
     # URL de retorno (sucesso/falha/pendente)
     back_urls: dict | None = None  # {"success": "...", "failure": "...", "pending": "..."}
+    # "android": volta para checkout.html?app=1, que reabre o app.
+    app_platform: str | None = Field(None, pattern="^(android|ios)$")
 
 
 class CheckoutResponse(BaseModel):

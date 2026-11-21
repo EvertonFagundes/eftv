@@ -33,6 +33,19 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        android:key="category_account"
+        android:title="@string/settings_category_account"
+        app:iconSpaceReserved="false">
+
+        <Preference
+            android:key="pref_delete_account"
+            android:summary="@string/settings_delete_account_summary"
+            android:title="@string/settings_delete_account"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:key="category_about"
         android:title="@string/settings_category_about"
         app:iconSpaceReserved="false">

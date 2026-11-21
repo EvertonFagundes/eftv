@@ -246,3 +246,30 @@ async def test_heartbeat_route_reports_closed_session(monkeypatch):
 
     assert exc.value.status_code == 409
     assert exc.value.detail["code"] == "session_closed"
+
+
+def test_stream_limit_is_capped_by_operational_setting(monkeypatch):
+    """Plano criado por engano com 10 telas nao pode furar a regra comercial."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "MAX_STREAMS_PER_SUBSCRIPTION", 2)
+    subscription = SimpleNamespace(plan=SimpleNamespace(max_simultaneous_streams=10))
+
+    assert streams.stream_limit(subscription) == 2
+
+
+def test_stream_limit_respects_the_plan_when_below_the_cap(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "MAX_STREAMS_PER_SUBSCRIPTION", 2)
+    subscription = SimpleNamespace(plan=SimpleNamespace(max_simultaneous_streams=1))
+
+    assert streams.stream_limit(subscription) == 1
+
+
+def test_stream_limit_without_plan_defaults_to_one(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "MAX_STREAMS_PER_SUBSCRIPTION", 2)
+
+    assert streams.stream_limit(SimpleNamespace(plan=None)) == 1

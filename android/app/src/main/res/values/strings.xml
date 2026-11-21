@@ -50,6 +50,10 @@
     <string name="update_available_message">A versão %1$s do EFTV está disponível. Atualize para receber as correções e novidades.</string>
     <string name="update_now">Atualizar</string>
     <string name="update_later">Depois</string>
+    <string name="update_downloading_title">Baixando atualização</string>
+    <string name="update_downloading">Aguarde enquanto o APK é baixado…</string>
+    <string name="update_download_failed">Não foi possível baixar a atualização. Verifique a conexão e tente de novo.</string>
+    <string name="update_allow_install">Autorize o EFTV a instalar apps nesta tela e toque em Atualizar novamente.</string>
     <string name="categories_title">Categorias</string>
     <string name="categories_search_hint">Buscar categoria</string>
     <string name="categories_empty">Nenhuma categoria com esse nome.</string>
@@ -231,6 +235,9 @@
         <item quantity="one">%d dia restante</item>
         <item quantity="other">%d dias restantes</item>
     </plurals>
+    <string name="trial_nudge_title">Seu teste grátis está terminando</string>
+    <string name="trial_nudge_message">Ainda restam %1$s de teste. Assine por %2$s/mês para continuar assistindo sem interrupção — você pode cancelar quando quiser.</string>
+    <string name="trial_nudge_later">Agora não</string>
 
     <string name="server_not_ready">O servidor local ainda está iniciando. Tente novamente em alguns segundos.</string>
     <string name="server_no_playlist">Nenhuma playlist configurada.\n\nToque em ⋮ → Adicionar playlist e cole o link .m3u do seu provedor. Depois toque em Atualizar.</string>
@@ -255,6 +262,17 @@
     <string name="settings_about_version">Versão do app</string>
     <string name="settings_terms">Termos de uso</string>
     <string name="settings_privacy">Política de privacidade</string>
+
+    <!-- Conta (exigencia da Play Store / LGPD) -->
+    <string name="settings_category_account">Conta</string>
+    <string name="settings_delete_account">Excluir minha conta</string>
+    <string name="settings_delete_account_summary">Apaga seus dados, encerra a assinatura e desconecta todos os aparelhos.</string>
+    <string name="settings_delete_account_title">Excluir conta?</string>
+    <string name="settings_delete_account_message">Esta ação é permanente. Seus dados pessoais serão apagados, a cobrança recorrente será encerrada e você será desconectado de todos os aparelhos. O histórico de pagamentos fica apenas sem seus dados, para obrigação fiscal.</string>
+    <string name="settings_delete_account_confirm">Excluir conta</string>
+    <string name="settings_delete_account_done">Conta excluída. Você foi desconectado.</string>
+    <string name="settings_delete_account_error">Não foi possível excluir a conta agora. Tente novamente.</string>
+    <string name="settings_delete_account_login">Entre novamente para excluir a conta.</string>
 
     <!-- Tipos de conteudo -->
     <string name="kind_live">Ao Vivo</string>

@@ -125,8 +125,8 @@ android {
         applicationId = "com.eftv.android"
         minSdk = 24
         targetSdk = 34
-        versionCode = 22
-        versionName = "1.4.7"
+        versionCode = 23
+        versionName = "1.4.8"
 
         // Debug no emulador usa 127.0.0.1; num celular, configure local.properties
         // com EFTV_API_URL=http://IP-DO-PC:8000
@@ -155,7 +155,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 remove código morto e ofusca o app. Sem isso o APK levava
+            // todas as classes das bibliotecas e ficava fácil de ler/alterar.
+            // As regras de keep (Chaquopy, ZXing, app) estão em proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
 
             // Assinatura propria: permite atualizar o app sem desinstalar.

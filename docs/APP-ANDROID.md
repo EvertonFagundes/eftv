@@ -1,7 +1,7 @@
 # EFTV Android — documentação técnica
 
 App do assinante para celular, tablet e **Android TV / TV box** (o mesmo APK).
-Versão atual: **1.4.6** (`versionCode 21`) · `minSdk 24` · `targetSdk 34` ·
+Versão atual: **1.4.8** (`versionCode 23`) · `minSdk 24` · `targetSdk 34` ·
 Media3/ExoPlayer 1.3.1 · Kotlin.
 
 > Regra do projeto: o usuário **não** cadastra playlist no app. O catálogo vem
@@ -260,3 +260,38 @@ Detalhes em `docs/TV.md`.
   quando você quiser expor de propósito.
 - Sem EPG, zapping por número, legendas embutidas do provedor e PIN infantil
   (dependem dos dados do provedor).
+
+### Endurecimento da 1.4.8
+
+- **Logs sem credenciais**: URLs de stream (que carregam usuário/senha em
+  muitos provedores) passaram a ser mascaradas em logcat, relatório de crash e
+  tela de erro (`data/LogUtils.kt`).
+- **Atualização só por HTTPS público**: o link de APK vindo do backend é
+  validado antes de abrir (recusa `http://`, loopback, faixas privadas e
+  `user:senha@host`).
+- **TLS obrigatório para o backend**: `res/xml/network_security_config.xml`
+  permite cleartext só para os streams IPTV; `eftv.onrender.com`,
+  `eftv.com.br` e `api.eftv.com.br` exigem HTTPS.
+- **R8 no release**: `isMinifyEnabled` e `isShrinkResources` ligados, com as
+  regras de keep do Chaquopy e do ZXing. O APK fica menor e mais difícil de
+  adulterar.
+- **Sem pedido de notificação no login**: o app não mostra notificações (o
+  servidor local não é mais serviço de primeiro plano), então a permissão
+  `POST_NOTIFICATIONS` não é mais solicitada na entrada.
+
+- **Sessão cifrada**: access/refresh tokens saem do `SharedPreferences` em
+  texto puro e passam a ser gravados com AES/GCM usando uma chave do Android
+  Keystore (só existe naquele aparelho). Copiar o arquivo de dados ou restaurar
+  um backup não permite reusar a assinatura em outro lugar. Sessões antigas
+  continuam válidas e são cifradas na primeira renovação.
+- **Volta do pagamento**: o checkout criado pelo app manda o Mercado Pago
+  retornar para `checkout.html?app=1`; a página reabre o app em `eftv://open`
+  e a tela **Minha assinatura** aparece já atualizada. Antes o cliente
+  terminava no navegador e precisava procurar o app de novo.
+- **Fim do acesso na hora**: se `/player/play` ou o heartbeat responder 401/403
+  (assinatura vencida, e-mail não confirmado), o vídeo é pausado e o app
+  oferece assinar. Antes o player ignorava o erro e continuava tocando o canal
+  salvo no cache. Falha de rede continua liberada (tolerância offline).
+- **Tela de login sem botão morto**: o botão "Continuar sem assinatura
+  (demonstração)" existia no layout de produção sem nenhuma ação e saiu.
+- **Aviso de fim do teste**: nos últimos 3 dias do trial o catálogo mostra um aviso (1x por dia) com o preço do plano e o botão **Assinar agora**. O e-mail de lembrete continua, mas quem não abre a caixa de entrada passa a ter uma segunda chance antes do bloqueio.

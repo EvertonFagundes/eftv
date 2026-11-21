@@ -1,5 +1,6 @@
 package com.eftv.android
 
+import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
@@ -34,6 +35,7 @@ import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.ChannelKind
 import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.LocalServer
+import com.eftv.android.data.LogUtils
 import com.eftv.android.data.AppScope
 import com.eftv.android.data.SessionStore
 import com.eftv.android.data.api.EftvApi
@@ -87,6 +89,9 @@ class PlayerActivity : AppCompatActivity() {
     private var streamSessionId: String? = null
     private var heartbeatJob: Job? = null
     private var limitDialogShown = false
+
+    /** Servidor recusou a assinatura: o video foi interrompido. */
+    private var accessBlocked = false
 
     /** Se o conteudo atual e ao vivo (true) ou sob demanda (false). */
     private var isLive = false
@@ -282,7 +287,11 @@ class PlayerActivity : AppCompatActivity() {
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                Timber.e(error, "Erro ao reproduzir %s", streamUrl)
+                Timber.e(
+                    "Erro ao reproduzir %s: %s",
+                    LogUtils.redactUrl(streamUrl),
+                    LogUtils.redactThrowable(error),
+                )
                 lastErrorDetail = buildString {
                     append(error.errorCodeName)
                     error.cause?.message?.let { append(": ").append(it) }
@@ -390,7 +399,7 @@ class PlayerActivity : AppCompatActivity() {
         // aparelhos: o servidor sobe junto com o app.
         val mediaUrl = LocalServer.playbackUrl(streamUrl)
         if (mediaUrl != streamUrl) {
-            Timber.i("Reproduzindo via proxy local: %s", streamUrl)
+            Timber.i("Reproduzindo via proxy local: %s", LogUtils.redactUrl(streamUrl))
         }
         exoPlayer.setMediaItem(
             MediaItem.Builder()
@@ -828,7 +837,11 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun showError(detail: String) {
         binding.errorContainer.visibility = View.VISIBLE
-        binding.errorText.text = getString(R.string.player_error_detail, streamUrl, detail)
+        binding.errorText.text = getString(
+            R.string.player_error_detail,
+            LogUtils.redactUrl(streamUrl),
+            detail,
+        )
     }
 
     private fun hideError() {
@@ -858,31 +871,61 @@ class PlayerActivity : AppCompatActivity() {
      * quisessem.
      */
     private fun startStreamSession() {
-        if (limitDialogShown) return
+        if (limitDialogShown || accessBlocked) return
         lifecycleScope.launch {
             val token = authorizedToken() ?: return@launch
-            try {
-                val info = api.playStream(token, streamUrl, channelName)
-                streamSessionId = info.sessionId
-                startHeartbeat(info.heartbeatInSeconds)
-            } catch (e: EftvApi.ApiException) {
-                if (e.statusCode == 403 && e.errorCode == "stream_limit") {
+            registerStreamSession(token)
+        }
+    }
+
+    /**
+     * Registra a tela no servidor. Um 401 pode ser so o token curto vencido:
+     * renova e tenta uma unica vez antes de bloquear.
+     */
+    private suspend fun registerStreamSession(token: String, allowRefresh: Boolean = true) {
+        try {
+            val info = api.playStream(token, streamUrl, channelName)
+            streamSessionId = info.sessionId
+            startHeartbeat(info.heartbeatInSeconds)
+        } catch (e: EftvApi.ApiException) {
+            when {
+                e.statusCode == 403 && e.errorCode == "stream_limit" -> {
                     showStreamLimitDialog(e.detail)
-                } else {
+                }
+
+                e.statusCode == 401 && allowRefresh -> {
+                    val renewed = authorizedToken(forceRefresh = true)
+                    if (renewed != null) {
+                        registerStreamSession(renewed, allowRefresh = false)
+                    } else {
+                        showAccessBlocked(e.detail)
+                    }
+                }
+
+                // 401/403 sem ser limite de tela: assinatura vencida,
+                // e-mail nao confirmado ou aparelho bloqueado. Antes o
+                // player ignorava e o video continuava no catalogo salvo,
+                // entao quem vencia o trial assistia de graca.
+                e.statusCode == 401 || e.statusCode == 403 -> {
+                    showAccessBlocked(e.detail)
+                }
+
+                else -> {
                     // Servidor fora do ar, erro interno, etc: nao bloqueia.
                     // O app tem tolerancia offline e nao pode virar refem da API.
                     Timber.w(e, "Sem registrar a sessao de stream")
                 }
-            } catch (e: Exception) {
-                Timber.w(e, "Sem registrar a sessao de stream")
             }
+        } catch (e: Exception) {
+            // Rede fora: nao bloqueia (tolerancia offline).
+            Timber.w(e, "Sem registrar a sessao de stream")
         }
     }
 
     /** Token valido; renova com o refresh quando o curto expirou. */
-    private suspend fun authorizedToken(): String? {
+    private suspend fun authorizedToken(forceRefresh: Boolean = false): String? {
         val token = session.accessToken() ?: return null
-        if (!session.isAccessTokenExpired()) return token
+        if (!forceRefresh && !session.isAccessTokenExpired()) return token
         val refresh = session.refreshToken() ?: return null
         return runCatching {
             val tokens = api.refresh(refresh)
@@ -903,10 +946,20 @@ class PlayerActivity : AppCompatActivity() {
                 try {
                     api.heartbeatStream(token, id)
                 } catch (e: EftvApi.ApiException) {
-                    if (e.statusCode == 409) {
-                        // O servidor encerrou a sessao: nao insiste.
-                        streamSessionId = null
-                        return@launch
+                    when (e.statusCode) {
+                        409 -> {
+                            // O servidor encerrou a sessao: nao insiste.
+                            streamSessionId = null
+                            return@launch
+                        }
+
+                        // A assinatura venceu (ou o aparelho foi removido)
+                        // enquanto o canal estava aberto: para o video.
+                        401, 403 -> {
+                            streamSessionId = null
+                            showAccessBlocked(e.detail)
+                            return@launch
+                        }
                     }
                 } catch (_: Exception) {
                     // Rede oscilou: o proximo ciclo tenta de novo.
@@ -938,6 +991,28 @@ class PlayerActivity : AppCompatActivity() {
             .setMessage(message.ifBlank { getString(R.string.stream_limit_message) })
             .setCancelable(false)
             .setPositiveButton(R.string.stream_limit_ok) { _, _ -> finish() }
+            .show()
+    }
+
+    /**
+     * Assinatura vencida/bloqueada: interrompe o video e leva ao pagamento.
+     *
+     * A checagem e feita quando o servidor recusa `/player/play` ou o
+     * heartbeat. Falha de rede continua liberada (tolerancia offline).
+     */
+    private fun showAccessBlocked(detail: String) {
+        if (accessBlocked || isFinishing || isDestroyed) return
+        accessBlocked = true
+        player?.playWhenReady = false
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.subscription_inactive_title)
+            .setMessage(detail.ifBlank { getString(R.string.subscription_inactive_message) })
+            .setCancelable(false)
+            .setPositiveButton(R.string.subscription_subscribe_now) { _, _ ->
+                startActivity(Intent(this, SubscriptionActivity::class.java))
+                finish()
+            }
+            .setNegativeButton(R.string.close) { _, _ -> finish() }
             .show()
     }
 

@@ -46,6 +46,12 @@ services:
       # Playlist licenciada: preencher no dashboard, nunca no repositorio.
       - key: IPTV_PLAYLIST_URL
         sync: false
+      # Assinatura do webhook do Mercado Pago (painel > Webhooks).
+      # Obrigatoria em producao: sem ela o webhook e recusado.
+      - key: MERCADOPAGO_WEBHOOK_SECRET
+        sync: false
+      - key: MAX_STREAMS_PER_SUBSCRIPTION
+        value: "2"
       - key: IPTV_PLAYLIST_USER_AGENT
         value: VLC/3.0.20 LibVLC/3.0.20
       - key: IPTV_PLAYLIST_REFERER

@@ -97,6 +97,20 @@ async def check_expired_subscriptions() -> int:
 
             updated += 1
 
+        # Trials vencidos: antes ficavam com status "trial" para sempre (o
+        # acesso era bloqueado so pelo has_access, mas o estado mentia e nao
+        # havia e-mail de fim de teste).
+        trial_result = await db.execute(
+            select(Subscription).where(
+                Subscription.status == "trial",
+                Subscription.trial_end.is_not(None),
+                Subscription.trial_end < now,
+            )
+        )
+        for sub in trial_result.scalars().all():
+            sub.status = "expired"
+            updated += 1
+
     return updated
 
 

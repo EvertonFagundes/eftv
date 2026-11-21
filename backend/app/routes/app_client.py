@@ -7,7 +7,7 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.client_error import ClientError
+from app.security.dependencies import client_ip
+from app.services import rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -80,15 +82,29 @@ async def apk_download():
 @router.post("/crashes", status_code=status.HTTP_202_ACCEPTED)
 async def report_crash(
     payload: CrashReportRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Recebe o relato de travamento/erro do app.
 
     Endpoint publico de proposito: o app pode quebrar antes do login. O volume
-    e limitado pelo tamanho dos campos e o conteudo vai direto para o log.
+    e limitado pelo tamanho dos campos, pela janela por IP e o conteudo vai
+    direto para o log.
     """
     if not settings.CLIENT_ERRORS_ENABLED:
         return {"accepted": False}
+
+    # Sem isso o endpoint publico aceitava spam infinito no banco. O balde e
+    # por aparelho quando o app manda o header (o proxy do Render entrega o
+    # mesmo IP para todos); sem header, cai no IP.
+    reporter = (request.headers.get("x-device-id") or "").strip() or client_ip(request)
+    await rate_limit.hit(
+        db,
+        key=rate_limit.scoped_key("crashes", reporter),
+        limit=settings.RATE_LIMIT_CRASHES_PER_MINUTE,
+        window_seconds=60,
+        detail="Muitos relatos de erro. Tente novamente em instantes.",
+    )
 
     error = ClientError(
         app_version=payload.app_version,

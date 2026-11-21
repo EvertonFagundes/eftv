@@ -1,6 +1,7 @@
 package com.eftv.android
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.text.SpannableString
@@ -13,6 +14,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.eftv.android.data.DeviceIdentity
@@ -39,6 +41,13 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var binding: ActivityLoginBinding
     private val session by lazy { SessionStore(this) }
     private val api by lazy { EftvApi(deviceId = DeviceIdentity(this).id) }
+
+    /** Android 13+ exige autorizacao explicita para notificacoes. */
+    private val notificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) Timber.i("Notificacoes nao autorizadas pelo usuario")
+    }
 
     private val isTelevision: Boolean by lazy {
         packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
@@ -69,17 +78,33 @@ class LoginActivity : AppCompatActivity() {
         )
     }
 
+    /** Android 13+: pede a permissao uma vez (o sistema nao pergunta sozinho). */
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        requestNotificationPermission()
+        requestNotificationPermissionIfNeeded()
 
         binding.versionText.text = getString(
             R.string.login_version,
             BuildConfig.VERSION_NAME,
             BuildConfig.API_BASE_URL,
         )
+
+        // Link externo (volta do pagamento ou confirmacao de email). Precisa
+        // ser tratado antes do desvio automatico para o catalogo.
+        if (handleDeepLink(intent)) return
 
         // Termos e politica: obrigatorio para loja e exigido pelo Mercado Pago.
         binding.legalText.text = getString(R.string.login_legal)
@@ -132,6 +157,50 @@ class LoginActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         TvScreen.apply(this)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    /**
+     * Links que abrem o app por fora:
+     *
+     * - `eftv://open` volta do checkout do Mercado Pago;
+     * - `eftv://verify-email?token=...` e o link de confirmacao do email.
+     *
+     * Os intent-filters existiam no manifesto, mas nada lia `intent.data`:
+     * quem pagava e tocava em "Voltar ao app" caia no catalogo sem atualizar a
+     * assinatura, e o link de email nao chegava na tela de verificacao.
+     *
+     * @return true quando a tela ja foi encaminhada para outro destino.
+     */
+    private fun handleDeepLink(intent: Intent?): Boolean {
+        val data = intent?.data ?: return false
+        if (data.scheme != "eftv") return false
+
+        when (data.host) {
+            "open" -> {
+                // Sem sessao: continua no login (o pagamento pode ter sido
+                // feito em outro aparelho).
+                if (!session.hasSession()) return false
+                if (session.isEmailVerified()) {
+                    openCatalog(openSubscription = true)
+                } else {
+                    openEmailVerification()
+                }
+                return true
+            }
+
+            "verify-email" -> {
+                if (!session.hasSession()) return false
+                openEmailVerification(token = data.getQueryParameter("token"))
+                return true
+            }
+        }
+        return false
     }
 
     /**
@@ -422,20 +491,27 @@ class LoginActivity : AppCompatActivity() {
         else -> e.detail
     }
 
-    private fun openCatalog(skipAuth: Boolean = false) {
+    private fun openCatalog(skipAuth: Boolean = false, openSubscription: Boolean = false) {
         startActivity(
             Intent(this, MainActivity::class.java).apply {
+                // Reaproveita o catalogo ja aberto (volta do navegador) em vez
+                // de empilhar outra MainActivity embaixo do login.
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 putExtra(MainActivity.EXTRA_SKIP_AUTH, skipAuth)
+                putExtra(MainActivity.EXTRA_OPEN_SUBSCRIPTION, openSubscription)
             }
         )
         finish()
     }
 
-    private fun openEmailVerification() {
+    private fun openEmailVerification(token: String? = null) {
         val email = session.email().orEmpty()
         startActivity(
             Intent(this, EmailVerificationActivity::class.java).apply {
                 putExtra(EmailVerificationActivity.EXTRA_EMAIL, email)
+                token?.takeIf { it.isNotBlank() }?.let {
+                    putExtra(EmailVerificationActivity.EXTRA_TOKEN, it)
+                }
             }
         )
         finish()
@@ -449,14 +525,6 @@ class LoginActivity : AppCompatActivity() {
         binding.fullNameInput.isEnabled = !loading
         binding.loginProgress.visibility = if (loading) View.VISIBLE else View.GONE
         if (loading) binding.loginError.visibility = View.GONE
-    }
-
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) return
-        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 8124)
     }
 
     private fun showError(message: String) {

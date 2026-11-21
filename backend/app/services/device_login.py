@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.device_login_code import DeviceLoginCode
+from app.services import sessions
 from app.services.auth_service import create_token_pair
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,16 @@ async def approve_code(db: AsyncSession, *, code: str, user_id, email: str | Non
         await db.commit()
         raise ValueError("expired")
 
-    access_token, _access_jti, refresh_token, _refresh_jti = create_token_pair(str(user_id))
+    access_token, _access_jti, refresh_token, refresh_jti = create_token_pair(str(user_id))
+    # Registra o refresh para que o logout/rotacao consigam revogar a sessao
+    # criada na TV (antes ela ficava valida mesmo depois do logout).
+    await sessions.register(
+        db,
+        user_id=user_id,
+        jti=refresh_jti,
+        expires_at=datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        commit=False,
+    )
     entry.user_id = user_id
     entry.email = email
     entry.access_token = access_token

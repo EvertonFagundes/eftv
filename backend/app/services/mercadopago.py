@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 # Estados da preapproval no Mercado Pago que liberam o acesso.
 _ACTIVE_PREAPPROVAL_STATUSES = {"authorized"}
 
+# Janela aceita entre o ts assinado e agora (anti-replay do webhook).
+WEBHOOK_TOLERANCE_SECONDS = 600
+
 # Cache da identidade da conta coletora (evita consultar o Mercado Pago a
 # cada abertura de tela). Conta de teste nao consegue cobrar cliente real.
 _account_cache: dict = {"at": 0.0, "data": None}
@@ -79,13 +82,19 @@ def validate_webhook_signature(headers, data_id: str | None) -> bool:
     """Valida o header ``x-signature`` enviado pelo Mercado Pago.
 
     O Mercado Pago assina ``id:<data.id>;request-id:<x-request-id>;ts:<ts>;``
-    com HMAC-SHA256 usando o segredo configurado no painel. Sem o segredo
-    configurado a validacao e ignorada (ambiente de desenvolvimento).
+    com HMAC-SHA256 usando o segredo configurado no painel.
 
-    Retorna ``False`` quando o segredo existe e a assinatura nao confere.
+    Em producao o segredo e obrigatorio: sem ele o webhook e recusado (antes
+    era aceito, e qualquer um podia forcar chamadas/reenvios). Em
+    desenvolvimento a validacao continua opcional para facilitar testes.
     """
     secret = settings.MERCADOPAGO_WEBHOOK_SECRET
     if not secret:
+        if settings.ENVIRONMENT == "production":
+            logger.error(
+                "MERCADOPAGO_WEBHOOK_SECRET nao configurado: webhook recusado em producao"
+            )
+            return False
         logger.warning(
             "MERCADOPAGO_WEBHOOK_SECRET nao configurado: webhook aceito sem validar assinatura"
         )
@@ -103,6 +112,15 @@ def validate_webhook_signature(headers, data_id: str | None) -> bool:
     ts = parts.get("ts")
     received = parts.get("v1")
     if not ts or not received:
+        return False
+
+    # Rejeita replay de um webhook antigo (a assinatura continua valida, mas a
+    # notificacao ja foi processada). O Mercado Pago reenvia assinado de novo.
+    try:
+        if abs(time.time() - float(ts)) > WEBHOOK_TOLERANCE_SECONDS:
+            logger.warning("Webhook do Mercado Pago com timestamp fora da janela: %s", ts)
+            return False
+    except (TypeError, ValueError):
         return False
 
     request_id = headers.get("x-request-id")
@@ -193,7 +211,7 @@ async def get_or_create_subscription_plan(db, plan: Plan) -> str:
             "transaction_amount": round(plan.price_cents / 100, 2),
             "currency_id": plan.currency or "BRL",
         },
-        "back_url": f"{settings.FRONTEND_URL.rstrip('/')}/checkout.html",
+        "back_url": f"{settings.FRONTEND_URL.rstrip('/')}/checkout.html?app=1",
         "payment_methods_allowed": {"payment_types": [{"id": "credit_card"}]},
     }
 
@@ -492,7 +510,9 @@ async def _find_subscription(
             select(User).where(func.lower(User.email) == payer_email.lower())
         )
         user = user_result.scalar_one_or_none()
-        if user is not None:
+        # So casa com conta CONFIRMADA: cadastrar o e-mail de outra pessoa
+        # (conta nao verificada) nao pode capturar o pagamento dela.
+        if user is not None and user.email_verified:
             result = await db.execute(
                 select(Subscription)
                 .where(Subscription.user_id == user.id)

@@ -1,11 +1,23 @@
 # tests/test_app_client.py - Versao do app (atualizacao por APK) e erros do cliente
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from pydantic import ValidationError
 
 from app.config import settings
 from app.models.client_error import ClientError
 from app.routes import app_client
+
+
+def make_request(ip: str = "203.0.113.7") -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/app/crashes",
+            "headers": [],
+            "client": (ip, 50000),
+        }
+    )
 
 
 class FakeSession:
@@ -69,6 +81,11 @@ async def test_crash_report_is_stored(monkeypatch):
     monkeypatch.setattr(settings, "CLIENT_ERRORS_ENABLED", True)
     db = FakeSession()
 
+    async def no_limit(*args, **kwargs):
+        return 0
+
+    monkeypatch.setattr(app_client.rate_limit, "hit", no_limit)
+
     payload = app_client.CrashReportRequest(
         message="NullPointerException",
         stacktrace="at com.eftv.android.PlayerActivity.onCreate(PlayerActivity.kt:1)",
@@ -77,7 +94,7 @@ async def test_crash_report_is_stored(monkeypatch):
         android="14",
     )
 
-    result = await app_client.report_crash(payload, db=db)
+    result = await app_client.report_crash(payload, make_request(), db=db)
 
     assert result == {"accepted": True}
     assert db.commits == 1
@@ -100,7 +117,7 @@ async def test_crash_report_disabled_does_nothing(monkeypatch):
     db = FakeSession()
 
     result = await app_client.report_crash(
-        app_client.CrashReportRequest(message="erro"), db=db
+        app_client.CrashReportRequest(message="erro"), make_request(), db=db
     )
 
     assert result == {"accepted": False}

@@ -51,7 +51,13 @@ class ApiClient {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      throw new Error(data.detail || `Erro ${response.status}`)
+      // O backend pode devolver detail como texto ou como {code, message}
+      // (vínculo de aparelho, assinatura inativa etc.).
+      let detalhe = data.detail
+      if (detalhe && typeof detalhe === 'object') {
+        detalhe = detalhe.message || detalhe.code
+      }
+      throw new Error(detalhe || `Erro ${response.status}`)
     }
 
     return data

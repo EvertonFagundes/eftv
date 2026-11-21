@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark">
   <title>Confirmar e-mail — EFTV</title>
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <style>
@@ -91,7 +93,7 @@
   </style>
 </head>
 <body>
-  <main>
+  <main aria-live="polite">
     <div class="brand">EF<span>TV</span></div>
 
     <section id="loading">
@@ -140,8 +142,16 @@
 
       const token = new URLSearchParams(window.location.search).get("token");
       if (!token) {
-        showError("O link nao tem um codigo de confirmacao. Use o botao do e-mail.");
+        showError("O link não tem um código de confirmação. Use o botão do e-mail.");
         return;
+      }
+
+      // O token é de uso único: tira da barra de endereço e do histórico para
+      // não ficar visível em prints, nem vazar por engano ao compartilhar a aba.
+      try {
+        window.history.replaceState(null, "", window.location.pathname);
+      } catch (_) {
+        // Histórico indisponível: segue com a confirmação normalmente.
       }
 
       fetch(API_BASE + "/auth/verify-email", {

@@ -47,10 +47,15 @@ class FakeEmails:
     def __init__(self, success: bool = True) -> None:
         self.success = success
         self.trial = []
+        self.expired = []
         self.failed = []
 
     async def send_trial_ending_email(self, to_email, trial_end, full_name=None):
         self.trial.append((to_email, trial_end, full_name))
+        return self.success
+
+    async def send_trial_expired_email(self, to_email, full_name=None):
+        self.expired.append((to_email, full_name))
         return self.success
 
     async def send_payment_failed_email(self, to_email, full_name=None):
@@ -89,7 +94,7 @@ def make_user() -> SimpleNamespace:
 
 async def test_trial_ending_email_is_sent_and_marked(monkeypatch):
     subscription = make_trial_subscription()
-    session = FakeSession([(subscription, make_user())], [])
+    session = FakeSession([(subscription, make_user())], [], [])
     emails = FakeEmails()
 
     monkeypatch.setattr(lifecycle_emails, "get_db_context", FakeDbContext(session))
@@ -108,7 +113,7 @@ async def test_trial_ending_email_is_sent_and_marked(monkeypatch):
 async def test_trial_email_not_marked_when_send_fails(monkeypatch):
     """Falha do provedor nao pode marcar como avisado (o cliente ficaria sem aviso)."""
     subscription = make_trial_subscription()
-    session = FakeSession([(subscription, make_user())], [])
+    session = FakeSession([(subscription, make_user())], [], [])
     emails = FakeEmails(success=False)
 
     monkeypatch.setattr(lifecycle_emails, "get_db_context", FakeDbContext(session))
@@ -122,7 +127,7 @@ async def test_trial_email_not_marked_when_send_fails(monkeypatch):
 
 async def test_payment_failed_email_is_sent_and_marked(monkeypatch):
     subscription = make_past_due()
-    session = FakeSession([], [(subscription, make_user())])
+    session = FakeSession([], [], [(subscription, make_user())])
     emails = FakeEmails()
 
     monkeypatch.setattr(lifecycle_emails, "get_db_context", FakeDbContext(session))
@@ -136,7 +141,7 @@ async def test_payment_failed_email_is_sent_and_marked(monkeypatch):
 
 
 async def test_nothing_to_notify(monkeypatch):
-    session = FakeSession([], [])
+    session = FakeSession([], [], [])
     emails = FakeEmails()
 
     monkeypatch.setattr(lifecycle_emails, "get_db_context", FakeDbContext(session))
@@ -144,5 +149,5 @@ async def test_nothing_to_notify(monkeypatch):
 
     sent = await lifecycle_emails.send_lifecycle_emails()
 
-    assert sent == {"trial_ending": 0, "payment_failed": 0}
+    assert sent == {"trial_ending": 0, "trial_expired": 0, "payment_failed": 0}
     assert emails.trial == []

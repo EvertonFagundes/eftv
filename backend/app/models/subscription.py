@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -49,7 +50,20 @@ class Subscription(Base):
     trial_reminder_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Aviso de "teste acabou" (winback). Sem isso o cliente so descobre o
+    # vencimento quando o canal para de tocar.
+    trial_expired_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     payment_failed_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Linha propria no provedor de IPTV (quando o provedor permite subconta).
+    # Enquanto for NULL o app usa a playlist compartilhada de
+    # ``IPTV_PLAYLIST_URL``; com valor, cada assinante tem credencial propria
+    # e revogavel. ``provider_revoked_at`` marca a linha cortada.
+    provider_playlist_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     # "metadata" e reservado no SQLAlchemy Declarative; a coluna mantem o nome.

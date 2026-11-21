@@ -82,3 +82,6 @@ class MessageResponse(BaseModel):
 class EmailVerificationResponse(BaseModel):
     message: str
     email_verified: bool
+    # False quando o aparelho ja consumiu o teste gratis em outra conta: o
+    # e-mail fica verificado, mas sem trial (o cliente precisa assinar).
+    trial_activated: bool = True

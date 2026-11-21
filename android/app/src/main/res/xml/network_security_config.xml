@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  O player precisa de HTTP para muitos streams IPTV licenciados (o provedor
+  entrega .ts/.m3u8 sem TLS). Por isso o padrão continua permitindo cleartext.
+
+  O que muda: os domínios conhecidos do backend EFTV exigem HTTPS. Assim, uma
+  configuração errada (ou um build apontando para http://) falha de forma
+  visível em vez de enviar login/token de sessão em texto puro.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">eftv.onrender.com</domain>
+        <domain includeSubdomains="true">eftv.com.br</domain>
+        <domain includeSubdomains="true">api.eftv.com.br</domain>
+    </domain-config>
+</network-security-config>

@@ -1,4 +1,5 @@
 # models/user.py - Modelo de usuário
+import hashlib
 import hmac
 import secrets
 import uuid
@@ -21,6 +22,11 @@ if TYPE_CHECKING:
     from app.models.payment import Payment
     from app.models.playback_session import PlaybackSession
     from app.models.subscription import Subscription
+
+
+def _hash_reset_code(code: str) -> str:
+    """Hash do codigo de recuperacao (o codigo em si nunca vai ao banco)."""
+    return hashlib.sha256(("eftv-reset:" + code).encode("utf-8")).hexdigest()
 
 
 class User(Base):
@@ -93,10 +99,14 @@ class User(Base):
         return datetime.now(UTC) < self.email_verification_expires_at
 
     def generate_password_reset_code(self) -> str:
-        """Gera um codigo numerico de 6 digitos valido por 30 minutos."""
+        """Gera um codigo numerico de 6 digitos valido por 30 minutos.
+
+        O banco guarda apenas o hash: um vazamento de leitura no banco nao
+        entrega o codigo que troca a senha.
+        """
 
         code = f"{secrets.randbelow(900000) + 100000}"
-        self.password_reset_token = code
+        self.password_reset_token = _hash_reset_code(code)
         self.password_reset_expires_at = datetime.now(UTC) + timedelta(minutes=30)
         return code
 
@@ -105,6 +115,13 @@ class User(Base):
 
         if not self.password_reset_token or not self.password_reset_expires_at:
             return False
-        if not hmac.compare_digest(self.password_reset_token, code.strip()):
+        typed = (code or "").strip()
+        if not typed:
+            return False
+        matches = hmac.compare_digest(self.password_reset_token, _hash_reset_code(typed))
+        if not matches:
+            # Compatibilidade: codigos gerados antes do hash (validade 30 min).
+            matches = hmac.compare_digest(self.password_reset_token, typed)
+        if not matches:
             return False
         return datetime.now(UTC) < self.password_reset_expires_at

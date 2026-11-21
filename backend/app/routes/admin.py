@@ -1,8 +1,10 @@
 ﻿# routes/admin.py - Rotas administrativas
+import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +25,8 @@ from app.services.plans import get_or_create_plan
 from app.services.playlist_expiry import check_playlist_expiry
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+logger = logging.getLogger(__name__)
 
 
 @router.post("/claim-ownership")
@@ -545,3 +549,69 @@ async def make_user_owner(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno: {str(exc)}",
         ) from exc
+
+# ----------------------------------------------------------------------
+# Linha propria do provedor de IPTV (revogacao por assinante)
+#
+# Sem isso todos os assinantes usam a MESMA URL (IPTV_PLAYLIST_URL) e um
+# vazamento nao pode ser revogado sem trocar a credencial de todos. Quando o
+# provedor permite subconta, o admin grava aqui a URL da linha do cliente; o
+# /player/playlist passa a entrega-la no lugar da compartilhada.
+# ----------------------------------------------------------------------
+
+
+class ProviderLineRequest(BaseModel):
+    playlist_url: str
+    note: str | None = None
+
+
+@router.post("/subscriptions/{subscription_id}/line")
+async def set_provider_line(
+    subscription_id: UUID,
+    payload: ProviderLineRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Vincula a linha propria (credencial do provedor) a uma assinatura."""
+    result = await db.execute(select(Subscription).where(Subscription.id == subscription_id))
+    subscription = result.scalar_one_or_none()
+    if subscription is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura nao encontrada")
+
+    url = payload.playlist_url.strip()
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A URL da linha precisa ser http(s)",
+        )
+
+    subscription.provider_playlist_url = url[:2000]
+    subscription.provider_revoked_at = None
+    await db.commit()
+    logger.info(
+        "Linha propria vinculada: subscription=%s por admin=%s", subscription.id, admin.email
+    )
+    return {
+        "subscription_id": str(subscription.id),
+        "configured": True,
+        "note": payload.note,
+    }
+
+
+@router.delete("/subscriptions/{subscription_id}/line")
+async def revoke_provider_line(
+    subscription_id: UUID,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoga a linha propria (cliente volta para a playlist compartilhada)."""
+    result = await db.execute(select(Subscription).where(Subscription.id == subscription_id))
+    subscription = result.scalar_one_or_none()
+    if subscription is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura nao encontrada")
+
+    subscription.provider_revoked_at = datetime.now(UTC)
+    subscription.provider_playlist_url = None
+    await db.commit()
+    logger.info("Linha propria revogada: subscription=%s por admin=%s", subscription.id, admin.email)
+    return {"subscription_id": str(subscription.id), "configured": False}

@@ -1,9 +1,10 @@
 # routes/auth.py - Rotas de autenticação
 import contextlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,10 +30,9 @@ from app.schemas.auth import (
 from app.security.dependencies import (
     check_login_failures,
     get_current_user,
-    rate_limit_dependency,
     record_login_success,
 )
-from app.services import device_login
+from app.services import device_login, rate_limit, sessions, trials
 from app.services.auth_service import (
     create_token_pair,
     decode_token,
@@ -41,12 +41,61 @@ from app.services.auth_service import (
     is_token_expired,
     verify_password,
 )
+from app.services.devices import InvalidDeviceError, normalize_device_id
 from app.services.email_service import EmailService
 from app.services.plans import get_or_create_plan
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
 email_service = EmailService()
+
+
+def _refresh_expiry() -> datetime:
+    """Quando o refresh token expira (mesma regra do JWT)."""
+    return datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
+
+def _optional_device_id(raw: str | None) -> str | None:
+    """Aceita o header de aparelho sem obrigar (web nao manda)."""
+    try:
+        return normalize_device_id(raw)
+    except InvalidDeviceError:
+        return None
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    """Cookie HttpOnly usado pelo site; o app Android usa o corpo JSON."""
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=not settings.DEBUG,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/auth/refresh",
+    )
+
+
+async def _issue_tokens(
+    db: AsyncSession,
+    user_id,
+    device_id: str | None = None,
+    *,
+    commit: bool = True,
+) -> tuple[str, str]:
+    """Cria o par de tokens e registra o refresh (para poder revogar)."""
+    access_token, _access_jti, refresh_token, refresh_jti = create_token_pair(str(user_id))
+    await sessions.register(
+        db,
+        user_id=user_id,
+        jti=refresh_jti,
+        expires_at=_refresh_expiry(),
+        device_id=device_id,
+        commit=False,
+    )
+    if commit:
+        await db.commit()
+    return access_token, refresh_token
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
@@ -63,32 +112,52 @@ async def register(
     enviado por email. Somente apos verificar o email o trial gratuito de
     7 dias e ativado.
     """
-    # Rate limiting por IP para evitar cadastros em massa
-    await rate_limit_dependency(request)
+    # Limite por CONTA (e-mail), nao por IP: atras do proxy do Render todos
+    # os clientes aparecem com o mesmo IP, entao um balde por IP bloquearia
+    # a base inteira.
+    await rate_limit.hit(
+        db,
+        key=rate_limit.scoped_key("register", data.email),
+        limit=settings.RATE_LIMIT_REGISTER_PER_HOUR,
+        window_seconds=3600,
+        detail="Muitas tentativas de cadastro para este email. Tente mais tarde.",
+    )
 
     # Verifica se email já existe
     result = await db.execute(select(User).where(User.email == data.email))
-    if result.scalar_one_or_none():
+    existing = result.scalar_one_or_none()
+
+    if existing is not None and existing.email_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email já cadastrado",
         )
 
-    # Verifica se já existe algum admin no banco; se não, este usuário vira admin
-    admin_result = await db.execute(select(User).where(User.is_admin == True))  # noqa: E712
-    existing_admin = admin_result.scalar_one_or_none()
-    is_first_user = existing_admin is None
+    if existing is not None:
+        # Conta criada e nunca confirmada (dono do e-mail nunca terminou o
+        # cadastro, ou alguem "reservou" o endereco). Como a posse do e-mail
+        # ainda vai ser provada pela verificacao, o cadastro novo assume a
+        # conta em vez de vazar pagamento/futuro trial para quem reservou.
+        existing.password_hash = hash_password(data.password)
+        existing.full_name = data.full_name or existing.full_name
+        existing.phone = data.phone or existing.phone
+        user = existing
+    else:
+        # Verifica se já existe algum admin no banco; se não, este usuário vira admin
+        admin_result = await db.execute(select(User).where(User.is_admin == True))  # noqa: E712
+        existing_admin = admin_result.scalar_one_or_none()
+        is_first_user = existing_admin is None
 
-    # Cria usuário (sem subscription ainda - so apos verificar email)
-    user = User(
-        email=data.email,
-        password_hash=hash_password(data.password),
-        full_name=data.full_name,
-        phone=data.phone,
-        is_admin=is_first_user,
-        email_verified=False,
-    )
-    db.add(user)
+        user = User(
+            email=data.email,
+            password_hash=hash_password(data.password),
+            full_name=data.full_name,
+            phone=data.phone,
+            is_admin=is_first_user,
+            email_verified=False,
+        )
+        db.add(user)
+
     await db.flush()  # Para obter o ID
 
     # Gera token de verificacao de email (valido por 24h)
@@ -106,18 +175,9 @@ async def register(
     await db.refresh(user)
 
     # Gera tokens de acesso (login automatico apos cadastro)
-    access_token, access_jti, refresh_token, refresh_jti = create_token_pair(str(user.id))
+    access_token, refresh_token = await _issue_tokens(db, user.id)
 
-    # Cookie HttpOnly para refresh token
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=not settings.DEBUG,
-        samesite="lax",
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/auth/refresh",
-    )
+    _set_refresh_cookie(response, refresh_token)
 
     return Token(
         access_token=access_token,
@@ -130,12 +190,14 @@ async def register(
 async def verify_email(
     data: VerifyEmailRequest,
     db: AsyncSession = Depends(get_db),
+    x_device_id: str | None = Header(default=None, alias="X-Device-Id"),
 ):
     """
     Verifica o email do usuário usando o token enviado por email.
 
     Apos a verificacao bem-sucedida, ativa o trial gratuito de 7 dias
-    (status='trial') se o usuario ainda nao tiver uma assinatura ativa.
+    (status='trial') se o usuario ainda nao tiver uma assinatura ativa e se
+    o aparelho (quando informado) ainda nao tiver consumido o teste.
     """
     result = await db.execute(select(User).where(User.email_verification_token == data.token))
     user = result.scalar_one_or_none()
@@ -173,21 +235,42 @@ async def verify_email(
     existing_subs = existing_sub_result.scalars().all()
     has_trial_or_active = any(sub.status in ("active", "trial") for sub in existing_subs)
 
+    device_id = _optional_device_id(x_device_id)
+    trial_activated = False
+
     if not has_trial_or_active:
-        # Ativa trial gratuito de 7 dias
-        plan = await get_or_create_plan(db)
-        now = datetime.now(UTC)
-        trial_end = now + timedelta(days=settings.FREE_TRIAL_DAYS)
-        subscription = Subscription(
-            user_id=user.id,
-            plan_id=plan.id,
-            status="trial",
-            current_period_start=now,
-            current_period_end=trial_end,
-            trial_end=trial_end,
-            auto_renew=False,
+        # Teste por APARELHO: o mesmo celular nao ganha outro trial so por
+        # criar outra conta. Quando o app nao manda o header (confirmacao
+        # pelo navegador), o bloqueio acontece no /player/playlist.
+        blocked = device_id is not None and await trials.device_already_used(
+            db, device_id, user.id
         )
-        db.add(subscription)
+        if blocked:
+            trial_activated = False
+        else:
+            plan = await get_or_create_plan(db)
+            now = datetime.now(UTC)
+            trial_end = now + timedelta(days=settings.FREE_TRIAL_DAYS)
+            subscription = Subscription(
+                user_id=user.id,
+                plan_id=plan.id,
+                status="trial",
+                current_period_start=now,
+                current_period_end=trial_end,
+                trial_end=trial_end,
+                auto_renew=False,
+            )
+            db.add(subscription)
+            await db.flush()
+            if device_id is not None:
+                await trials.claim(
+                    db,
+                    device_id=device_id,
+                    user_id=user.id,
+                    subscription_id=subscription.id,
+                    commit=False,
+                )
+            trial_activated = True
 
     await db.commit()
     await db.refresh(user)
@@ -199,9 +282,20 @@ async def verify_email(
             full_name=user.full_name,
         )
 
+    if trial_activated:
+        message = "Email verificado com sucesso. Seus 7 dias gratis foram ativados!"
+    elif has_trial_or_active:
+        message = "Email verificado com sucesso."
+    else:
+        message = (
+            "Email verificado. Este aparelho ja usou o teste gratis: "
+            "assine para continuar assistindo."
+        )
+
     return EmailVerificationResponse(
-        message="Email verificado com sucesso. Seus 7 dias gratis foram ativados!",
+        message=message,
         email_verified=True,
+        trial_activated=trial_activated,
     )
 
 
@@ -214,7 +308,13 @@ async def resend_verification(
     """
     Reenvia o email de verificacao para um usuário nao verificado.
     """
-    await rate_limit_dependency(request)
+    await rate_limit.hit(
+        db,
+        key=rate_limit.scoped_key("verify-email", data.email),
+        limit=settings.RATE_LIMIT_EMAIL_PER_HOUR,
+        window_seconds=3600,
+        detail="Muitos reenvios para este email. Tente novamente mais tarde.",
+    )
 
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
@@ -257,7 +357,13 @@ async def forgot_password(
     Responde sempre com a mesma mensagem para nao revelar quais emails
     estao cadastrados.
     """
-    await rate_limit_dependency(request)
+    await rate_limit.hit(
+        db,
+        key=rate_limit.scoped_key("forgot-password", data.email),
+        limit=settings.RATE_LIMIT_EMAIL_PER_HOUR,
+        window_seconds=3600,
+        detail="Muitos pedidos de recuperacao para este email. Tente mais tarde.",
+    )
 
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
@@ -285,7 +391,18 @@ async def reset_password(
     db: AsyncSession = Depends(get_db),
 ):
     """Troca a senha usando o codigo recebido por email."""
-    await rate_limit_dependency(request)
+    # Codigo de 6 digitos so e seguro com limite por conta: 1 milhao de
+    # combinacoes com 5 tentativas a cada 15 minutos nao e viavel.
+    await rate_limit.hit(
+        db,
+        key=rate_limit.scoped_key("reset-password", data.email),
+        limit=settings.RATE_LIMIT_PASSWORD_RESET_ATTEMPTS,
+        window_seconds=settings.RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS,
+        detail=(
+            "Muitas tentativas de codigo para esta conta. "
+            "Peca um novo codigo mais tarde."
+        ),
+    )
 
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
@@ -310,12 +427,13 @@ async def login(
     data: UserLogin,
     response: Response,
     db: AsyncSession = Depends(get_db),
+    x_device_id: str | None = Header(default=None, alias="X-Device-Id"),
 ):
     """Login com email e senha."""
     # Conta as tentativas POR CONTA antes de validar: sem isso a senha podia
     # ser martelada sem parar. Limite por IP nao serve aqui porque atras do
     # proxy do Render todos os clientes vem do mesmo IP.
-    check_login_failures(data.email)
+    await check_login_failures(db, data.email)
 
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
@@ -334,21 +452,14 @@ async def login(
         )
 
     # Senha certa: zera o contador de tentativas da conta.
-    record_login_success(data.email)
+    await record_login_success(db, data.email)
 
-    # Gera tokens
-    access_token, access_jti, refresh_token, refresh_jti = create_token_pair(str(user.id))
-
-    # Cookie HttpOnly para refresh token
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=not settings.DEBUG,
-        samesite="lax",
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/auth/refresh",
+    # Gera tokens (e registra o refresh para poder revogar depois)
+    access_token, refresh_token = await _issue_tokens(
+        db, user.id, _optional_device_id(x_device_id)
     )
+
+    _set_refresh_cookie(response, refresh_token)
 
     return Token(
         access_token=access_token,
@@ -368,16 +479,18 @@ async def refresh_token(
     Renova access token usando o refresh token.
 
     Aceita o token no corpo JSON (app Android) ou no cookie HttpOnly (web).
+    O token apresentado e revogado na rotacao: um refresh copiado deixa de
+    funcionar assim que o dono renova a sessao.
     """
 
-    refresh_token = (data.refresh_token if data else None) or request.cookies.get("refresh_token")
-    if not refresh_token:
+    refresh = (data.refresh_token if data else None) or request.cookies.get("refresh_token")
+    if not refresh:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token não encontrado",
         )
 
-    payload = decode_token(refresh_token)
+    payload = decode_token(refresh)
     if not payload or get_token_type(payload) != "refresh" or is_token_expired(payload):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -391,6 +504,17 @@ async def refresh_token(
             detail="Token malformado",
         )
 
+    jti = payload.get("jti")
+    stored = await sessions.get(db, jti) if isinstance(jti, str) and jti else None
+
+    # Token registrado e revogado/expirado: sessao encerrada (logout, troca de
+    # aparelho ou revogacao pelo suporte).
+    if stored is not None and (str(stored.user_id) != str(user_id) or not sessions.is_usable(stored)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessao encerrada. Entre novamente.",
+        )
+
     # Verifica se usuário ainda existe e está ativo
     result = await db.execute(select(User).where(User.id == UUID(user_id)))
     user = result.scalar_one_or_none()
@@ -401,19 +525,27 @@ async def refresh_token(
             detail="Usuário não encontrado ou desativado",
         )
 
-    # Gera novo par de tokens (rotate refresh token)
-    access_token, access_jti, new_refresh_token, new_refresh_jti = create_token_pair(str(user.id))
+    if stored is None and isinstance(jti, str) and jti:
+        # Token emitido antes deste controle existir: aceita uma vez e passa a
+        # registrar, para nao derrubar quem ja estava logado.
+        expires_at = datetime.fromtimestamp(float(payload.get("exp", 0)), UTC)
+        await sessions.register(
+            db,
+            user_id=user.id,
+            jti=jti,
+            expires_at=expires_at,
+            commit=False,
+        )
+    elif stored is not None:
+        # Rotacao: o token usado nao serve mais.
+        stored.revoked_at = datetime.now(UTC)
 
-    # Atualiza cookie
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        secure=not settings.DEBUG,
-        samesite="lax",
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/auth/refresh",
+    # Gera novo par de tokens
+    access_token, new_refresh_token = await _issue_tokens(
+        db, user.id, stored.device_id if stored is not None else None
     )
+
+    _set_refresh_cookie(response, new_refresh_token)
 
     return Token(
         access_token=access_token,
@@ -423,8 +555,24 @@ async def refresh_token(
 
 
 @router.post("/logout", response_model=MessageResponse)
-async def logout(response: Response):
-    """Logout - remove cookie de refresh token."""
+async def logout(
+    request: Request,
+    response: Response,
+    data: RefreshTokenRequest | None = Body(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Logout - revoga o refresh token e remove o cookie.
+
+    Antes so apagava o cookie: quem tinha copiado o token continuava
+    renovando a sessao. Agora o jti vai para a lista de revogados.
+    """
+    token = (data.refresh_token if data else None) or request.cookies.get("refresh_token")
+    if token:
+        payload = decode_token(token)
+        jti = payload.get("jti") if payload else None
+        if isinstance(jti, str) and jti:
+            await sessions.revoke(db, jti)
+
     response.delete_cookie(key="refresh_token", path="/auth/refresh")
     return MessageResponse(message="Logout realizado com sucesso")
 
@@ -541,3 +689,114 @@ async def update_me(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.get("/me/export")
+async def export_me(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Exporta os dados da conta (LGPD / Play Store).
+
+    Devolve o cadastro, as assinaturas e as cobrancas em JSON. Nao inclui
+    senha, tokens nem dados do cartao (o app nunca os recebeu).
+    """
+    from app.models.payment import Payment
+
+    subs_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user.id).order_by(Subscription.created_at)
+    )
+    payments_result = await db.execute(
+        select(Payment).where(Payment.user_id == user.id).order_by(Payment.created_at)
+    )
+
+    return {
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": user.phone,
+            "email_verified": user.email_verified,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+        "subscriptions": [
+            {
+                "id": str(sub.id),
+                "status": sub.status,
+                "current_period_start": (
+                    sub.current_period_start.isoformat() if sub.current_period_start else None
+                ),
+                "current_period_end": (
+                    sub.current_period_end.isoformat() if sub.current_period_end else None
+                ),
+                "trial_end": sub.trial_end.isoformat() if sub.trial_end else None,
+                "auto_renew": sub.auto_renew,
+            }
+            for sub in subs_result.scalars().all()
+        ],
+        "payments": [
+            {
+                "id": str(payment.id),
+                "amount_cents": payment.amount_cents,
+                "currency": payment.currency,
+                "status": payment.status,
+                "payment_method": payment.payment_method,
+                "paid_at": payment.paid_at.isoformat() if payment.paid_at else None,
+                "created_at": payment.created_at.isoformat() if payment.created_at else None,
+            }
+            for payment in payments_result.scalars().all()
+        ],
+    }
+
+
+@router.delete("/me", response_model=MessageResponse)
+async def delete_me(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Exclui a conta do app (LGPD / exigencia da Play Store).
+
+    Anonimiza o cadastro, encerra as sessoes e corta a cobranca recorrente.
+    O historico de pagamentos fica sem dado pessoal (o e-mail vira um
+    identificador interno), que e o minimo exigido para obrigacao fiscal.
+    """
+    from app.services.devices import revoke_all_devices
+    from app.services.mercadopago import cancel_preapproval
+
+    subs_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
+    subscriptions = list(subs_result.scalars().all())
+
+    for sub in subscriptions:
+        sub.cancel_at_period_end = True
+        sub.auto_renew = False
+        sub.status = "cancelled" if sub.status != "expired" else sub.status
+        sub.cancelled_at = sub.cancelled_at or datetime.now(UTC)
+
+    # Corta a recorrencia no Mercado Pago (best-effort: o cadastro sai de
+    # qualquer forma e a falha fica no log para o suporte).
+    for sub in subscriptions:
+        if sub.mercadopago_subscription_id:
+            with contextlib.suppress(Exception):
+                await cancel_preapproval(str(sub.mercadopago_subscription_id))
+
+    with contextlib.suppress(Exception):
+        await revoke_all_devices(db, [sub.id for sub in subscriptions])
+
+    # Derruba todas as sessoes emitidas (refresh registrados).
+    await sessions.revoke_all(db, user.id)
+
+    # Anonimiza: o e-mail e unico, entao usa um identificador interno.
+    user.email = f"deleted-{user.id}@deleted.eftv.invalid"
+    user.full_name = None
+    user.phone = None
+    user.password_hash = hash_password(secrets.token_urlsafe(32))
+    user.email_verified = False
+    user.is_active = False
+    user.is_admin = False
+    user.email_verification_token = None
+    user.password_reset_token = None
+
+    # Nao apaga as linhas de pagamento: guarda o valor/status sem dado pessoal.
+    await db.commit()
+
+    return MessageResponse(message="Conta excluida. Voce foi desconectado de todos os aparelhos.")

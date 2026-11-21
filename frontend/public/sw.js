@@ -1,27 +1,28 @@
-/* EFTV - service worker do PWA.
-   Guarda o app shell para abrir offline. Nunca intercepta /api/ no modo local,
-   porque o catálogo contém dados da playlist do usuário; a única exceção é o
-   api/modo.js, que é público e pequeno. */
+/* EFTV - service worker da SPA do assinante.
+   Guarda as páginas e os módulos do app para abrir offline. Nunca intercepta
+   /api/ (dados do assinante) e deixa streams de vídeo passarem direto. */
 
-const CACHE = "eftv-v6";
+const CACHE = "eftv-spa-v1";
 
 const CORE = [
   "./",
   "./index.html",
-  "./canal.html",
+  "./login.html",
+  "./register.html",
+  "./plans.html",
+  "./account.html",
+  "./player.html",
   "./manifest.webmanifest",
-  "./api/modo.js",
   "./assets/css/style.css",
-  "./assets/js/data.js",
-  "./assets/js/catalogo-base.js",
-  "./assets/js/catalogo-loader.js",
-  "./assets/js/static-store.js",
-  "./assets/js/local-server.js",
-  "./assets/js/app.js",
-  "./assets/js/canal.js",
-  "./assets/js/playlists.js",
+  "./assets/js/api.js",
+  "./assets/js/auth.js",
+  "./assets/js/account.js",
+  "./assets/js/account-page.js",
+  "./assets/js/auth-page.js",
+  "./assets/js/main.js",
+  "./assets/js/plans-page.js",
+  "./assets/js/utils.js",
   "./assets/js/pwa.js",
-  "./embed/player.html",
   "./assets/img/favicon.svg",
   "./assets/img/eftv-mark.svg",
   "./assets/img/icon-192.png",
@@ -64,6 +65,8 @@ self.addEventListener("message", (event) => {
   }
 });
 
+/* Páginas: rede primeiro para sempre pegar a versão publicada, com cache como
+   reserva quando estiver offline. */
 async function networkFirst(request, fallback) {
   const cache = await caches.open(CACHE);
   try {
@@ -83,6 +86,21 @@ async function networkFirst(request, fallback) {
   }
 }
 
+/* Módulos, CSS e ícones: responde do cache e atualiza em segundo plano. */
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE);
+  const salvo = await cache.match(request);
+  const rede = fetch(request)
+    .then((resposta) => {
+      if (resposta && resposta.ok) {
+        cache.put(request, resposta.clone()).catch(() => {});
+      }
+      return resposta;
+    })
+    .catch(() => null);
+  return salvo || (await rede) || Response.error();
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
@@ -94,18 +112,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Não intercepta CDNs, streams externos, vídeo/áudio nem dados de playlist.
   if (url.origin !== self.location.origin) return;
   if (request.headers.has("range")) return;
   if (request.destination === "video" || request.destination === "audio") return;
-  if (url.pathname.includes("/data/")) return;
-
-  // api/modo.js é público e pode ser cacheado; as demais rotas /api/ contêm
-  // dados locais e ficam sempre fora do service worker.
-  if (url.pathname.endsWith("/api/modo.js")) {
-    event.respondWith(networkFirst(request));
-    return;
-  }
+  // API autenticada nunca entra no cache.
   if (url.pathname.includes("/api/")) return;
 
   if (request.mode === "navigate") {
@@ -113,5 +123,5 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(networkFirst(request));
+  event.respondWith(staleWhileRevalidate(request));
 });

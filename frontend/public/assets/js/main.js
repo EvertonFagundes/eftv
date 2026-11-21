@@ -9,7 +9,11 @@ async function loadPlansPreview() {
     const grid = document.getElementById('plans-grid')
     if (!grid) return
 
-    grid.innerHTML = response.plans.map(plan => `
+    grid.innerHTML = response.plans.map(plan => {
+      const features = plan.features || {}
+      const streams = Number(plan.max_simultaneous_streams) || 1
+      const devices = Number(plan.max_devices) || 1
+      return `
       <article class="plan-card">
         <header class="plan-header">
           <h3>${utils.escapeHtml(plan.name)}</h3>
@@ -19,15 +23,15 @@ async function loadPlansPreview() {
           </div>
         </header>
         <ul class="plan-features">
-          ${plan.features.hd ? '<li>✓ Qualidade HD</li>' : ''}
-          ${plan.features.full_hd ? '<li>✓ Full HD</li>' : ''}
-          ${plan.features['4k'] ? '<li>✓ 4K</li>' : ''}
-          <li>✓ ${plan.max_simultaneous_streams} stream${plan.max_simultaneous_streams > 1 ? 's' : ''} simultâneo${plan.max_simultaneous_streams > 1 ? 's' : ''}</li>
-          <li>✓ ${plan.max_devices} dispositivos</li>
+          ${features.hd ? '<li>✓ Qualidade HD</li>' : ''}
+          ${features.full_hd ? '<li>✓ Full HD</li>' : ''}
+          ${features['4k'] ? '<li>✓ 4K</li>' : ''}
+          <li>✓ ${streams} stream${streams > 1 ? 's' : ''} simultâneo${streams > 1 ? 's' : ''}</li>
+          <li>✓ ${devices} dispositivo${devices > 1 ? 's' : ''}</li>
         </ul>
-        <a href="register.html?plan_id=${plan.id}" class="btn btn-outline btn-block">Assinar</a>
-      </article>
-    `).join('')
+        <a href="register.html?plan_id=${encodeURIComponent(plan.id)}" class="btn btn-outline btn-block">Assinar</a>
+      </article>`
+    }).join('')
   } catch (e) {
     console.error('Erro ao carregar planos:', e)
   }
@@ -72,8 +76,13 @@ function renderChannels(channels) {
   const grid = document.getElementById('channels-grid')
   if (!grid) return
 
+  if (!channels || !channels.length) {
+    grid.innerHTML = '<p class="empty-state">Nenhum canal nesta categoria por enquanto.</p>'
+    return
+  }
+
   grid.innerHTML = channels.map(ch => `
-    <article class="channel-card" data-slug="${utils.escapeHtml(ch.slug)}">
+    <article class="channel-card" data-slug="${utils.escapeHtml(ch.slug)}" tabindex="0" role="link">
       ${ch.logo_url ? `<img class="channel-logo" src="${utils.escapeHtml(ch.logo_url)}" alt="${utils.escapeHtml(ch.name)}" loading="lazy">` : '<div class="channel-logo-placeholder">📺</div>'}
       <div class="channel-info">
         <h4>${utils.escapeHtml(ch.name)}</h4>
@@ -86,15 +95,35 @@ function renderChannels(channels) {
   `).join('')
 
   grid.querySelectorAll('.channel-card').forEach(card => {
-    card.addEventListener('click', () => {
-      window.location.href = `register.html?redirect=player.html%3Fchannel=${card.dataset.slug}`
+    const abrir = () => {
+      const destino = `player.html?channel=${encodeURIComponent(card.dataset.slug)}`
+      window.location.href = `register.html?redirect=${encodeURIComponent(destino)}`
+    }
+    card.addEventListener('click', abrir)
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        abrir()
+      }
     })
   })
 }
 
-function filterChannels(categoryId) {
-  // TODO: implementar filtro via API
-  console.log('Filtrar por categoria:', categoryId)
+async function filterChannels(categoryId) {
+  const grid = document.getElementById('channels-grid')
+  if (grid) grid.innerHTML = '<p class="empty-state">Carregando canais...</p>'
+  try {
+    const params = { page_size: 8, include_adult: false }
+    if (categoryId) params.category_id = categoryId
+    const response = await api.getChannels(params)
+    renderChannels(response.channels)
+    if (grid && grid.scrollIntoView) {
+      grid.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  } catch (erro) {
+    console.error('Erro ao filtrar canais:', erro)
+    if (grid) grid.innerHTML = '<p class="empty-state">Não foi possível carregar os canais. Tente novamente.</p>'
+  }
 }
 
 // Inicialização

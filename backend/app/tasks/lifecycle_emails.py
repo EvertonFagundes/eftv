@@ -28,7 +28,7 @@ async def send_lifecycle_emails() -> dict[str, int]:
     - cartao recusado: o Mercado Pago para de cobrar e a conta expira em
       silencio se ninguem avisar.
     """
-    sent = {"trial_ending": 0, "payment_failed": 0}
+    sent = {"trial_ending": 0, "trial_expired": 0, "payment_failed": 0}
     now = datetime.now(UTC)
 
     async with get_db_context() as db:
@@ -61,6 +61,35 @@ async def send_lifecycle_emails() -> dict[str, int]:
                 subscription.trial_reminder_sent_at = now
                 sent["trial_ending"] += 1
 
+        # Teste vencido: avisa uma vez, so para quem venceu nos ultimos 7 dias
+        # (sem isso, toda conta antiga receberia um e-mail na primeira rodada).
+        expired_result = await db.execute(
+            select(Subscription, User)
+            .join(User, User.id == Subscription.user_id)
+            .where(
+                Subscription.status == "expired",
+                Subscription.trial_end.is_not(None),
+                Subscription.trial_end <= now,
+                Subscription.trial_end >= now - timedelta(days=7),
+                Subscription.trial_expired_notified_at.is_(None),
+            )
+        )
+        for subscription, user in expired_result.all():
+            try:
+                ok = await email_service.send_trial_expired_email(
+                    user.email, user.full_name
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Falha ao avisar o fim do teste vencido da assinatura %s",
+                    subscription.id,
+                    exc_info=True,
+                )
+                continue
+            if ok:
+                subscription.trial_expired_notified_at = now
+                sent["trial_expired"] += 1
+
         failed_result = await db.execute(
             select(Subscription, User)
             .join(User, User.id == Subscription.user_id)
@@ -85,6 +114,6 @@ async def send_lifecycle_emails() -> dict[str, int]:
 
         await db.commit()
 
-    if sent["trial_ending"] or sent["payment_failed"]:
+    if sent["trial_ending"] or sent["trial_expired"] or sent["payment_failed"]:
         logger.info("Avisos de assinatura enviados: %s", sent)
     return sent

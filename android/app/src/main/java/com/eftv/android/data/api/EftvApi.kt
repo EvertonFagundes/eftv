@@ -181,6 +181,17 @@ class EftvApi(
         )
     }
 
+    /**
+     * Exclui a conta (LGPD / exigencia da Play Store).
+     *
+     * O backend anonimiza o cadastro, encerra a cobranca recorrente e revoga
+     * todas as sessoes; por isso o app precisa limpar a sessao local depois.
+     */
+    suspend fun deleteAccount(accessToken: String): String {
+        val json = request("DELETE", "/auth/me", accessToken = accessToken)
+        return json.optString("message", "")
+    }
+
     suspend fun refresh(refreshToken: String): TokenPair {
         val body = JSONObject().put("refresh_token", refreshToken)
         return tokenPair(request("POST", "/auth/refresh", body = body))
@@ -368,8 +379,13 @@ class EftvApi(
     }
 
     /** Cria a assinatura recorrente no Mercado Pago e devolve a URL de pagamento. */
-    suspend fun createCheckout(accessToken: String, planId: String): CheckoutSession {
+    suspend fun createCheckout(
+        accessToken: String,
+        planId: String,
+        appPlatform: String? = null,
+    ): CheckoutSession {
         val body = JSONObject().put("plan_id", planId)
+        appPlatform?.takeIf { it.isNotBlank() }?.let { body.put("app_platform", it) }
         val json = request("POST", "/subscriptions/checkout", accessToken = accessToken, body = body)
         val initPoint = json.optString("init_point")
         if (initPoint.isBlank()) {

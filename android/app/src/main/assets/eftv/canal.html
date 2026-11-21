@@ -5,18 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Carregando canal — EFTV</title>
   <meta name="description" content="Assista ao seu canal na EFTV, com opções de transmissão e informações da programação.">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#071426">
+  <meta name="color-scheme" content="dark">
   <meta name="application-name" content="EFTV">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="EFTV">
   <link rel="manifest" href="manifest.webmanifest">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; media-src 'self' blob: data: http: https:; frame-src 'self' about: http: https:; connect-src 'self' http: https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
   <header class="site-header">
     <div class="wrap header-inner">
       <a class="brand" href="index.html" aria-label="EFTV — início">
@@ -61,7 +66,7 @@
     </div>
   </div>
 
-  <main class="wrap">
+  <main class="wrap" id="conteudo">
     <!-- No televisor o controle remoto nem sempre consegue voltar: este botão
          grande fica logo acima do vídeo e devolve para a tela anterior (com os
          filtros e a posição da rolagem que estavam antes de abrir o canal).
@@ -187,13 +192,15 @@
   </footer>
 
   <!-- Overlay de busca -->
-  <div class="search-overlay" data-search-overlay aria-hidden="true" role="dialog" aria-label="Buscar canal">
+  <div class="search-overlay" data-search-overlay role="dialog" aria-modal="true"
+       aria-label="Buscar canal" aria-hidden="true">
     <div class="search-box">
       <div class="row">
-        <input type="search" placeholder="Buscar canal..." data-global-search autocomplete="off">
+        <input type="search" placeholder="Buscar canal..." aria-label="Nome do canal"
+               data-global-search autocomplete="off">
         <button class="search-close" type="button" data-search-close aria-label="Fechar busca">✕</button>
       </div>
-      <div class="search-results" data-search-results></div>
+      <div class="search-results" data-search-results aria-live="polite"></div>
     </div>
   </div>
 

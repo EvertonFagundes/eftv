@@ -11,6 +11,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.subscription import Subscription
 from app.security.dependencies import get_current_active_subscription, get_device_id
+from app.services import trials
 from app.services.devices import (
     DeviceLimitError,
     active_devices,
@@ -67,6 +68,20 @@ class MessageResponse(BaseModel):
     message: str
 
 
+def _provider_url(subscription: Subscription | None) -> str | None:
+    """Linha propria do assinante, quando existe e nao foi revogada.
+
+    Sem ela o app cai na playlist compartilhada de ``IPTV_PLAYLIST_URL``.
+    A linha propria e o unico jeito de revogar um cliente sem trocar a
+    credencial de todos.
+    """
+    if subscription is None:
+        return None
+    if not subscription.provider_playlist_url or subscription.provider_revoked_at is not None:
+        return None
+    return subscription.provider_playlist_url.strip() or None
+
+
 @router.get("/playlist", response_model=PlaylistAccessResponse)
 async def get_playlist_access(
     subscription: Subscription = Depends(get_current_active_subscription),
@@ -82,7 +97,7 @@ async def get_playlist_access(
     vinculado automaticamente na primeira consulta, respeitando o limite do
     plano.
     """
-    if not settings.IPTV_PLAYLIST_URL:
+    if not settings.IPTV_PLAYLIST_URL and not _provider_url(subscription):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Playlist ainda nao configurada no servidor",
@@ -102,6 +117,30 @@ async def get_playlist_access(
             },
         ) from exc
 
+    # Teste gratis por APARELHO: se este device_id ja consumiu trial em outra
+    # conta, o trial e revogado na hora. Este e o ponto que fecha o caminho de
+    # quem confirma o e-mail pelo navegador (sem X-Device-Id no verify-email).
+    if subscription.status == "trial":
+        if await trials.device_already_used(db, device_id, subscription.user_id):
+            trials.revoke_trial(subscription)
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "trial_device_used",
+                    "message": (
+                        "Este aparelho ja usou o teste gratis. "
+                        "Assine para continuar assistindo."
+                    ),
+                },
+            )
+        await trials.claim(
+            db,
+            device_id=device_id,
+            user_id=subscription.user_id,
+            subscription_id=subscription.id,
+        )
+
     now = datetime.now(UTC)
     period_end = subscription.current_period_end
     if period_end.tzinfo is None:
@@ -109,7 +148,7 @@ async def get_playlist_access(
     days_remaining = max((period_end - now).days, 0)
 
     return PlaylistAccessResponse(
-        playlist_url=settings.IPTV_PLAYLIST_URL,
+        playlist_url=_provider_url(subscription) or settings.IPTV_PLAYLIST_URL,
         user_agent=settings.IPTV_PLAYLIST_USER_AGENT,
         referer=settings.IPTV_PLAYLIST_REFERER,
         refresh_in=settings.IPTV_PLAYLIST_REFRESH_SECONDS,
