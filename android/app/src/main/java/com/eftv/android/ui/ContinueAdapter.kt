@@ -49,12 +49,7 @@ class ContinueAdapter(
         fun bind(channel: Channel) {
             binding.vodTitle.text = channel.name
 
-            binding.vodPoster.load(channel.logo.ifBlank { null }) {
-                placeholder(R.drawable.ic_movie)
-                error(R.drawable.ic_movie)
-                fallback(R.drawable.ic_movie)
-                crossfade(true)
-            }
+            binding.vodPoster.loadChannelArt(channel, R.drawable.ic_movie)
 
             binding.vodProgress.isVisible = channel.hasProgress
             binding.remainingText.isVisible = channel.hasProgress

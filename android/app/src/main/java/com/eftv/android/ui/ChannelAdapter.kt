@@ -153,12 +153,7 @@ class ChannelAdapter(
             binding.channelName.text = channel.name
             binding.channelGroup.text = channel.group
 
-            binding.channelLogo.load(channel.logo.ifBlank { null }) {
-                placeholder(R.drawable.ic_tv)
-                error(R.drawable.ic_tv)
-                fallback(R.drawable.ic_tv)
-                crossfade(true)
-            }
+            binding.channelLogo.loadChannelArt(channel, R.drawable.ic_tv)
 
             // A aba já indica que é ao vivo; sem selo sobre o logo para não cobrir a arte.
             binding.liveBadge.isVisible = false
@@ -231,17 +226,12 @@ class ChannelAdapter(
             binding.root.alpha = 1f
             binding.vodTitle.text = channel.name
             binding.vodGroup.text = if (channel.isSeriesCard) {
-                seriesSummary(binding.root.context, channel)
+                seriesSummary(binding.root.context, channel) ?: channel.group
             } else {
                 channel.group
             }
 
-            binding.vodPoster.load(channel.logo.ifBlank { null }) {
-                placeholder(R.drawable.ic_movie)
-                error(R.drawable.ic_movie)
-                fallback(R.drawable.ic_movie)
-                crossfade(true)
-            }
+            binding.vodPoster.loadChannelArt(channel, R.drawable.ic_movie)
 
             val isSeries = channel.kind == ChannelKind.SERIES
             binding.kindBadge.isVisible = true
@@ -327,7 +317,11 @@ class ChannelAdapter(
     // ------------------------------------------------------------------
 
     /** "5 temporadas · 120 episódios" no card da serie. */
-    private fun seriesSummary(context: Context, channel: Channel): String {
+    private fun seriesSummary(context: Context, channel: Channel): String? {
+        // Catalogo em que a serie vem como um unico link nao tem temporada nem
+        // episodio: "1 temporada · 1 episodio" ali e ruido (e impreciso).
+        if (channel.seriesSeasons <= 0 && channel.seriesEpisodes <= 1) return null
+
         val resources = context.resources
         val seasons = resources.getQuantityString(
             R.plurals.series_seasons_count, channel.seriesSeasons, channel.seriesSeasons,

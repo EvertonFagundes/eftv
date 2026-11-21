@@ -34,3 +34,6 @@ backend/entrypoint.sh.txt
 android/keystore.properties
 *.jks
 *.keystore
+
+# Backups criptografados do keystore (gerados por tools/backup-keystore.ps1)
+android/*.enc

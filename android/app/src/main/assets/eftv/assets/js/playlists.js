@@ -158,7 +158,7 @@
           ? `<div class="playlist-source">
                <span class="playlist-source-label">Link:</span>
                <code class="playlist-link">${escapeHtml(urlExibida)}</code>
-               <button class="playlist-btn mini" type="button" data-copy="${id}" title="Copia o endereço completo, com usuário e senha">Copiar link</button>
+               <span class="playlist-source-note">Credenciais ocultas</span>
              </div>`
           : `<div class="playlist-source">
                <span class="playlist-source-label">Origem:</span>
