@@ -299,7 +299,17 @@ class PlayerActivity : AppCompatActivity() {
             .setTitle(channelName)
             .apply {
                 if (channelLogo.isNotBlank()) {
-                    setArtworkUri(Uri.parse(LocalServer.proxiedArtwork(channelLogo)))
+                    // Wi-Fi usa a URL direta (mesmo caminho de antes); nos
+                    // dados moveis o proxy local resolve o DNS do provedor.
+                    val artwork = if (
+                        NetworkInfo.label(this@PlayerActivity) == "movel" &&
+                        LocalServer.isServerReady()
+                    ) {
+                        LocalServer.artworkProxyUrl(channelLogo)
+                    } else {
+                        channelLogo
+                    }
+                    setArtworkUri(Uri.parse(artwork))
                 }
             }
             .build()

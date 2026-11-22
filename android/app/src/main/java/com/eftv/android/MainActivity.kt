@@ -147,7 +147,14 @@ class MainActivity : AppCompatActivity() {
         // o servico com o app ainda em segundo plano.
         EftvServerService.start(this)
         lifecycleScope.launch {
-            LocalServer.waitUntilReady(timeoutMs = 30_000)
+            val ready = LocalServer.waitUntilReady(timeoutMs = 30_000)
+            // As primeiras capas podem ter sido montadas antes do proxy subir.
+            // Remonta os cards visiveis para aproveitar o DNS-over-HTTPS (ou o
+            // fallback direto) sem o usuario precisar rolar a lista.
+            if (ready && hasCatalog) {
+                channelAdapter.notifyDataSetChanged()
+                continueAdapter.notifyDataSetChanged()
+            }
         }
 
         startCatalog()

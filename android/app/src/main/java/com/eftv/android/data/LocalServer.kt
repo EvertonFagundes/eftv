@@ -53,22 +53,20 @@ object LocalServer {
         return "$BASE_URL/api/playlist-remote?url=$encoded"
     }
 
+    /** True depois que o servidor embutido respondeu ao menos uma vez. */
+    fun isServerReady(): Boolean = serverReady
+
     /**
-     * URL de uma capa/arte pelo proxy local.
+     * URL de uma capa/arte pelo proxy local, sem checar se o servidor subiu.
      *
-     * O provedor costuma exigir User-Agent/Referer e, nos dados móveis, o DNS
-     * da operadora pode não resolver (ou devolver IP de bloqueio). O proxy
-     * local resolve via DoH e envia os cabeçalhos da playlist.
-     *
-     * Não faz checagem de rede aqui de propósito: isto é chamado no bind do
-     * RecyclerView. Se o servidor ainda não respondeu, devolve a URL original.
+     * Quem chama decide a ordem (direto x proxy) e pode usar esta URL como
+     * segunda tentativa quando o download direto falhar.
      */
-    fun proxiedArtwork(target: String): String {
+    fun artworkProxyUrl(target: String): String {
         val url = target.trim()
         if (url.isBlank()) return url
         if (!url.startsWith("http://") && !url.startsWith("https://")) return url
         if (url.startsWith(BASE_URL)) return url
-        if (!serverReady) return url
         val encoded = java.net.URLEncoder.encode(url, "UTF-8")
         return "$BASE_URL/api/proxy?url=$encoded"
     }
