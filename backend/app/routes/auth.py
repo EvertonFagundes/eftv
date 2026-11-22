@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -36,9 +36,11 @@ from app.services import device_login, rate_limit, sessions, trials
 from app.services.auth_service import (
     create_token_pair,
     decode_token,
+    dummy_password_hash,
     get_token_type,
     hash_password,
     is_token_expired,
+    verify_and_update_password,
     verify_password,
 )
 from app.services.devices import InvalidDeviceError, normalize_device_id
@@ -143,10 +145,11 @@ async def register(
         existing.phone = data.phone or existing.phone
         user = existing
     else:
-        # Verifica se já existe algum admin no banco; se não, este usuário vira admin
-        admin_result = await db.execute(select(User).where(User.is_admin == True))  # noqa: E712
-        existing_admin = admin_result.scalar_one_or_none()
-        is_first_user = existing_admin is None
+        # Somente a primeira conta de uma instalacao vazia vira admin. Antes
+        # bastava nao existir admin: se o ultimo admin fosse removido, o
+        # proximo cadastro (de qualquer pessoa) assumia o painel.
+        users_result = await db.execute(select(func.count(User.id)))
+        is_first_user = int(users_result.scalar_one() or 0) == 0
 
         user = User(
             email=data.email,
@@ -416,7 +419,10 @@ async def reset_password(
     user.password_hash = hash_password(data.new_password)
     user.password_reset_token = None
     user.password_reset_expires_at = None
-    user.is_active = True
+    # Nao reativa conta desativada: recuperar a senha nao pode desfazer um
+    # bloqueio feito pelo suporte. E derruba as sessoes antigas, senao um
+    # aparelho ja logado continua renovando o acesso com a senha trocada.
+    await sessions.revoke_all(db, user.id, commit=False)
     await db.commit()
 
     return MessageResponse(message="Senha alterada com sucesso. Entre com a nova senha.")
@@ -438,7 +444,18 @@ async def login(
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
-    if not user or not verify_password(data.password, user.password_hash):
+    if user is None:
+        # Mesmo custo de bcrypt de uma conta real, para o tempo de resposta
+        # nao denunciar quais e-mails existem.
+        verify_password(data.password, dummy_password_hash())
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    valid, new_hash = verify_and_update_password(data.password, user.password_hash)
+    if not valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",
@@ -450,6 +467,11 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Usuário desativado",
         )
+
+    # Hash legado (bcrypt puro): migra para bcrypt_sha256. O commit acontece
+    # junto com o registro do refresh token em _issue_tokens.
+    if new_hash:
+        user.password_hash = new_hash
 
     # Senha certa: zera o contador de tentativas da conta.
     await record_login_success(db, data.email)
@@ -504,6 +526,14 @@ async def refresh_token(
             detail="Token malformado",
         )
 
+    try:
+        user_uuid = UUID(str(user_id))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token malformado",
+        ) from None
+
     jti = payload.get("jti")
     stored = await sessions.get(db, jti) if isinstance(jti, str) and jti else None
 
@@ -516,7 +546,7 @@ async def refresh_token(
         )
 
     # Verifica se usuário ainda existe e está ativo
-    result = await db.execute(select(User).where(User.id == UUID(user_id)))
+    result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
@@ -678,13 +708,30 @@ async def update_me(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Atualiza dados do usuário autenticado."""
+    """Atualiza dados do usuário autenticado.
+
+    Trocar a senha exige a senha atual: um access token roubado (15 min) nao
+    pode virar troca de senha definitiva. Depois da troca, todas as sessoes
+    sao revogadas.
+    """
     if data.full_name is not None:
         user.full_name = data.full_name
     if data.phone is not None:
         user.phone = data.phone
     if data.password is not None:
+        if not data.current_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Informe a senha atual para trocar a senha.",
+            )
+        valid, _ = verify_and_update_password(data.current_password, user.password_hash)
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Senha atual incorreta.",
+            )
         user.password_hash = hash_password(data.password)
+        await sessions.revoke_all(db, user.id, commit=False)
 
     await db.commit()
     await db.refresh(user)
@@ -762,6 +809,23 @@ async def delete_me(
     """
     from app.services.devices import revoke_all_devices
     from app.services.mercadopago import cancel_preapproval
+
+    # Excluir o unico admin deixaria o painel sem dono e abriria caminho para
+    # o proximo usuario reivindicar a propriedade. Transfira antes.
+    if user.is_admin:
+        admins_result = await db.execute(
+            select(func.count(User.id)).where(
+                User.is_admin.is_(True), User.is_active.is_(True)
+            )
+        )
+        if int(admins_result.scalar_one() or 0) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Nao e possivel excluir o ultimo administrador. "
+                    "Promova outro usuario antes de excluir esta conta."
+                ),
+            )
 
     subs_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
     subscriptions = list(subs_result.scalars().all())

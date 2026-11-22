@@ -25,8 +25,30 @@ if TYPE_CHECKING:
 
 
 def _hash_reset_code(code: str) -> str:
-    """Hash do codigo de recuperacao (o codigo em si nunca vai ao banco)."""
+    """HMAC do codigo de recuperacao (o codigo em si nunca vai ao banco).
+
+    Usa a SECRET_KEY: so o hash SHA-256 de um codigo de 6 digitos seria
+    trivial de reverter por forca bruta se o banco vazasse.
+    """
+    return hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        ("eftv-reset:" + code).encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _legacy_hash_reset_code(code: str) -> str:
+    """Formato anterior (SHA-256 sem segredo), aceito ate o codigo expirar."""
     return hashlib.sha256(("eftv-reset:" + code).encode("utf-8")).hexdigest()
+
+
+def _is_in_the_future(value: datetime | None) -> bool:
+    """Compara em UTC mesmo quando o banco devolve datetime sem timezone."""
+    if value is None:
+        return False
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return datetime.now(UTC) < value
 
 
 class User(Base):
@@ -96,7 +118,7 @@ class User(Base):
             return False
         if not hmac.compare_digest(self.email_verification_token, token):
             return False
-        return datetime.now(UTC) < self.email_verification_expires_at
+        return _is_in_the_future(self.email_verification_expires_at)
 
     def generate_password_reset_code(self) -> str:
         """Gera um codigo numerico de 6 digitos valido por 30 minutos.
@@ -120,8 +142,13 @@ class User(Base):
             return False
         matches = hmac.compare_digest(self.password_reset_token, _hash_reset_code(typed))
         if not matches:
+            # Compatibilidade: hashes gerados antes do HMAC (validade 30 min).
+            matches = hmac.compare_digest(
+                self.password_reset_token, _legacy_hash_reset_code(typed)
+            )
+        if not matches:
             # Compatibilidade: codigos gerados antes do hash (validade 30 min).
             matches = hmac.compare_digest(self.password_reset_token, typed)
         if not matches:
             return False
-        return datetime.now(UTC) < self.password_reset_expires_at
+        return _is_in_the_future(self.password_reset_expires_at)

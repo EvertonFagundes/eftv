@@ -78,11 +78,16 @@ class Settings(BaseSettings):
     DATABASE_POOLER: bool | None = None
 
     # Security
-    SECRET_KEY: str = Field(..., description="Chave secreta para JWT - DEVE ser definida no .env")
+    SECRET_KEY: str = Field(
+        ..., min_length=32, description="Chave secreta para JWT - DEVE ser definida no .env"
+    )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     BCRYPT_ROUNDS: int = 12
+    # Teto do corpo das requisicoes (webhook/JSON). Sem isso um POST gigante
+    # consome memoria do processo antes de qualquer validacao.
+    MAX_REQUEST_BODY_BYTES: int = 1_048_576
 
     # CORS (lista separada por virgula ou JSON, ver cors_origins)
     CORS_ORIGINS: str = (
@@ -176,6 +181,34 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     SENTRY_DSN: str | None = None
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, value: str) -> str:
+        """Recusa chave curta/placeholder: ela assina JWT e codigos de reset."""
+        cleaned = value.strip()
+        if len(cleaned) < 32:
+            raise ValueError("SECRET_KEY deve ter pelo menos 32 caracteres")
+        if cleaned.lower() in {
+            "changeme",
+            "change-me",
+            "secret",
+            "secret-key",
+            "your-secret-key",
+            "troque-esta-chave",
+        }:
+            raise ValueError("SECRET_KEY usa um valor previsivel; gere uma chave aleatoria")
+        return cleaned
+
+    @field_validator("ALGORITHM")
+    @classmethod
+    def validate_algorithm(cls, value: str) -> str:
+        """Somente HMAC: impede configurar ``none`` ou algoritmo assimetrico."""
+        allowed = {"HS256", "HS384", "HS512"}
+        cleaned = value.strip().upper()
+        if cleaned not in allowed:
+            raise ValueError(f"ALGORITHM deve ser um de {sorted(allowed)}")
+        return cleaned
 
     @field_validator("DATABASE_URL")
     @classmethod

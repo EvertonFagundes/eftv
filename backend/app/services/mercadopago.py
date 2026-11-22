@@ -78,21 +78,38 @@ async def get_account_info(force: bool = False) -> dict | None:
     return info
 
 
+def _webhook_signature_required() -> bool:
+    """A assinatura e obrigatoria sempre que ha risco de cobranca real.
+
+    ``ENVIRONMENT`` sozinho nao serve: producao ja rodou como
+    ``development`` e o webhook ficou aberto. Token ``APP_USR-`` e sandbox
+    desligado tambem indicam conta real.
+    """
+    token = (settings.MERCADOPAGO_ACCESS_TOKEN or "").strip()
+    return (
+        settings.ENVIRONMENT == "production"
+        or token.startswith("APP_USR-")
+        or settings.MERCADOPAGO_SANDBOX is False
+    )
+
+
 def validate_webhook_signature(headers, data_id: str | None) -> bool:
     """Valida o header ``x-signature`` enviado pelo Mercado Pago.
 
     O Mercado Pago assina ``id:<data.id>;request-id:<x-request-id>;ts:<ts>;``
     com HMAC-SHA256 usando o segredo configurado no painel.
 
-    Em producao o segredo e obrigatorio: sem ele o webhook e recusado (antes
-    era aceito, e qualquer um podia forcar chamadas/reenvios). Em
-    desenvolvimento a validacao continua opcional para facilitar testes.
+    Sem segredo o webhook e recusado quando ha conta real configurada
+    (token ``APP_USR-``, sandbox desligado ou ``ENVIRONMENT=production``).
+    Em desenvolvimento com token de teste a validacao continua opcional para
+    facilitar a simulacao local.
     """
-    secret = settings.MERCADOPAGO_WEBHOOK_SECRET
+    secret = (settings.MERCADOPAGO_WEBHOOK_SECRET or "").strip()
     if not secret:
-        if settings.ENVIRONMENT == "production":
+        if _webhook_signature_required():
             logger.error(
-                "MERCADOPAGO_WEBHOOK_SECRET nao configurado: webhook recusado em producao"
+                "MERCADOPAGO_WEBHOOK_SECRET nao configurado: webhook recusado "
+                "para conta de producao"
             )
             return False
         logger.warning(

@@ -51,6 +51,7 @@ class UserUpdate(BaseModel):
     full_name: str | None = Field(None, max_length=255)
     phone: str | None = Field(None, max_length=20)
     password: str | None = Field(None, min_length=8, max_length=128)
+    current_password: str | None = Field(None, max_length=128)
 
 
 class RefreshTokenRequest(BaseModel):

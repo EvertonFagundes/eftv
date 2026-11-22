@@ -1,6 +1,6 @@
 ﻿# routes/admin.py - Rotas administrativas
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -29,26 +29,53 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 logger = logging.getLogger(__name__)
 
 
+async def _active_admin_count(db: AsyncSession) -> int:
+    """Quantos administradores ativos existem (para nao deixar o painel sem dono)."""
+    result = await db.execute(
+        select(func.count(User.id)).where(User.is_admin.is_(True), User.is_active.is_(True))
+    )
+    return int(result.scalar_one() or 0)
+
+
 @router.post("/claim-ownership")
 async def claim_ownership(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Permite que o primeiro usuÃ¡rio logado se torne dono do app (admin)
-    se ainda nÃ£o houver nenhum administrador cadastrado.
+    Permite que a conta ativa mais antiga assuma o painel quando nao existe
+    nenhum administrador (instalacao nova ou recuperacao).
+
+    A checagem nao e so "esta logado": um cadastro recente nao pode tomar o
+    painel caso o ultimo admin seja removido.
     """
     try:
-        admin_result = await db.execute(select(User).where(User.is_admin == True))  # noqa: E712
-        existing_admin = admin_result.scalar_one_or_none()
-        if existing_admin is not None:
+        if await _active_admin_count(db) > 0:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="JÃ¡ existe um administrador cadastrado.",
+                detail="Ja existe um administrador cadastrado.",
+            )
+
+        if not current_user.email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Confirme seu email antes de assumir a administracao.",
+            )
+
+        oldest_result = await db.execute(
+            select(User.id)
+            .where(User.is_active.is_(True))
+            .order_by(User.created_at.asc(), User.id.asc())
+            .limit(1)
+        )
+        oldest_id = oldest_result.scalar_one_or_none()
+        if oldest_id is None or str(oldest_id) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas a conta ativa mais antiga pode assumir a administracao.",
             )
 
         current_user.is_admin = True
-        current_user.is_active = True
 
         # Garante o plano comercial (trial e assinatura usam o mesmo)
         plan = await get_or_create_plan(db)
@@ -59,7 +86,7 @@ async def claim_ownership(
         )
         subscription = sub_result.scalar_one_or_none()
         now = datetime.now(UTC)
-        period_end = now.replace(year=now.year + 1)
+        period_end = now + timedelta(days=365)
         if subscription is None:
             subscription = Subscription(
                 user_id=current_user.id,
@@ -89,12 +116,13 @@ async def claim_ownership(
         }
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         await db.rollback()
+        logger.exception("Erro ao processar solicitacao administrativa")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro interno: {str(exc)}",
-        ) from exc
+            detail="Erro interno ao processar a solicitacao.",
+        ) from None
 
 
 @router.get("/stats")
@@ -464,7 +492,13 @@ async def toggle_admin(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+
+    if user.is_admin and user.is_active and await _active_admin_count(db) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nao e possivel remover o ultimo administrador ativo.",
+        )
 
     user.is_admin = not user.is_admin
     await db.commit()
@@ -480,7 +514,13 @@ async def toggle_user_active(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+
+    if user.is_admin and user.is_active and await _active_admin_count(db) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nao e possivel desativar o ultimo administrador ativo.",
+        )
 
     user.is_active = not user.is_active
     await db.commit()
@@ -513,7 +553,7 @@ async def make_user_owner(
         sub_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
         subscription = sub_result.scalar_one_or_none()
         now = datetime.now(UTC)
-        period_end = now.replace(year=now.year + 1)
+        period_end = now + timedelta(days=365)
         if subscription is None:
             subscription = Subscription(
                 user_id=user.id,
@@ -543,12 +583,13 @@ async def make_user_owner(
         }
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         await db.rollback()
+        logger.exception("Erro ao processar solicitacao administrativa")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro interno: {str(exc)}",
-        ) from exc
+            detail="Erro interno ao processar a solicitacao.",
+        ) from None
 
 # ----------------------------------------------------------------------
 # Linha propria do provedor de IPTV (revogacao por assinante)

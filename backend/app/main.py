@@ -20,6 +20,7 @@ from app.routes import (
     subscriptions_router,
 )
 from app.routes.app_client import apk_download
+from app.security.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.services.mercadopago import sync_pending_subscriptions
 from app.tasks.lifecycle_emails import send_lifecycle_emails
 from app.tasks.subscription_checker import (
@@ -61,17 +62,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# GZip compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Corpo maximo antes de qualquer parsing (webhook/JSON). Fica dentro do CORS
+# para a resposta 413 tambem sair com os cabecalhos de origem.
+app.add_middleware(
+    BodySizeLimitMiddleware, max_bytes=settings.MAX_REQUEST_BODY_BYTES
+)
+
+# CORS. Wildcard com credenciais e proibido pelo navegador e permitiria
+# qualquer site ler a resposta autenticada; nesse caso desliga credentials.
+_origins = settings.cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=_origins,
+    allow_credentials="*" not in _origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# GZip compression
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Por ultimo = mais externo: ate as respostas de erro/413 saem com os
+# cabecalhos de seguranca.
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 # Global exception handler

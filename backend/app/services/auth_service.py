@@ -1,4 +1,5 @@
 # services/auth_service.py - Lógica de autenticação (hash, JWT, tokens)
+import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -7,19 +8,55 @@ from passlib.context import CryptContext
 
 from app.config import settings
 
+# bcrypt puro ignora tudo depois de 72 bytes. Como o bcrypt_sha256 aplica
+# SHA-256 antes, a senha inteira conta e uma senha longa nao vira outra
+# qualquer a partir do 73o byte. Hashes bcrypt antigos continuam validos e
+# sao migrados no proximo login (ver verify_and_update_password).
 pwd_context = CryptContext(
-    schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=settings.BCRYPT_ROUNDS
+    schemes=["bcrypt_sha256", "bcrypt"],
+    deprecated=["bcrypt"],
+    bcrypt__rounds=settings.BCRYPT_ROUNDS,
 )
+
+_dummy_hash: str | None = None
 
 
 def hash_password(password: str) -> str:
-    """Gera hash bcrypt da senha."""
+    """Gera o hash da senha (bcrypt_sha256 para senhas novas)."""
     return str(pwd_context.hash(password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica senha contra hash."""
-    return bool(pwd_context.verify(plain_password, hashed_password))
+    """Verifica senha contra hash, aceitando hashes bcrypt antigos."""
+    try:
+        return bool(pwd_context.verify(plain_password, hashed_password))
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_and_update_password(plain_password: str, hashed_password: str) -> tuple[bool, str | None]:
+    """Verifica a senha e devolve um hash novo quando o antigo e legado.
+
+    Retorna ``(valido, hash_novo)``. ``hash_novo`` e ``None`` quando o hash
+    atual ja esta no formato recomendado.
+    """
+    try:
+        valid, new_hash = pwd_context.verify_and_update(plain_password, hashed_password)
+    except (TypeError, ValueError):
+        return False, None
+    return bool(valid), str(new_hash) if new_hash else None
+
+
+def dummy_password_hash() -> str:
+    """Hash descartavel usado para gastar o mesmo tempo em login inexistente.
+
+    Sem isso, e-mail que nao existe responde na hora e e-mail real demora o
+    bcrypt, entregando quais contas estao cadastradas.
+    """
+    global _dummy_hash
+    if _dummy_hash is None:
+        _dummy_hash = hash_password(secrets.token_urlsafe(24))
+    return _dummy_hash
 
 
 def create_access_token(user_id: str, extra_claims: dict | None = None) -> tuple[str, str]:

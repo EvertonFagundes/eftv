@@ -329,7 +329,18 @@ async def mercadopago_webhook(
     Webhook do Mercado Pago para eventos de assinatura/pagamento.
     Processa: assinatura autorizada/cancelada e cobranças recorrentes.
     """
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Corpo do webhook inválido",
+        ) from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Corpo do webhook inválido",
+        )
 
     # O id do recurso pode vir na query (?data.id=...) ou no corpo.
     data_id = request.query_params.get("data.id") or request.query_params.get("id")

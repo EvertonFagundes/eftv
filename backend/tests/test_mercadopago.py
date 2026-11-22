@@ -301,14 +301,37 @@ def test_webhook_without_secret_is_rejected_in_production(monkeypatch):
     """Sem segredo o endpoint seria publico: qualquer um forca renovacao."""
     monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", None)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "MERCADOPAGO_ACCESS_TOKEN", None)
+    monkeypatch.setattr(settings, "MERCADOPAGO_SANDBOX", True)
+
+    assert mercadopago.validate_webhook_signature({}, "123") is False
+
+
+def test_webhook_without_secret_is_rejected_for_production_token(monkeypatch):
+    """ENVIRONMENT errado nao pode deixar o webhook aberto com conta real."""
+    monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", None)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "MERCADOPAGO_ACCESS_TOKEN", "APP_USR-123")
+    monkeypatch.setattr(settings, "MERCADOPAGO_SANDBOX", True)
+
+    assert mercadopago.validate_webhook_signature({}, "123") is False
+
+
+def test_webhook_without_secret_is_rejected_when_sandbox_is_off(monkeypatch):
+    monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", None)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "MERCADOPAGO_ACCESS_TOKEN", "TEST-123")
+    monkeypatch.setattr(settings, "MERCADOPAGO_SANDBOX", False)
 
     assert mercadopago.validate_webhook_signature({}, "123") is False
 
 
 def test_webhook_without_secret_is_allowed_in_development(monkeypatch):
-    """Em dev/teste continua opcional para facilitar a simulacao local."""
+    """Em dev/teste com credencial de teste continua opcional."""
     monkeypatch.setattr(settings, "MERCADOPAGO_WEBHOOK_SECRET", None)
     monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "MERCADOPAGO_ACCESS_TOKEN", "TEST-123")
+    monkeypatch.setattr(settings, "MERCADOPAGO_SANDBOX", True)
 
     assert mercadopago.validate_webhook_signature({}, "123") is True
 
