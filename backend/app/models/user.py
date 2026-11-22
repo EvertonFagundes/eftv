@@ -70,9 +70,7 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
     # Codigo de recuperacao de senha (enviado por email)
-    password_reset_token: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, index=True
-    )
+    password_reset_token: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     password_reset_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -143,9 +141,7 @@ class User(Base):
         matches = hmac.compare_digest(self.password_reset_token, _hash_reset_code(typed))
         if not matches:
             # Compatibilidade: hashes gerados antes do HMAC (validade 30 min).
-            matches = hmac.compare_digest(
-                self.password_reset_token, _legacy_hash_reset_code(typed)
-            )
+            matches = hmac.compare_digest(self.password_reset_token, _legacy_hash_reset_code(typed))
         if not matches:
             # Compatibilidade: codigos gerados antes do hash (validade 30 min).
             matches = hmac.compare_digest(self.password_reset_token, typed)

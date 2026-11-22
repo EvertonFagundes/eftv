@@ -112,7 +112,7 @@ class EmailService:
         html_body = (
             f"<p>Ola{', ' + full_name if full_name else ''}!</p>"
             "<p>Seu codigo para redefinir a senha do EFTV e:</p>"
-            f"<p style=\"font-size:28px;font-weight:bold;letter-spacing:6px\">{code}</p>"
+            f'<p style="font-size:28px;font-weight:bold;letter-spacing:6px">{code}</p>'
             "<p>Ele expira em 30 minutos.</p>"
             "<p>Se voce nao pediu para redefinir a senha, ignore este email.</p>"
         )
@@ -154,7 +154,7 @@ class EmailService:
             f"<p>Seu periodo de teste termina em <strong>{trial_end}</strong>.</p>"
             "<p>Para continuar assistindo sem interrupcao, assine o plano mensal "
             "de <strong>R$ 19,90</strong> no cartao de credito:</p>"
-            f"<p><a href=\"{subscribe_url}\">Assinar o EFTV</a></p>"
+            f'<p><a href="{subscribe_url}">Assinar o EFTV</a></p>'
         )
         return await self._send(to_email, subject, text_body, html_body)
 
@@ -179,7 +179,7 @@ class EmailService:
             "acesso foi pausado.</p>"
             "<p>Para voltar a assistir, assine o plano mensal de "
             "<strong>R$ 19,90</strong>:</p>"
-            f"<p><a href=\"{subscribe_url}\">Assinar o EFTV</a></p>"
+            f'<p><a href="{subscribe_url}">Assinar o EFTV</a></p>'
             "<p>Se ja assinou, entre no app e toque em Minha assinatura.</p>"
         )
         return await self._send(to_email, subject, text_body, html_body)
@@ -203,7 +203,7 @@ class EmailService:
             "<p>A cobranca da sua assinatura <strong>nao foi aprovada</strong> "
             "pelo cartao.</p>"
             "<p>Atualize a forma de pagamento para nao perder o acesso:</p>"
-            f"<p><a href=\"{subscribe_url}\">Atualizar pagamento</a></p>"
+            f'<p><a href="{subscribe_url}">Atualizar pagamento</a></p>'
         )
         return await self._send(to_email, subject, text_body, html_body)
 

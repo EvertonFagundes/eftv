@@ -245,9 +245,7 @@ async def verify_email(
         # Teste por APARELHO: o mesmo celular nao ganha outro trial so por
         # criar outra conta. Quando o app nao manda o header (confirmacao
         # pelo navegador), o bloqueio acontece no /player/playlist.
-        blocked = device_id is not None and await trials.device_already_used(
-            db, device_id, user.id
-        )
+        blocked = device_id is not None and await trials.device_already_used(db, device_id, user.id)
         if blocked:
             trial_activated = False
         else:
@@ -401,10 +399,7 @@ async def reset_password(
         key=rate_limit.scoped_key("reset-password", data.email),
         limit=settings.RATE_LIMIT_PASSWORD_RESET_ATTEMPTS,
         window_seconds=settings.RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS,
-        detail=(
-            "Muitas tentativas de codigo para esta conta. "
-            "Peca um novo codigo mais tarde."
-        ),
+        detail=("Muitas tentativas de codigo para esta conta. " "Peca um novo codigo mais tarde."),
     )
 
     result = await db.execute(select(User).where(User.email == data.email))
@@ -477,9 +472,7 @@ async def login(
     await record_login_success(db, data.email)
 
     # Gera tokens (e registra o refresh para poder revogar depois)
-    access_token, refresh_token = await _issue_tokens(
-        db, user.id, _optional_device_id(x_device_id)
-    )
+    access_token, refresh_token = await _issue_tokens(db, user.id, _optional_device_id(x_device_id))
 
     _set_refresh_cookie(response, refresh_token)
 
@@ -539,7 +532,9 @@ async def refresh_token(
 
     # Token registrado e revogado/expirado: sessao encerrada (logout, troca de
     # aparelho ou revogacao pelo suporte).
-    if stored is not None and (str(stored.user_id) != str(user_id) or not sessions.is_usable(stored)):
+    if stored is not None and (
+        str(stored.user_id) != str(user_id) or not sessions.is_usable(stored)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sessao encerrada. Entre novamente.",
@@ -614,6 +609,7 @@ async def logout(
 # ela mostra um codigo curto e o assinante confirma no celular, onde ja esta
 # logado. O mesmo vale para a assinatura (ver /subscriptions/checkout).
 # ----------------------------------------------------------------------
+
 
 class DeviceCodeRequest(BaseModel):
     device_name: str | None = None
@@ -751,7 +747,9 @@ async def export_me(
     from app.models.payment import Payment
 
     subs_result = await db.execute(
-        select(Subscription).where(Subscription.user_id == user.id).order_by(Subscription.created_at)
+        select(Subscription)
+        .where(Subscription.user_id == user.id)
+        .order_by(Subscription.created_at)
     )
     payments_result = await db.execute(
         select(Payment).where(Payment.user_id == user.id).order_by(Payment.created_at)
@@ -814,9 +812,7 @@ async def delete_me(
     # o proximo usuario reivindicar a propriedade. Transfira antes.
     if user.is_admin:
         admins_result = await db.execute(
-            select(func.count(User.id)).where(
-                User.is_admin.is_(True), User.is_active.is_(True)
-            )
+            select(func.count(User.id)).where(User.is_admin.is_(True), User.is_active.is_(True))
         )
         if int(admins_result.scalar_one() or 0) <= 1:
             raise HTTPException(

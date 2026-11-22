@@ -34,7 +34,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def verify_and_update_password(plain_password: str, hashed_password: str) -> tuple[bool, str | None]:
+def verify_and_update_password(
+    plain_password: str, hashed_password: str
+) -> tuple[bool, str | None]:
     """Verifica a senha e devolve um hash novo quando o antigo e legado.
 
     Retorna ``(valido, hash_novo)``. ``hash_novo`` e ``None`` quando o hash

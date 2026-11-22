@@ -126,15 +126,13 @@ async def init_db() -> None:
         # junto com o codigo.
         exists_codes = await conn.execute(
             text(
-                "SELECT 1 FROM information_schema.tables "
-                "WHERE table_name = 'device_login_codes'"
+                "SELECT 1 FROM information_schema.tables " "WHERE table_name = 'device_login_codes'"
             )
         )
         if exists_codes.first() is not None:
             await conn.execute(
                 text(
-                    "ALTER TABLE device_login_codes ADD COLUMN IF NOT EXISTS "
-                    "email VARCHAR(255)"
+                    "ALTER TABLE device_login_codes ADD COLUMN IF NOT EXISTS " "email VARCHAR(255)"
                 )
             )
 

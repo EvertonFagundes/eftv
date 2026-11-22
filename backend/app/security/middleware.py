@@ -145,12 +145,12 @@ class SecurityHeadersMiddleware:
                 if (
                     scope.get("scheme") == "https" or forwarded == "https"
                 ) and b"strict-transport-security" not in present:
-                        raw.append(
-                            (
-                                b"strict-transport-security",
-                                b"max-age=31536000; includeSubDomains",
-                            )
+                    raw.append(
+                        (
+                            b"strict-transport-security",
+                            b"max-age=31536000; includeSubDomains",
                         )
+                    )
 
                 message["headers"] = raw
             await send(message)

@@ -234,7 +234,9 @@ async def get_user(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado"
+        )
 
     sub_result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
     subscriptions = sub_result.scalars().all()
@@ -324,9 +326,7 @@ async def list_payments(
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()
 
-    rows = (
-        await db.execute(query.offset((page - 1) * page_size).limit(page_size))
-    ).all()
+    rows = (await db.execute(query.offset((page - 1) * page_size).limit(page_size))).all()
 
     return {
         "payments": [
@@ -361,13 +361,17 @@ async def list_client_errors(
     """Erros e travamentos relatados pelo app ("o app fechou sozinho")."""
     total = (await db.execute(select(func.count()).select_from(ClientError))).scalar_one()
     rows = (
-        await db.execute(
-            select(ClientError)
-            .order_by(ClientError.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                select(ClientError)
+                .order_by(ClientError.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return {
         "errors": [
@@ -475,7 +479,9 @@ async def revoke_user_devices(
     """Desvincula todos os aparelhos do usuario (suporte ao cliente)."""
     result = await db.execute(select(User).where(User.id == user_id))
     if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="UsuÃ¡rio nÃ£o encontrado"
+        )
 
     ids_result = await db.execute(select(Subscription.id).where(Subscription.user_id == user_id))
     subscription_ids = list(ids_result.scalars().all())
@@ -591,6 +597,7 @@ async def make_user_owner(
             detail="Erro interno ao processar a solicitacao.",
         ) from None
 
+
 # ----------------------------------------------------------------------
 # Linha propria do provedor de IPTV (revogacao por assinante)
 #
@@ -617,7 +624,9 @@ async def set_provider_line(
     result = await db.execute(select(Subscription).where(Subscription.id == subscription_id))
     subscription = result.scalar_one_or_none()
     if subscription is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura nao encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura nao encontrada"
+        )
 
     url = payload.playlist_url.strip()
     if not url.startswith(("http://", "https://")):
@@ -649,10 +658,14 @@ async def revoke_provider_line(
     result = await db.execute(select(Subscription).where(Subscription.id == subscription_id))
     subscription = result.scalar_one_or_none()
     if subscription is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura nao encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assinatura nao encontrada"
+        )
 
     subscription.provider_revoked_at = datetime.now(UTC)
     subscription.provider_playlist_url = None
     await db.commit()
-    logger.info("Linha propria revogada: subscription=%s por admin=%s", subscription.id, admin.email)
+    logger.info(
+        "Linha propria revogada: subscription=%s por admin=%s", subscription.id, admin.email
+    )
     return {"subscription_id": str(subscription.id), "configured": False}

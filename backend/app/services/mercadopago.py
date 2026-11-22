@@ -45,11 +45,7 @@ async def get_account_info(force: bool = False) -> dict | None:
         return None
 
     now = time.monotonic()
-    if (
-        not force
-        and _account_cache["data"] is not None
-        and now - _account_cache["at"] < 600
-    ):
+    if not force and _account_cache["data"] is not None and now - _account_cache["at"] < 600:
         return _account_cache["data"]
 
     try:
@@ -212,9 +208,7 @@ async def get_or_create_subscription_plan(db, plan: Plan) -> str:
     if existing and await _plan_belongs_to_account(str(existing)):
         return str(existing)
     if existing:
-        logger.warning(
-            "Plano MP %s nao pertence a conta atual; criando um novo", existing
-        )
+        logger.warning("Plano MP %s nao pertence a conta atual; criando um novo", existing)
         plan.mercadopago_plan_id = None
 
     if not settings.MERCADOPAGO_ACCESS_TOKEN:
@@ -240,9 +234,7 @@ async def get_or_create_subscription_plan(db, plan: Plan) -> str:
         )
 
     if response.status_code >= 400:
-        raise RuntimeError(
-            f"Erro ao criar plano MP: {response.status_code} - {response.text}"
-        )
+        raise RuntimeError(f"Erro ao criar plano MP: {response.status_code} - {response.text}")
 
     data = response.json()
     plan.mercadopago_plan_id = data.get("id")
@@ -347,16 +339,13 @@ async def create_checkout_preference(
     # ``external_reference`` anexado ao init_point (e, se o Mercado Pago nao
     # repassar, pelo e-mail do pagador no webhook).
     if db is None:
-        raise RuntimeError(
-            f"Erro ao criar assinatura MP: {response.status_code} - {response.text}"
-        )
+        raise RuntimeError(f"Erro ao criar assinatura MP: {response.status_code} - {response.text}")
 
     try:
         plan_id = await get_or_create_subscription_plan(db, plan)
     except RuntimeError as exc:
         raise RuntimeError(
-            f"Erro ao criar assinatura MP: {response.status_code} - {response.text}. "
-            f"{exc}"
+            f"Erro ao criar assinatura MP: {response.status_code} - {response.text}. " f"{exc}"
         ) from exc
 
     init_point = (
@@ -764,9 +753,7 @@ async def sync_payments_for_subscription(preapproval_id: str, db) -> int:
     try:
         invoices = await search_authorized_payments(preapproval_id)
     except Exception:  # noqa: BLE001
-        logger.warning(
-            "Falha ao buscar cobrancas da assinatura %s", preapproval_id, exc_info=True
-        )
+        logger.warning("Falha ao buscar cobrancas da assinatura %s", preapproval_id, exc_info=True)
         return 0
 
     recorded = 0
@@ -797,18 +784,14 @@ async def _record_authorized_payment(data: dict, db) -> bool:
     subscription = await _find_subscription(db, preapproval_id, data.get("external_reference"))
 
     if subscription is None:
-        logger.warning(
-            "Pagamento autorizado %s sem assinatura correspondente", data.get("id")
-        )
+        logger.warning("Pagamento autorizado %s sem assinatura correspondente", data.get("id"))
         return False
 
     payment_info = data.get("payment") or {}
     # A busca devolve o id da fatura; o webhook costuma trazer o id do
     # pagamento. Considera os dois para nao gravar a mesma cobranca duas vezes.
     candidates = [
-        str(value)
-        for value in (payment_info.get("id"), data.get("id"))
-        if value is not None
+        str(value) for value in (payment_info.get("id"), data.get("id")) if value is not None
     ]
     mp_payment_id = candidates[0]
     payment_status = data.get("status")

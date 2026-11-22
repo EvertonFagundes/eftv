@@ -129,8 +129,7 @@ async def get_playlist_access(
                 detail={
                     "code": "trial_device_used",
                     "message": (
-                        "Este aparelho ja usou o teste gratis. "
-                        "Assine para continuar assistindo."
+                        "Este aparelho ja usou o teste gratis. " "Assine para continuar assistindo."
                     ),
                 },
             )
@@ -227,6 +226,7 @@ async def revoke_all_my_devices(
 # ----------------------------------------------------------------------
 # Limite de telas simultaneas
 # ----------------------------------------------------------------------
+
 
 class StreamPlayRequest(BaseModel):
     channel_url: str

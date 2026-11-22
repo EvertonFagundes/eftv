@@ -76,9 +76,7 @@ async def send_lifecycle_emails() -> dict[str, int]:
         )
         for subscription, user in expired_result.all():
             try:
-                ok = await email_service.send_trial_expired_email(
-                    user.email, user.full_name
-                )
+                ok = await email_service.send_trial_expired_email(user.email, user.full_name)
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "Falha ao avisar o fim do teste vencido da assinatura %s",

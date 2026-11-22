@@ -400,8 +400,7 @@ async def cancel_subscription(
             await cancel_preapproval(str(subscription.mercadopago_subscription_id))
         except Exception:  # noqa: BLE001
             logger.error(
-                "Cancelamento local da assinatura %s, mas falhou ao cancelar "
-                "no Mercado Pago",
+                "Cancelamento local da assinatura %s, mas falhou ao cancelar " "no Mercado Pago",
                 subscription.id,
                 exc_info=True,
             )
