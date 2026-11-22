@@ -99,9 +99,13 @@ object LocalServer {
         conn.requestMethod = "GET"
         val ok = conn.responseCode == 200
         conn.disconnect()
-        if (ok) serverReady = true
+        serverReady = ok
         ok
     } catch (_: Exception) {
+        // O servidor pode ter sido encerrado pelo Android (ou estar
+        // reiniciando apos a troca de rede). Sem zerar a flag, o player
+        // continuaria tentando o proxy morto em vez da URL direta.
+        serverReady = false
         false
     }
 
