@@ -27,6 +27,10 @@ class PlaylistRepository(
             Integer.toHexString(source.url.hashCode())
         }
 
+    /** Base para resolver logos relativos vindos na playlist. */
+    private val playlistBaseUrl: String? =
+        source.url.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+
     data class Result(
         val metadata: CatalogStore.Metadata,
         val fromCache: Boolean = false,
@@ -44,12 +48,12 @@ class PlaylistRepository(
             val metadata = catalogStore.replace(sourceId, onProgress) { onChannel ->
                 if (playlistInput != null) {
                     playlistInput.bufferedReader(Charsets.UTF_8).use { reader ->
-                        M3uParser.parse(reader, onChannel)
+                        M3uParser.parse(reader, playlistBaseUrl, onChannel)
                     }
                 } else {
                     appContext.assets.open("sample_playlist.m3u").bufferedReader(Charsets.UTF_8)
                         .use { reader ->
-                            M3uParser.parse(reader, onChannel)
+                            M3uParser.parse(reader, onChannel = onChannel)
                         }
                 }
             }

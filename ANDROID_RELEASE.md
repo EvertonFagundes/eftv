@@ -4,7 +4,7 @@
 
 | Item | Valor |
 | --- | --- |
-| Versao publicada | `1.5.0` (`versionCode 25`) |
+| Versao publicada | `1.5.2` (`versionCode 27`) |
 | APK gerado | `android/app/build/outputs/apk/release/app-release.apk` |
 | Chave | `android/eftv-release.jks` (fingerprint abaixo) |
 

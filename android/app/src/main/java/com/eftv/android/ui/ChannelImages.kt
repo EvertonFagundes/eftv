@@ -23,13 +23,14 @@ import com.eftv.android.data.NetworkInfo
  *  - dados moveis: tenta o proxy local (DNS-over-HTTPS) primeiro e cai para
  *    a URL direta.
  *
- * A segunda tentativa e importante no primeiro minuto apos abrir o app: o
- * servidor embutido pode ainda nao ter respondido quando a lista e montada.
+ * Quando todas as tentativas falham, entra a capa gerada com as iniciais do
+ * canal: muitas listas antigas apontam para `goo.gl`/`postimg`, que sairam do
+ * ar, e sem isso a tela inteira fica com o mesmo icone generico.
  */
 fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     val logo = channel.logo.trim()
     if (logo.isBlank()) {
-        setImageResource(fallbackRes)
+        setImageDrawable(CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes))
         return
     }
 
@@ -56,9 +57,9 @@ private fun ImageView.loadArtwork(
 
     val request = ImageRequest.Builder(context)
         .data(data)
-        .placeholder(fallbackRes)
-        .error(fallbackRes)
-        .fallback(fallbackRes)
+        .placeholder(CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes))
+        .error(CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes))
+        .fallback(CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes))
         .crossfade(150)
         .apply {
             if (userAgent.isNotBlank()) addHeader("User-Agent", userAgent)

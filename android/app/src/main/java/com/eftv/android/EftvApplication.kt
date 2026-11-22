@@ -2,6 +2,9 @@ package com.eftv.android
 
 import android.app.Application
 import android.os.Build
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.SvgDecoder
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.eftv.android.data.DeviceIdentity
@@ -10,7 +13,17 @@ import com.eftv.android.data.api.EftvApi
 import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 
-class EftvApplication : Application() {
+class EftvApplication : Application(), ImageLoaderFactory {
+
+    /**
+     * O Coil nao decodifica SVG so por a dependencia estar no APK: precisa
+     * registrar o decoder. Varias listas usam logo `.svg`, que sem isso cai
+     * direto na capa gerada.
+     */
+    override fun newImageLoader(): ImageLoader =
+        ImageLoader.Builder(this)
+            .components { add(SvgDecoder.Factory()) }
+            .build()
 
     override fun onCreate() {
         super.onCreate()

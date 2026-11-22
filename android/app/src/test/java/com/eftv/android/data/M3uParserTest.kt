@@ -16,6 +16,13 @@ class M3uParserTest {
         return channels
     }
 
+    private fun parse(content: String, baseUrl: String): List<Channel> {
+        val channels = ArrayList<Channel>()
+        val reader: BufferedReader = StringReader(content).buffered()
+        M3uParser.parse(reader, baseUrl) { channels.add(it) }
+        return channels
+    }
+
     @Test
     fun `le atributos, categoria e nome depois da virgula`() {
         val list = parse(
@@ -135,6 +142,59 @@ class M3uParserTest {
 
         assertNull(channel.userAgent)
         assertNull(channel.referer)
+    }
+
+    @Test
+    fun `resolve logo relativo contra a url da playlist`() {
+        val list = parse(
+            """
+            #EXTINF:-1 tvg-logo="The-Walking-Dead.png",The Walking Dead
+            https://example.com/a.m3u8
+            """.trimIndent(),
+            baseUrl = "https://example.com/listas/canais.m3u",
+        )
+
+        assertEquals(
+            "https://example.com/listas/The-Walking-Dead.png",
+            list.single().logo,
+        )
+    }
+
+    @Test
+    fun `atributo tvg-logo duplicado prefere a url absoluta`() {
+        val list = parse(
+            """
+            #EXTINF:-1 tvg-logo="Prison-Break.png" tvg-logo="https://cdn.example.com/prison.png",Prison Break
+            https://example.com/a.m3u8
+            """.trimIndent(),
+            baseUrl = "https://example.com/listas/canais.m3u",
+        )
+
+        assertEquals("https://cdn.example.com/prison.png", list.single().logo)
+    }
+
+    @Test
+    fun `logo invalido vira vazio para usar a capa gerada`() {
+        val list = parse(
+            """
+            #EXTINF:-1 tvg-logo="xx",Canal
+            https://example.com/a.m3u8
+            """.trimIndent()
+        )
+
+        assertEquals("", list.single().logo)
+    }
+
+    @Test
+    fun `logo protocolo relativo vira https`() {
+        val list = parse(
+            """
+            #EXTINF:-1 tvg-logo="//cdn.example.com/logo.png",Canal
+            https://example.com/a.m3u8
+            """.trimIndent()
+        )
+
+        assertEquals("https://cdn.example.com/logo.png", list.single().logo)
     }
 
     @Test

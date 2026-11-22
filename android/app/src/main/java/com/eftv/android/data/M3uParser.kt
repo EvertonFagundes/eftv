@@ -1,6 +1,8 @@
 package com.eftv.android.data
 
 import java.io.BufferedReader
+import java.net.URI
+import java.util.Locale
 
 /**
  * Parser de playlists M3U/M3U8 (formato Xtream Codes / IPTV).
@@ -12,7 +14,21 @@ object M3uParser {
     private const val DEFAULT_GROUP = "Sem categoria"
     private const val DEFAULT_NAME = "Sem nome"
 
-    fun parse(reader: BufferedReader, onChannel: (Channel) -> Unit): Int {
+    /** Valores usados por algumas listas como "sem logo". */
+    private val INVALID_LOGOS = setOf("xx", "xxx", "tvg-logo=", "null", "none", "-")
+
+    /**
+     * Le a playlist.
+     *
+     * [baseUrl] e a URL de onde a lista foi baixada. Ela resolve logos
+     * relativos (`The-Walking-Dead.png`), comuns em listas antigas. Quando a
+     * lista vem de assets do APK, [baseUrl] fica nulo.
+     */
+    fun parse(
+        reader: BufferedReader,
+        baseUrl: String? = null,
+        onChannel: (Channel) -> Unit,
+    ): Int {
         var pending: Pending? = null
         var count = 0
         val groups = HashMap<String, String>()
@@ -24,9 +40,13 @@ object M3uParser {
 
             when {
                 line.startsWith("#EXTINF", ignoreCase = true) -> {
-                    val attrs = ATTR_REGEX.findAll(line).associate {
+                    val matches = ATTR_REGEX.findAll(line).toList()
+                    val attrs = matches.associate {
                         it.groupValues[1].lowercase() to it.groupValues[2].trim()
                     }
+                    val logoValues = matches
+                        .filter { it.groupValues[1].equals("tvg-logo", ignoreCase = true) }
+                        .map { it.groupValues[2] }
                     val rawName = nameAfterAttributes(line)
                     val name = rawName
                         .ifBlank { attrs["tvg-name"].orEmpty() }
@@ -35,7 +55,7 @@ object M3uParser {
                     pending = Pending(
                         name = name,
                         group = groups.getOrPut(rawGroup) { rawGroup },
-                        logo = attrs["tvg-logo"].orEmpty(),
+                        logo = chooseLogo(logoValues, baseUrl),
                         tvgId = attrs["tvg-id"].orEmpty(),
                     )
                 }
@@ -85,6 +105,45 @@ object M3uParser {
             }
         }
         return count
+    }
+
+    /**
+     * Escolhe o logo entre os atributos duplicados.
+     *
+     * Varias listas repetem `tvg-logo`: um nome relativo e um link absoluto.
+     * O absoluto costuma ser o que funciona, entao ele tem prioridade; se so
+     * houver relativo, resolvemos contra a URL da playlist.
+     */
+    private fun chooseLogo(values: List<String>, baseUrl: String?): String {
+        val clean = values.map { it.trim() }.filter { it.isNotEmpty() }
+        val chosen = clean.lastOrNull { isAbsoluteLogo(it) }
+            ?: clean.lastOrNull()
+            ?: return ""
+        return normalizeLogo(chosen, baseUrl)
+    }
+
+    private fun isAbsoluteLogo(value: String): Boolean =
+        value.startsWith("http://", ignoreCase = true) ||
+            value.startsWith("https://", ignoreCase = true) ||
+            value.startsWith("//") ||
+            value.startsWith("data:image/", ignoreCase = true)
+
+    private fun normalizeLogo(raw: String, baseUrl: String?): String {
+        var value = raw.trim().trim('"', '\'').replace("&amp;", "&")
+        if (value.isBlank() || value.lowercase(Locale.ROOT) in INVALID_LOGOS) return ""
+
+        if (value.startsWith("//")) value = "https:$value"
+        if (isAbsoluteLogo(value)) return value
+
+        val base = baseUrl?.takeIf {
+            it.startsWith("http://", ignoreCase = true) ||
+                it.startsWith("https://", ignoreCase = true)
+        }
+        if (base.isNullOrBlank()) return value
+
+        // URI.resolve nao aceita espaco cru; o nome do arquivo pode ter.
+        val relative = value.replace(" ", "%20")
+        return runCatching { URI(base).resolve(relative).toString() }.getOrDefault(value)
     }
 
     /** Nome do canal = texto depois da primeira virgula fora das aspas. */

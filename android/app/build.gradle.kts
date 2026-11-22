@@ -125,8 +125,8 @@ android {
         applicationId = "com.eftv.android"
         minSdk = 24
         targetSdk = 34
-        versionCode = 26
-        versionName = "1.5.1"
+        versionCode = 27
+        versionName = "1.5.2"
 
         // Debug no emulador usa 127.0.0.1; num celular, configure local.properties
         // com EFTV_API_URL=http://IP-DO-PC:8000
@@ -238,8 +238,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
     implementation("androidx.media3:media3-ui:1.3.1")
 
-    // Logos dos canais
+    // Logos dos canais (o SVG cobre listas que usam esse formato)
     implementation("io.coil-kt:coil:2.6.0")
+    implementation("io.coil-kt:coil-svg:2.6.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
