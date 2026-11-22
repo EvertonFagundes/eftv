@@ -30,9 +30,11 @@ import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.Channel
 import com.eftv.android.data.ChannelKind
 import com.eftv.android.data.ChannelMode
+import com.eftv.android.data.AppScope
 import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.LocalServer
 import com.eftv.android.data.LogUtils
+import com.eftv.android.data.NetworkInfo
 import com.eftv.android.data.PlaylistRepository
 import com.eftv.android.data.PlaylistSource
 import com.eftv.android.data.SessionStore
@@ -113,6 +115,7 @@ class MainActivity : AppCompatActivity() {
             (BuildConfig.DEBUG && intent.getBooleanExtra(EXTRA_SKIP_AUTH, false))
 
     private var refreshJob: Job? = null
+    private var lastCatalogReportAt = 0L
     private var filterJob: Job? = null
     private val pageJobs = HashMap<Int, Job>()
     private val loadingPages = HashSet<Int>()
@@ -1027,6 +1030,7 @@ class MainActivity : AppCompatActivity() {
                 throw e
             } catch (e: Exception) {
                 Timber.e(e, "Falha ao carregar o catalogo")
+                reportCatalogFailure(e)
                 if (hasContent) {
                     Toast.makeText(
                         this@MainActivity,
@@ -1038,6 +1042,32 @@ class MainActivity : AppCompatActivity() {
                 }
             } finally {
                 binding.swipeRefresh.isRefreshing = false
+            }
+        }
+    }
+
+    /**
+     * Envia a falha do catálogo para o backend com o tipo de rede.
+     *
+     * Sem isso, "não funciona nos dados móveis" chega sem dizer se o problema
+     * é DNS do provedor, bloqueio da operadora ou o backend. O relato é
+     * mascarado (sem a URL do provedor) e limitado a um por hora por sessão.
+     */
+    private fun reportCatalogFailure(e: Exception) {
+        val agora = System.currentTimeMillis()
+        if (agora - lastCatalogReportAt < CATALOG_REPORT_INTERVAL_MS) return
+        lastCatalogReportAt = agora
+        val rede = NetworkInfo.label(this)
+        AppScope.io.launch {
+            runCatching {
+                api.reportCrash(
+                    message = "catalogo [$rede] ${e.javaClass.simpleName}: " +
+                        LogUtils.redactText(e.message.orEmpty()),
+                    stacktrace = LogUtils.redactThrowable(e),
+                    appVersion = BuildConfig.VERSION_NAME,
+                    device = android.os.Build.MODEL.orEmpty(),
+                    android = android.os.Build.VERSION.RELEASE.orEmpty(),
+                )
             }
         }
     }
@@ -1637,6 +1667,9 @@ class MainActivity : AppCompatActivity() {
         private const val UPDATE_PREFS = "eftv_updates"
         private const val UPDATE_LAST_CHECK = "last_check"
         private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
+
+        /** No maximo um relato de falha do catalogo por hora. */
+        private const val CATALOG_REPORT_INTERVAL_MS = 60 * 60 * 1000L
     }
 
     private class DeviceBlockedException(message: String) : Exception(message)

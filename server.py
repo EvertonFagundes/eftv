@@ -61,6 +61,9 @@ MAX_PLAYLIST_MB = int(os.environ.get("MAX_PLAYLIST_MB", "128"))
 MAX_PLAYLIST_BYTES = max(1, MAX_PLAYLIST_MB) * 1024 * 1024
 MAX_CHANNELS = int(os.environ.get("MAX_CHANNELS", "50000"))
 FETCH_TIMEOUT = 25
+# Baixar uma lista inteira (dezenas de milhares de canais) pode levar bem mais
+# que abrir um stream: o timeout é separado para não truncar o catálogo.
+PLAYLIST_TIMEOUT = int(os.environ.get("EFTV_PLAYLIST_TIMEOUT", "90"))
 
 # O site publico que pode ler as rotas do servidor local. Qualquer outra
 # origem recebe a resposta sem Access-Control-Allow-Origin (o navegador
@@ -140,39 +143,73 @@ _DNS_CACHE_TTL = 600  # segundos
 _DNS_LOCAL = threading.local()
 _LOG_DNS: dict = {}
 _getaddrinfo_sistema = socket.getaddrinfo
+# Endereços por IP literal primeiro: continuam valendo mesmo quando o
+# resolvedor da operadora está morto ou bloqueado, porque o próprio DoH não
+# precisa de DNS para ser alcançado.
 _URLS_DOH = (
-    "https://cloudflare-dns.com/dns-query?name={nome}&type={tipo}",
-    "https://dns.google/resolve?name={nome}&type={tipo}",
-    # Endereços diretos: valem até quando o resolvedor local não responde
-    # nem a Cloudflare (conexão por IP puro, sem depender de DNS nenhum).
     "https://1.1.1.1/dns-query?name={nome}&type={tipo}",
     "https://8.8.8.8/resolve?name={nome}&type={tipo}",
+    "https://cloudflare-dns.com/dns-query?name={nome}&type={tipo}",
+    "https://dns.google/resolve?name={nome}&type={tipo}",
+)
+
+# Em dados móveis o resolvedor da operadora às vezes devolve um IP de bloqueio
+# *sem erro* (não lança gaierror), então esperar a falha não basta: o DoH é
+# consultado primeiro. O resultado fica em cache por 10 minutos.
+_DNS_DOH_FIRST = os.environ.get("EFTV_DNS_DOH_FIRST", "1").strip().lower() not in (
+    "0",
+    "false",
+    "nao",
+    "não",
+    "no",
 )
 
 
-def _consulta_doh(nome: str, tipo: str) -> list:
+def _eh_ip_literal(valor: str) -> bool:
+    try:
+        ipaddress.ip_address(valor.strip("[]"))
+        return True
+    except ValueError:
+        return False
+
+
+def _consulta_doh(nome: str, tipo: str, force: bool = False) -> list:
+    """Pergunta o nome no DoH da Cloudflare/Google.
+
+    ``force=True`` ignora o cache (usado quando a conexão com o IP cacheado
+    falhou: pode ser um IP de bloqueio da operadora ou um registro que mudou).
+    """
     chave = f"{tipo}:{nome}"
-    guardado = _DNS_CACHE.get(chave)
-    if guardado and guardado[0] > time.time():
-        return guardado[1]
-    ips: list = []
-    for modelo in _URLS_DOH:
-        try:
-            requisicao = Request(
-                modelo.format(nome=quote(nome), tipo=tipo),
-                headers={"Accept": "application/dns-json", "User-Agent": USER_AGENT},
-            )
-            with urlopen(requisicao, timeout=4) as resposta:
-                dados = json.loads(resposta.read(16384).decode("utf-8", "replace"))
-            ips = [
-                str(item.get("data", "")).strip()
-                for item in dados.get("Answer") or []
-                if item.get("type") in (1, 28) and str(item.get("data", "")).strip()
-            ]
-        except Exception:  # noqa: BLE001 - tenta o próximo provedor
-            ips = []
-        if ips:
-            break
+    if not force:
+        guardado = _DNS_CACHE.get(chave)
+        if guardado and guardado[0] > time.time():
+            return guardado[1]
+    # A própria consulta DoH precisa resolver o nome do provedor de DoH. A
+    # trava evita recursão infinita: dentro dela vale só o resolvedor local.
+    if getattr(_DNS_LOCAL, "consultando", False):
+        return []
+    _DNS_LOCAL.consultando = True
+    try:
+        ips: list = []
+        for modelo in _URLS_DOH:
+            try:
+                requisicao = Request(
+                    modelo.format(nome=quote(nome), tipo=tipo),
+                    headers={"Accept": "application/dns-json", "User-Agent": USER_AGENT},
+                )
+                with urlopen(requisicao, timeout=4) as resposta:
+                    dados = json.loads(resposta.read(16384).decode("utf-8", "replace"))
+                ips = [
+                    str(item.get("data", "")).strip()
+                    for item in dados.get("Answer") or []
+                    if item.get("type") in (1, 28) and str(item.get("data", "")).strip()
+                ]
+            except Exception:  # noqa: BLE001 - tenta o próximo provedor
+                ips = []
+            if ips:
+                break
+    finally:
+        _DNS_LOCAL.consultando = False
     if ips:
         _DNS_CACHE[chave] = (time.time() + _DNS_CACHE_TTL, ips)
     return ips
@@ -187,28 +224,47 @@ def _anotar_fallback(host: str, ip: str) -> None:
 
 
 def getaddrinfo_resiliente(host, port, family=0, type=0, proto=0, flags=0):
-    """getaddrinfo do sistema com queda para DNS-over-HTTPS.
+    """getaddrinfo do sistema com apoio (ou prioridade) de DNS-over-HTTPS.
 
-    O jeito normal vem primeiro. Só se o resolvedor local falhar é que o DoH é
-    consultado — com um bloqueio para não chamar a si mesmo, já que a consulta
-    DoH também precisa de DNS (a exceção da chamada aninhada sobe direto).
+    O resolvedor da operadora falha de dois jeitos nos dados móveis:
+
+    * lança ``gaierror`` (domínio não existe/bloqueado);
+    * devolve um IP de bloqueio **sem erro** — o pior caso, porque a conexão
+      só falha depois e não há como saber que o DNS mentiu.
+
+    Por isso o DoH é consultado primeiro para nomes públicos. Se ele não
+    responder, o resolvedor do sistema assume: a rede local continua
+    funcionando e nada fica dependente da Cloudflare/Google.
     """
+    if getattr(_DNS_LOCAL, "consultando", False) or not isinstance(host, str) or not host:
+        return _getaddrinfo_sistema(host, port, family, type, proto, flags)
+
+    nome = host.strip()
+    publico = (
+        not _eh_ip_literal(nome)
+        and nome.lower() != "localhost"
+        and "." in nome
+        and not nome.lower().endswith((".local", ".internal"))
+    )
+    tipo = "AAAA" if family == socket.AF_INET6 else "A"
+
+    if _DNS_DOH_FIRST and publico:
+        for ip in _consulta_doh(nome, tipo):
+            try:
+                return _getaddrinfo_sistema(ip, port, family, type, proto, flags)
+            except socket.gaierror:
+                continue
+
     try:
         return _getaddrinfo_sistema(host, port, family, type, proto, flags)
     except socket.gaierror as erro:
-        if getattr(_DNS_LOCAL, "consultando", False) or not isinstance(host, str) or not host:
+        if not publico:
             raise
-        _DNS_LOCAL.consultando = True
-        try:
-            ips = _consulta_doh(host, "AAAA" if family == socket.AF_INET6 else "A")
-        finally:
-            _DNS_LOCAL.consultando = False
-        if not ips:
-            raise
+        # O sistema falhou: tenta o DoH de novo forçando uma consulta nova.
         ultimo_erro = erro
-        for ip in ips:
+        for ip in _consulta_doh(nome, tipo, force=True):
             try:
-                _anotar_fallback(host, ip)
+                _anotar_fallback(nome, ip)
                 return _getaddrinfo_sistema(ip, port, family, type, proto, flags)
             except socket.gaierror as exc2:
                 ultimo_erro = exc2
@@ -795,6 +851,27 @@ class _RedirecionamentoSeguro(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def abrir_url_resiliente(req: Request, timeout: int = FETCH_TIMEOUT):
+    """Abre a URL; se a conexão falhar, refaz o DNS pelo DoH e tenta de novo.
+
+    Cobre o caso em que o resolvedor da operadora devolveu (sem erro) um IP de
+    bloqueio: a conexão com ele morre e uma nova resposta do DoH costuma
+    apontar para o IP verdadeiro.
+    """
+    opener = build_opener(_RedirecionamentoSeguro())
+    try:
+        return opener.open(req, timeout=timeout)
+    except HTTPError:
+        raise
+    except (URLError, TimeoutError, OSError):
+        host = (urlsplit(req.full_url).hostname or "").strip()
+        if not host or _eh_ip_literal(host):
+            raise
+        _consulta_doh(host, "A", force=True)
+        opener = build_opener(_RedirecionamentoSeguro())
+        return opener.open(req, timeout=timeout)
+
+
 def summarize(playlist: dict) -> dict:
     return {
         "id": playlist.get("id", ""),
@@ -1266,6 +1343,13 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_playlist()
             return
 
+        if route == "/api/playlist-remote":
+            # Playlist original do provedor, baixada pelo servidor local (DoH +
+            # User-Agent/Referer). Diferente de /api/playlist.m3u, o texto não é
+            # reescrito: o app guarda as URLs e decide o que passa pelo proxy.
+            self._handle_playlist_remote(parts.query)
+            return
+
         if route == "/api/proxy":
             self._handle_proxy(parts.query)
             return
@@ -1617,6 +1701,62 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _handle_playlist_remote(self, query: str) -> None:
+        """Baixa a playlist real do provedor e devolve o texto sem reescrever.
+
+        O app usa esta rota (em vez de baixar direto do provedor) para herdar o
+        DNS-over-HTTPS e os cabeçalhos User-Agent/Referer do servidor local.
+        Sem isso, nos dados móveis de algumas operadoras a lista simplesmente
+        não abre — o catálogo fica vazio e o app parece "sem internet".
+
+        O texto volta igual ao do provedor: o player continua passando pelo
+        /api/proxy na hora de tocar, e as capas também.
+        """
+        params = parse_qs(query)
+        target = (params.get("url") or [""])[0].strip()
+        if not target:
+            self._error("Parâmetro url ausente.", 400)
+            return
+        if not is_http_url(target):
+            self._error("Somente URLs http(s) podem ser baixadas.", 400)
+            return
+        if not proxy_alvo_permitido(target):
+            self._error("Endereco de destino nao permitido.", 403)
+            return
+
+        headers = {
+            "User-Agent": (self.headers.get("User-Agent") or "").strip() or USER_AGENT,
+            "Accept": "*/*",
+            "Accept-Encoding": "identity",
+        }
+        partes = urlsplit(target)
+        referer = (self.headers.get("Referer") or "").strip()
+        if not referer or "127.0.0.1" in referer or "localhost" in referer:
+            referer = f"{partes.scheme}://{partes.netloc}/"
+        headers["Referer"] = referer
+
+        try:
+            req = Request(target, headers=headers)
+            with abrir_url_resiliente(req, timeout=PLAYLIST_TIMEOUT) as resp:
+                data = resp.read(MAX_PLAYLIST_BYTES + 1)
+                if "gzip" in (resp.headers.get("Content-Encoding") or "").lower():
+                    # Alguns provedores ignoram "Accept-Encoding: identity".
+                    data = gzip.decompress(data)
+                if len(data) > MAX_PLAYLIST_BYTES:
+                    self._error("Playlist muito grande.", 502)
+                    return
+                ctype = resp.headers.get("Content-Type") or "audio/x-mpegurl; charset=utf-8"
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+        except HTTPError as exc:
+            self._error(f"A origem respondeu HTTP {exc.code}.", 502)
+        except (URLError, TimeoutError, OSError) as exc:
+            self._error(f"Não foi possível baixar a playlist: {exc}", 502)
+
     def _handle_proxy(self, query: str) -> None:
         params = parse_qs(query)
         target = (params.get("url") or [""])[0].strip()
@@ -1650,7 +1790,7 @@ class Handler(SimpleHTTPRequestHandler):
 
         try:
             req = Request(target, headers=headers)
-            resp = build_opener(_RedirecionamentoSeguro()).open(req, timeout=FETCH_TIMEOUT)
+            resp = abrir_url_resiliente(req, timeout=FETCH_TIMEOUT)
         except HTTPError as exc:
             self._error(f"A origem respondeu HTTP {exc.code}.", 502)
             return

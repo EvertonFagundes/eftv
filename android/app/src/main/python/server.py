@@ -16,6 +16,7 @@ Uso:
 from __future__ import annotations
 
 import gzip
+import ipaddress
 import json
 import mimetypes
 import os
@@ -34,7 +35,7 @@ from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 def _diretorio_base() -> str:
     env = os.environ.get("EFTV_ROOT", "").strip()
@@ -60,6 +61,25 @@ MAX_PLAYLIST_MB = int(os.environ.get("MAX_PLAYLIST_MB", "128"))
 MAX_PLAYLIST_BYTES = max(1, MAX_PLAYLIST_MB) * 1024 * 1024
 MAX_CHANNELS = int(os.environ.get("MAX_CHANNELS", "50000"))
 FETCH_TIMEOUT = 25
+# Baixar uma lista inteira (dezenas de milhares de canais) pode levar bem mais
+# que abrir um stream: o timeout é separado para não truncar o catálogo.
+PLAYLIST_TIMEOUT = int(os.environ.get("EFTV_PLAYLIST_TIMEOUT", "90"))
+
+# O site publico que pode ler as rotas do servidor local. Qualquer outra
+# origem recebe a resposta sem Access-Control-Allow-Origin (o navegador
+# bloqueia a leitura), inclusive paginas maliciosas na mesma rede.
+ORIGEM_PUBLICA = "https://evertonfagundes.github.io"
+
+# Por padrao o proxy recusa alvos privados/loopback: sem isso uma pagina
+# qualquer conseguia usar o servidor local como ponte para a rede de casa
+# (roteador, cameras, 169.254.169.254 de nuvem). Quem tem provedor na LAN
+# pode liberar explicitamente com EFTV_PROXY_ALLOW_PRIVATE=1.
+PROXY_ALLOW_PRIVATE = os.environ.get("EFTV_PROXY_ALLOW_PRIVATE", "").strip().lower() in (
+    "1",
+    "true",
+    "sim",
+    "yes",
+)
 
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -123,39 +143,73 @@ _DNS_CACHE_TTL = 600  # segundos
 _DNS_LOCAL = threading.local()
 _LOG_DNS: dict = {}
 _getaddrinfo_sistema = socket.getaddrinfo
+# Endereços por IP literal primeiro: continuam valendo mesmo quando o
+# resolvedor da operadora está morto ou bloqueado, porque o próprio DoH não
+# precisa de DNS para ser alcançado.
 _URLS_DOH = (
-    "https://cloudflare-dns.com/dns-query?name={nome}&type={tipo}",
-    "https://dns.google/resolve?name={nome}&type={tipo}",
-    # Endereços diretos: valem até quando o resolvedor local não responde
-    # nem a Cloudflare (conexão por IP puro, sem depender de DNS nenhum).
     "https://1.1.1.1/dns-query?name={nome}&type={tipo}",
     "https://8.8.8.8/resolve?name={nome}&type={tipo}",
+    "https://cloudflare-dns.com/dns-query?name={nome}&type={tipo}",
+    "https://dns.google/resolve?name={nome}&type={tipo}",
+)
+
+# Em dados móveis o resolvedor da operadora às vezes devolve um IP de bloqueio
+# *sem erro* (não lança gaierror), então esperar a falha não basta: o DoH é
+# consultado primeiro. O resultado fica em cache por 10 minutos.
+_DNS_DOH_FIRST = os.environ.get("EFTV_DNS_DOH_FIRST", "1").strip().lower() not in (
+    "0",
+    "false",
+    "nao",
+    "não",
+    "no",
 )
 
 
-def _consulta_doh(nome: str, tipo: str) -> list:
+def _eh_ip_literal(valor: str) -> bool:
+    try:
+        ipaddress.ip_address(valor.strip("[]"))
+        return True
+    except ValueError:
+        return False
+
+
+def _consulta_doh(nome: str, tipo: str, force: bool = False) -> list:
+    """Pergunta o nome no DoH da Cloudflare/Google.
+
+    ``force=True`` ignora o cache (usado quando a conexão com o IP cacheado
+    falhou: pode ser um IP de bloqueio da operadora ou um registro que mudou).
+    """
     chave = f"{tipo}:{nome}"
-    guardado = _DNS_CACHE.get(chave)
-    if guardado and guardado[0] > time.time():
-        return guardado[1]
-    ips: list = []
-    for modelo in _URLS_DOH:
-        try:
-            requisicao = Request(
-                modelo.format(nome=quote(nome), tipo=tipo),
-                headers={"Accept": "application/dns-json", "User-Agent": USER_AGENT},
-            )
-            with urlopen(requisicao, timeout=4) as resposta:
-                dados = json.loads(resposta.read(16384).decode("utf-8", "replace"))
-            ips = [
-                str(item.get("data", "")).strip()
-                for item in dados.get("Answer") or []
-                if item.get("type") in (1, 28) and str(item.get("data", "")).strip()
-            ]
-        except Exception:  # noqa: BLE001 - tenta o próximo provedor
-            ips = []
-        if ips:
-            break
+    if not force:
+        guardado = _DNS_CACHE.get(chave)
+        if guardado and guardado[0] > time.time():
+            return guardado[1]
+    # A própria consulta DoH precisa resolver o nome do provedor de DoH. A
+    # trava evita recursão infinita: dentro dela vale só o resolvedor local.
+    if getattr(_DNS_LOCAL, "consultando", False):
+        return []
+    _DNS_LOCAL.consultando = True
+    try:
+        ips: list = []
+        for modelo in _URLS_DOH:
+            try:
+                requisicao = Request(
+                    modelo.format(nome=quote(nome), tipo=tipo),
+                    headers={"Accept": "application/dns-json", "User-Agent": USER_AGENT},
+                )
+                with urlopen(requisicao, timeout=4) as resposta:
+                    dados = json.loads(resposta.read(16384).decode("utf-8", "replace"))
+                ips = [
+                    str(item.get("data", "")).strip()
+                    for item in dados.get("Answer") or []
+                    if item.get("type") in (1, 28) and str(item.get("data", "")).strip()
+                ]
+            except Exception:  # noqa: BLE001 - tenta o próximo provedor
+                ips = []
+            if ips:
+                break
+    finally:
+        _DNS_LOCAL.consultando = False
     if ips:
         _DNS_CACHE[chave] = (time.time() + _DNS_CACHE_TTL, ips)
     return ips
@@ -170,28 +224,47 @@ def _anotar_fallback(host: str, ip: str) -> None:
 
 
 def getaddrinfo_resiliente(host, port, family=0, type=0, proto=0, flags=0):
-    """getaddrinfo do sistema com queda para DNS-over-HTTPS.
+    """getaddrinfo do sistema com apoio (ou prioridade) de DNS-over-HTTPS.
 
-    O jeito normal vem primeiro. Só se o resolvedor local falhar é que o DoH é
-    consultado — com um bloqueio para não chamar a si mesmo, já que a consulta
-    DoH também precisa de DNS (a exceção da chamada aninhada sobe direto).
+    O resolvedor da operadora falha de dois jeitos nos dados móveis:
+
+    * lança ``gaierror`` (domínio não existe/bloqueado);
+    * devolve um IP de bloqueio **sem erro** — o pior caso, porque a conexão
+      só falha depois e não há como saber que o DNS mentiu.
+
+    Por isso o DoH é consultado primeiro para nomes públicos. Se ele não
+    responder, o resolvedor do sistema assume: a rede local continua
+    funcionando e nada fica dependente da Cloudflare/Google.
     """
+    if getattr(_DNS_LOCAL, "consultando", False) or not isinstance(host, str) or not host:
+        return _getaddrinfo_sistema(host, port, family, type, proto, flags)
+
+    nome = host.strip()
+    publico = (
+        not _eh_ip_literal(nome)
+        and nome.lower() != "localhost"
+        and "." in nome
+        and not nome.lower().endswith((".local", ".internal"))
+    )
+    tipo = "AAAA" if family == socket.AF_INET6 else "A"
+
+    if _DNS_DOH_FIRST and publico:
+        for ip in _consulta_doh(nome, tipo):
+            try:
+                return _getaddrinfo_sistema(ip, port, family, type, proto, flags)
+            except socket.gaierror:
+                continue
+
     try:
         return _getaddrinfo_sistema(host, port, family, type, proto, flags)
     except socket.gaierror as erro:
-        if getattr(_DNS_LOCAL, "consultando", False) or not isinstance(host, str) or not host:
+        if not publico:
             raise
-        _DNS_LOCAL.consultando = True
-        try:
-            ips = _consulta_doh(host, "AAAA" if family == socket.AF_INET6 else "A")
-        finally:
-            _DNS_LOCAL.consultando = False
-        if not ips:
-            raise
+        # O sistema falhou: tenta o DoH de novo forçando uma consulta nova.
         ultimo_erro = erro
-        for ip in ips:
+        for ip in _consulta_doh(nome, tipo, force=True):
             try:
-                _anotar_fallback(host, ip)
+                _anotar_fallback(nome, ip)
                 return _getaddrinfo_sistema(ip, port, family, type, proto, flags)
             except socket.gaierror as exc2:
                 ultimo_erro = exc2
@@ -685,11 +758,125 @@ def make_playlist(name: str, url: str, channels: list[dict]) -> dict:
     }
 
 
+_CHAVES_SEGREDAS = {
+    "username",
+    "user",
+    "password",
+    "pass",
+    "senha",
+    "token",
+    "key",
+    "auth",
+    "access_token",
+}
+
+
+def mascarar_url(valor: str) -> str:
+    """Remove usuario/senha de uma URL antes de devolve-la na API.
+
+    A URL da playlist e uma credencial do provedor: quem a copia assiste sem
+    pagar. A tela ainda mostra o endereco (util para conferir a origem), mas
+    sem o segredo. O servidor continua usando a URL completa internamente.
+    """
+    try:
+        partes = urlsplit(valor)
+    except ValueError:
+        return valor
+    if not partes.scheme or not partes.netloc:
+        return valor
+
+    netloc = partes.netloc
+    if partes.username or partes.password:
+        host = partes.hostname or ""
+        if partes.port:
+            host = f"{host}:{partes.port}"
+        credencial = "***" if partes.username else ""
+        if partes.password:
+            credencial = f"{credencial}:***"
+        netloc = f"{credencial}@{host}"
+
+    consulta = partes.query
+    if consulta:
+        itens = []
+        for item in consulta.split("&"):
+            chave, separador, _valor = item.partition("=")
+            if separador and unquote(chave).lower() in _CHAVES_SEGREDAS:
+                itens.append(f"{chave}=***")
+            else:
+                itens.append(item)
+        consulta = "&".join(itens)
+
+    return urlunsplit((partes.scheme, netloc, partes.path, consulta, partes.fragment))
+
+
+def proxy_alvo_permitido(url: str) -> bool:
+    """Diz se o proxy pode buscar esta URL (bloqueia SSRF para a rede local)."""
+    if PROXY_ALLOW_PRIVATE:
+        return True
+    if not is_http_url(url):
+        return False
+    partes = urlsplit(url)
+    host = (partes.hostname or "").strip().lower()
+    if not host:
+        return False
+    if host == "localhost" or host.endswith(".local") or host.endswith(".internal"):
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return False
+    return True
+
+
+class _RedirecionamentoSeguro(HTTPRedirectHandler):
+    """Valida cada salto do redirect: a origem pode apontar para 127.0.0.1."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not proxy_alvo_permitido(newurl):
+            raise URLError("Redirecionamento para endereco nao permitido.")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def abrir_url_resiliente(req: Request, timeout: int = FETCH_TIMEOUT):
+    """Abre a URL; se a conexão falhar, refaz o DNS pelo DoH e tenta de novo.
+
+    Cobre o caso em que o resolvedor da operadora devolveu (sem erro) um IP de
+    bloqueio: a conexão com ele morre e uma nova resposta do DoH costuma
+    apontar para o IP verdadeiro.
+    """
+    opener = build_opener(_RedirecionamentoSeguro())
+    try:
+        return opener.open(req, timeout=timeout)
+    except HTTPError:
+        raise
+    except (URLError, TimeoutError, OSError):
+        host = (urlsplit(req.full_url).hostname or "").strip()
+        if not host or _eh_ip_literal(host):
+            raise
+        _consulta_doh(host, "A", force=True)
+        opener = build_opener(_RedirecionamentoSeguro())
+        return opener.open(req, timeout=timeout)
+
+
 def summarize(playlist: dict) -> dict:
     return {
         "id": playlist.get("id", ""),
         "name": playlist.get("name", "Playlist"),
-        "url": playlist.get("url", ""),
+        "url": mascarar_url(playlist.get("url", "")),
         "count": len(playlist.get("channels", [])),
         "importedAt": playlist.get("imported_at", ""),
         "updatedAt": playlist.get("updated_at", ""),
@@ -976,11 +1163,56 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _cors_publico(self) -> None:
-        """Permite que a página do GitHub Pages leia estas rotas do servidor local."""
-        self.send_header("Access-Control-Allow-Origin", "*")
+        """Libera apenas a pagina oficial (e a propria origem local).
+
+        Antes era ``*``: qualquer site aberto no navegador podia ler a lista de
+        playlists (com usuario/senha do provedor) e o catalogo do servidor
+        local. O navegador agora so entrega a resposta para a origem oficial.
+        """
+        origem = self.headers.get("Origin", "")
+        if origem and not self._origem_permitida(origem):
+            return
+        self.send_header("Access-Control-Allow-Origin", origem or ORIGEM_PUBLICA)
+        self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-EFTV-Local")
         self.send_header("Access-Control-Max-Age", "600")
+
+    def _origem_permitida(self, origem: str) -> bool:
+        if not origem:
+            return True
+        if origem == ORIGEM_PUBLICA:
+            return True
+        host = self.headers.get("Host", "")
+        return origem in (f"http://{host}", f"https://{host}")
+
+    def _host_permitido(self) -> bool:
+        """Bloqueia DNS rebinding: ``evil.com`` resolvendo para 127.0.0.1.
+
+        O navegador manda no Host o nome usado na URL. O servidor local so
+        atende nomes locais (localhost, IP da maquina, hostname sem dominio e
+        ``*.local``); um dominio publico apontando para a maquina e recusado.
+        """
+        host = (self.headers.get("Host") or "").strip().lower()
+        if not host:
+            return False
+        if host.startswith("["):
+            fim = host.find("]")
+            nome = host[1:fim] if fim > 0 else host
+        elif host.count(":") == 1:
+            nome = host.rsplit(":", 1)[0]
+        else:
+            nome = host
+
+        if nome in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return True
+        if nome.endswith(".local") or "." not in nome:
+            return True
+        try:
+            ip = ipaddress.ip_address(nome)
+        except ValueError:
+            return False
+        return ip.is_loopback or ip.is_private or ip.is_link_local
 
     def _same_origin(self) -> bool:
         """Bloqueia POST/DELETE disparados por outras páginas (CSRF local)."""
@@ -1022,6 +1254,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ------------------------------------------------------------------- API
     def do_GET(self) -> None:  # noqa: N802
+        if not self._host_permitido():
+            self._error("Host não permitido.", 403)
+            return
         parts = urlsplit(self.path)
         route = parts.path
 
@@ -1108,6 +1343,13 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_playlist()
             return
 
+        if route == "/api/playlist-remote":
+            # Playlist original do provedor, baixada pelo servidor local (DoH +
+            # User-Agent/Referer). Diferente de /api/playlist.m3u, o texto não é
+            # reescrito: o app guarda as URLs e decide o que passa pelo proxy.
+            self._handle_playlist_remote(parts.query)
+            return
+
         if route == "/api/proxy":
             self._handle_proxy(parts.query)
             return
@@ -1129,14 +1371,14 @@ class Handler(SimpleHTTPRequestHandler):
         disparar rotas do servidor local (proteção contra CSRF).
         """
         origem = self.headers.get("Origin", "")
-        host = self.headers.get("Host", "")
-        if origem and origem not in (f"http://{host}", f"https://{host}"):
+        if origem and not self._origem_permitida(origem):
             self.send_response(403)
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", origem or "*")
+        self.send_header("Access-Control-Allow-Origin", origem or ORIGEM_PUBLICA)
+        self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-EFTV-Local")
         self.send_header("Access-Control-Max-Age", "600")
@@ -1144,6 +1386,9 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._host_permitido():
+            self._error("Host não permitido.", 403)
+            return
         parts = urlsplit(self.path)
         route = parts.path
 
@@ -1214,6 +1459,9 @@ class Handler(SimpleHTTPRequestHandler):
             self._error(f"Erro inesperado: {exc}", 500)
 
     def do_DELETE(self) -> None:  # noqa: N802
+        if not self._host_permitido():
+            self._error("Host não permitido.", 403)
+            return
         parts = urlsplit(self.path)
         if not self._same_origin():
             self._error("Origem não permitida.", 403)
@@ -1453,6 +1701,62 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _handle_playlist_remote(self, query: str) -> None:
+        """Baixa a playlist real do provedor e devolve o texto sem reescrever.
+
+        O app usa esta rota (em vez de baixar direto do provedor) para herdar o
+        DNS-over-HTTPS e os cabeçalhos User-Agent/Referer do servidor local.
+        Sem isso, nos dados móveis de algumas operadoras a lista simplesmente
+        não abre — o catálogo fica vazio e o app parece "sem internet".
+
+        O texto volta igual ao do provedor: o player continua passando pelo
+        /api/proxy na hora de tocar, e as capas também.
+        """
+        params = parse_qs(query)
+        target = (params.get("url") or [""])[0].strip()
+        if not target:
+            self._error("Parâmetro url ausente.", 400)
+            return
+        if not is_http_url(target):
+            self._error("Somente URLs http(s) podem ser baixadas.", 400)
+            return
+        if not proxy_alvo_permitido(target):
+            self._error("Endereco de destino nao permitido.", 403)
+            return
+
+        headers = {
+            "User-Agent": (self.headers.get("User-Agent") or "").strip() or USER_AGENT,
+            "Accept": "*/*",
+            "Accept-Encoding": "identity",
+        }
+        partes = urlsplit(target)
+        referer = (self.headers.get("Referer") or "").strip()
+        if not referer or "127.0.0.1" in referer or "localhost" in referer:
+            referer = f"{partes.scheme}://{partes.netloc}/"
+        headers["Referer"] = referer
+
+        try:
+            req = Request(target, headers=headers)
+            with abrir_url_resiliente(req, timeout=PLAYLIST_TIMEOUT) as resp:
+                data = resp.read(MAX_PLAYLIST_BYTES + 1)
+                if "gzip" in (resp.headers.get("Content-Encoding") or "").lower():
+                    # Alguns provedores ignoram "Accept-Encoding: identity".
+                    data = gzip.decompress(data)
+                if len(data) > MAX_PLAYLIST_BYTES:
+                    self._error("Playlist muito grande.", 502)
+                    return
+                ctype = resp.headers.get("Content-Type") or "audio/x-mpegurl; charset=utf-8"
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+        except HTTPError as exc:
+            self._error(f"A origem respondeu HTTP {exc.code}.", 502)
+        except (URLError, TimeoutError, OSError) as exc:
+            self._error(f"Não foi possível baixar a playlist: {exc}", 502)
+
     def _handle_proxy(self, query: str) -> None:
         params = parse_qs(query)
         target = (params.get("url") or [""])[0].strip()
@@ -1461,6 +1765,11 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if not is_http_url(target):
             self._error("Somente URLs http(s) podem ser reproduzidas.", 400)
+            return
+        if not proxy_alvo_permitido(target):
+            # Sem isso o proxy virava uma ponte para a rede local (roteador,
+            # cameras, metadados de nuvem) a partir de qualquer pagina.
+            self._error("Endereco de destino nao permitido.", 403)
             return
 
         headers = {
@@ -1481,7 +1790,7 @@ class Handler(SimpleHTTPRequestHandler):
 
         try:
             req = Request(target, headers=headers)
-            resp = urlopen(req, timeout=FETCH_TIMEOUT)
+            resp = abrir_url_resiliente(req, timeout=FETCH_TIMEOUT)
         except HTTPError as exc:
             self._error(f"A origem respondeu HTTP {exc.code}.", 502)
             return

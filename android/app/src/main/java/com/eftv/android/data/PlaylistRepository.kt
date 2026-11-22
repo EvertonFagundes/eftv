@@ -37,13 +37,14 @@ class PlaylistRepository(
         catalogStore.metadata()?.takeIf { it.sourceId == sourceId }
 
     suspend fun refresh(onProgress: ((Int) -> Unit)? = null): Result = withContext(Dispatchers.IO) {
+        var input: InputStream? = null
         try {
+            input = if (source.url.isNotBlank()) openPlaylistInput() else null
+            val playlistInput = input
             val metadata = catalogStore.replace(sourceId, onProgress) { onChannel ->
-                if (source.url.isNotBlank()) {
-                    openStream(source.url).use { input ->
-                        input.bufferedReader(Charsets.UTF_8).use { reader ->
-                            M3uParser.parse(reader, onChannel)
-                        }
+                if (playlistInput != null) {
+                    playlistInput.bufferedReader(Charsets.UTF_8).use { reader ->
+                        M3uParser.parse(reader, onChannel)
                     }
                 } else {
                     appContext.assets.open("sample_playlist.m3u").bufferedReader(Charsets.UTF_8)
@@ -71,7 +72,39 @@ class PlaylistRepository(
             } else {
                 throw e
             }
+        } finally {
+            runCatching { input?.close() }
         }
+    }
+
+    /**
+     * Abre a playlist pelo servidor local (DNS-over-HTTPS + User-Agent/Referer)
+     * e cai para o download direto se ele não responder.
+     *
+     * Nos dados móveis a operadora às vezes não resolve o domínio do provedor
+     * ou devolve um IP de bloqueio. O download direto então falha e o catálogo
+     * fica vazio, mesmo com internet funcionando. O proxy local já resolvia os
+     * streams assim; agora o catálogo usa o mesmo caminho.
+     */
+    private suspend fun openPlaylistInput(): InputStream {
+        if (source.fromServer && source.url.startsWith("http")) {
+            if (LocalServer.waitUntilReady(timeoutMs = 8_000)) {
+                try {
+                    Timber.i("Baixando playlist pelo proxy local (DoH)")
+                    return openStream(LocalServer.remotePlaylistUrl(source.url))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(
+                        "Proxy local nao baixou a playlist; tentando direto: %s",
+                        LogUtils.redactThrowable(e),
+                    )
+                }
+            } else {
+                Timber.w("Servidor local nao respondeu; baixando playlist direto")
+            }
+        }
+        return openStream(source.url)
     }
 
     private fun openStream(url: String, maxRedirects: Int = 5): InputStream {

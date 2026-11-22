@@ -1,5 +1,13 @@
 # Release do app Android
 
+## Estado atual
+
+| Item | Valor |
+| --- | --- |
+| Versao publicada | `1.5.0` (`versionCode 25`) |
+| APK gerado | `android/app/build/outputs/apk/release/app-release.apk` |
+| Chave | `android/eftv-release.jks` (fingerprint abaixo) |
+
 ## Antes de gerar o APK
 
 1. Confira a versao em `android/app/build.gradle.kts`:

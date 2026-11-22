@@ -47,6 +47,32 @@ object LocalServer {
         return "$BASE_URL/api/proxy?url=$encoded"
     }
 
+    /** URL do proxy local para baixar a playlist do provedor (DoH + headers). */
+    fun remotePlaylistUrl(target: String): String {
+        val encoded = java.net.URLEncoder.encode(target.trim(), "UTF-8")
+        return "$BASE_URL/api/playlist-remote?url=$encoded"
+    }
+
+    /**
+     * URL de uma capa/arte pelo proxy local.
+     *
+     * O provedor costuma exigir User-Agent/Referer e, nos dados móveis, o DNS
+     * da operadora pode não resolver (ou devolver IP de bloqueio). O proxy
+     * local resolve via DoH e envia os cabeçalhos da playlist.
+     *
+     * Não faz checagem de rede aqui de propósito: isto é chamado no bind do
+     * RecyclerView. Se o servidor ainda não respondeu, devolve a URL original.
+     */
+    fun proxiedArtwork(target: String): String {
+        val url = target.trim()
+        if (url.isBlank()) return url
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return url
+        if (url.startsWith(BASE_URL)) return url
+        if (!serverReady) return url
+        val encoded = java.net.URLEncoder.encode(url, "UTF-8")
+        return "$BASE_URL/api/proxy?url=$encoded"
+    }
+
     /** Playlist M3U gerada pelo servidor, com os streams ja no proxy local. */
     fun playlistSource(): PlaylistSource = PlaylistSource(
         url = "$BASE_URL/api/playlist.m3u",

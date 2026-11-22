@@ -36,6 +36,7 @@ import com.eftv.android.data.ChannelKind
 import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.LocalServer
 import com.eftv.android.data.LogUtils
+import com.eftv.android.data.NetworkInfo
 import com.eftv.android.data.AppScope
 import com.eftv.android.data.SessionStore
 import com.eftv.android.data.api.EftvApi
@@ -88,6 +89,8 @@ class PlayerActivity : AppCompatActivity() {
     /** Sessao de stream aberta no servidor: mantem a vaga desta tela. */
     private var streamSessionId: String? = null
     private var heartbeatJob: Job? = null
+    private var prepareJob: Job? = null
+    private var lastPlaybackReportAt = 0L
     private var limitDialogShown = false
 
     /** Servidor recusou a assinatura: o video foi interrompido. */
@@ -233,7 +236,19 @@ class PlayerActivity : AppCompatActivity() {
         hideReconnecting()
         cancelVodProgress()
         cancelHideOverlay()
-        preparePlayer()
+
+        // Em dados moveis a operadora pode nao resolver o DNS do provedor (ou
+        // devolver um IP de bloqueio). Espera o proxy local, que resolve via
+        // DNS-over-HTTPS, antes de montar o player. Se ele nao responder, abre
+        // direto (no Wi-Fi isso continua funcionando normalmente).
+        prepareJob?.cancel()
+        prepareJob = lifecycleScope.launch {
+            if (!LocalServer.waitUntilReady(timeoutMs = 6_000)) {
+                Timber.w("Servidor local nao respondeu; abrindo stream direto")
+            }
+            if (isFinishing || isDestroyed) return@launch
+            preparePlayer()
+        }
     }
 
     @androidx.annotation.OptIn(UnstableApi::class)
@@ -282,8 +297,21 @@ class PlayerActivity : AppCompatActivity() {
 
         val metadata = MediaMetadata.Builder()
             .setTitle(channelName)
-            .apply { if (channelLogo.isNotBlank()) setArtworkUri(Uri.parse(channelLogo)) }
+            .apply {
+                if (channelLogo.isNotBlank()) {
+                    setArtworkUri(Uri.parse(LocalServer.proxiedArtwork(channelLogo)))
+                }
+            }
             .build()
+
+        // Em dados móveis a operadora pode não resolver o DNS do provedor (ou
+        // devolver um IP de bloqueio). O proxy local resolve via DNS over HTTPS
+        // e repassa o stream, então o canal abre em qualquer rede.
+        val mediaUrl = LocalServer.playbackUrl(streamUrl)
+        val viaProxy = mediaUrl != streamUrl
+        if (viaProxy) {
+            Timber.i("Reproduzindo via proxy local: %s", LogUtils.redactUrl(streamUrl))
+        }
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
@@ -296,6 +324,7 @@ class PlayerActivity : AppCompatActivity() {
                     append(error.errorCodeName)
                     error.cause?.message?.let { append(": ").append(it) }
                 }
+                reportPlaybackFailure(error, viaProxy)
                 // Falha de rede costuma ser passageira: tenta religar no mesmo
                 // player antes de recriar tudo (evita o "pisca" de recarga).
                 if (shouldRecoverInPlace(error)) {
@@ -393,14 +422,6 @@ class PlayerActivity : AppCompatActivity() {
         })
 
         binding.playerView.player = exoPlayer
-        // Em dados moveis a operadora pode nao resolver o DNS do provedor.
-        // O proxy do servidor embutido resolve via DNS over HTTPS e repassa o
-        // stream, entao o canal abre em qualquer rede. Vale para todos os
-        // aparelhos: o servidor sobe junto com o app.
-        val mediaUrl = LocalServer.playbackUrl(streamUrl)
-        if (mediaUrl != streamUrl) {
-            Timber.i("Reproduzindo via proxy local: %s", LogUtils.redactUrl(streamUrl))
-        }
         exoPlayer.setMediaItem(
             MediaItem.Builder()
                 .setUri(mediaUrl)
@@ -1079,9 +1100,36 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         stopped = true
+        prepareJob?.cancel()
         stopStreamSession()
         releasePlayer()
         super.onDestroy()
+    }
+
+    /**
+     * Relata falha de reprodução com a rede e se o proxy local foi usado.
+     *
+     * É o dado que faltava para separar "DNS da operadora" de "bloqueio do
+     * provedor": sem ele o erro chegava só como "não abre nos dados móveis".
+     * Limitado a um relato por meia hora para não inundar o backend.
+     */
+    private fun reportPlaybackFailure(error: PlaybackException, viaProxy: Boolean) {
+        val agora = System.currentTimeMillis()
+        if (agora - lastPlaybackReportAt < PLAYBACK_REPORT_INTERVAL_MS) return
+        lastPlaybackReportAt = agora
+        val rede = NetworkInfo.label(this)
+        AppScope.io.launch {
+            runCatching {
+                api.reportCrash(
+                    message = "player [$rede] proxy=$viaProxy ${error.errorCodeName}: " +
+                        LogUtils.redactText(error.message.orEmpty()),
+                    stacktrace = LogUtils.redactThrowable(error),
+                    appVersion = BuildConfig.VERSION_NAME,
+                    device = android.os.Build.MODEL.orEmpty(),
+                    android = android.os.Build.VERSION.RELEASE.orEmpty(),
+                )
+            }
+        }
     }
 
     companion object {
@@ -1106,6 +1154,9 @@ class PlayerActivity : AppCompatActivity() {
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 3_000
         private const val MAX_LOAD_RETRIES = 6
         private const val MAX_SOFT_RECOVERIES = 2
+
+        /** No máximo um relato de falha de reprodução por meia hora. */
+        private const val PLAYBACK_REPORT_INTERVAL_MS = 30 * 60 * 1000L
 
         /** Nao retoma se o progresso salvo estiver no comeco/fim demais. */
         private const val RESUME_MIN_MS = 5_000L
