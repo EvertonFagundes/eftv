@@ -76,4 +76,4 @@ async def revoke_all(db: AsyncSession, user_id, *, commit: bool = True) -> int:
     )
     if commit:
         await db.commit()
-    return int(result.rowcount or 0)
+    return int(getattr(result, "rowcount", 0) or 0)

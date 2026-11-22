@@ -45,8 +45,9 @@ async def get_account_info(force: bool = False) -> dict | None:
         return None
 
     now = time.monotonic()
-    if not force and _account_cache["data"] is not None and now - _account_cache["at"] < 600:
-        return _account_cache["data"]
+    cached = _account_cache["data"]
+    if not force and isinstance(cached, dict) and now - _account_cache["at"] < 600:
+        return cached
 
     try:
         async with httpx.AsyncClient(timeout=6.0) as client:
