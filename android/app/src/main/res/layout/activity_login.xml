@@ -56,6 +56,23 @@
             android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
             android:textColor="@color/on_surface_variant" />
 
+        <!-- Card container para os campos -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            app:cardBackgroundColor="@color/surface_container"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="8dp"
+            app:strokeColor="@color/outline_variant"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/emailLayout"
             style="@style/Widget.Material3.TextInputLayout.FilledBox.Dense"
@@ -245,6 +262,9 @@
             android:gravity="center"
             android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
             android:textColor="@color/on_surface_variant" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <TextView
             android:id="@+id/versionText"
