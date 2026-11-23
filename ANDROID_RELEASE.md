@@ -5,6 +5,8 @@
 | Item | Valor |
 | --- | --- |
 | Versao publicada | `1.5.3` (`versionCode 28`) |
+| APK publicado | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.3/eftv-v1.5.3.apk |
+| SHA-256 do APK | `cf01f87f0002a1fd21afdf7cd034242032965037179acbf27c6d2f899b373d92` |
 | APK gerado | `android/app/build/outputs/apk/release/app-release.apk` |
 | Chave | `android/eftv-release.jks` (fingerprint abaixo) |
 
