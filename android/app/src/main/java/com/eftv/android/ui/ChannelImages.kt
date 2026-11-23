@@ -45,14 +45,16 @@ fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     if (channel.isSeriesCard) {
         val view = this
         view.setTag(R.id.series_cover_key, channel.name)
-        view.findViewTreeLifecycleOwner()?.lifecycleScope?.launch {
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val url = SeriesCoverFetcher.fetch(channel.name)
-            if (view.getTag(R.id.series_cover_key) != channel.name) return@launch
-            if (!url.isNullOrBlank()) {
-                view.load(url) {
-                    (channel.userAgent?.takeIf { it.isNotBlank() }
-                        ?: com.eftv.android.PlaylistConfig.USER_AGENT).let { ua ->
-                        addHeader("User-Agent", ua)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                if (view.getTag(R.id.series_cover_key) != channel.name) return@withContext
+                if (!url.isNullOrBlank()) {
+                    view.load(url) {
+                        (channel.userAgent?.takeIf { it.isNotBlank() }
+                            ?: com.eftv.android.PlaylistConfig.USER_AGENT).let { ua ->
+                            addHeader("User-Agent", ua)
+                        }
                     }
                 }
             }
