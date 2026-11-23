@@ -579,6 +579,7 @@ class CatalogStore private constructor(context: Context) {
                 insertGroup.close()
             }
 
+            db.execSQL("DELETE FROM meta")
             val insertMeta = db.compileStatement("INSERT INTO meta(key, value) VALUES(?, ?)")
             try {
                 putMeta(insertMeta, "source_id", sourceId)
