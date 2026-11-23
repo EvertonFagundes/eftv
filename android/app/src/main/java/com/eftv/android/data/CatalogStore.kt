@@ -254,24 +254,36 @@ class CatalogStore private constructor(context: Context) {
          * eh sempre de um episodio que realmente pertence a ela.
          */
         val sql = """
-            SELECT series_key, series_title, name, group_title, logo, url,
-                   user_agent, referer, tvg_id,
-                   COUNT(*) AS episodes, COUNT(DISTINCT season) AS seasons,
-                   gkey, sortkey
-            FROM (
+            WITH filtered AS (
                 SELECT c.*,
                        CASE WHEN c.series_key = '' THEN 'u' || c.id ELSE c.series_key END AS gkey,
-                       CASE WHEN c.series_key = '' THEN c.name_key ELSE c.series_key END AS sortkey,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY CASE WHEN c.series_key = '' THEN 'u' || c.id ELSE c.series_key END
-                           ORDER BY (c.logo = '') ASC, c.season ASC, c.episode ASC, c.id ASC
-                       ) AS rn
+                       CASE WHEN c.series_key = '' THEN c.name_key ELSE c.series_key END AS sortkey
                 FROM channels c
                 $where
+            ),
+            counts AS (
+                SELECT gkey,
+                       COUNT(*) AS episodes,
+                       COUNT(DISTINCT season) AS seasons
+                FROM filtered
+                GROUP BY gkey
+            ),
+            ranked AS (
+                SELECT f.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY f.gkey
+                           ORDER BY (f.logo = '') ASC, f.season ASC, f.episode ASC, f.id ASC
+                       ) AS rn
+                FROM filtered f
             )
-            WHERE rn = 1
-            GROUP BY gkey
-            ORDER BY sortkey, gkey
+            SELECT r.series_key, r.series_title, r.name, r.group_title, r.logo, r.url,
+                   r.user_agent, r.referer, r.tvg_id,
+                   cnt.episodes AS episodes, cnt.seasons AS seasons,
+                   r.gkey, r.sortkey
+            FROM ranked r
+            JOIN counts cnt ON cnt.gkey = r.gkey
+            WHERE r.rn = 1
+            ORDER BY r.sortkey, r.gkey
             LIMIT ? OFFSET ?
         """.trimIndent()
 
