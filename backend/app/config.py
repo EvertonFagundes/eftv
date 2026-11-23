@@ -59,7 +59,7 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "EFTV API"
-    APP_VERSION: str = "1.1.0"
+    APP_VERSION: str = "1.2.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"  # development, staging, production
     # URL publica da API. O webhook de Assinaturas e configurado no proprio
