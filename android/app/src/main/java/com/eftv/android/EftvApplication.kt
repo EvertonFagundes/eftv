@@ -11,7 +11,9 @@ import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.LogUtils
 import com.eftv.android.data.api.EftvApi
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 
 class EftvApplication : Application(), ImageLoaderFactory {
 
@@ -23,6 +25,22 @@ class EftvApplication : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .components { add(SvgDecoder.Factory()) }
+            // O observador de rede do Coil pode deixar a fila parada quando o
+            // Android reporta a rede como indisponivel (acontece em aparelhos
+            // que bloqueiam o DNS do provedor). Os requests usam o proxy
+            // local, que continua funcionando nesse cenario.
+            .networkObserverEnabled(false)
+            // Sem timeout o card fica preso no carregamento quando o servidor
+            // aceita a conexao e nao responde. Com estes limites o fallback
+            // (proxy local / capa gerada) entra em poucos segundos.
+            .okHttpClient {
+                OkHttpClient.Builder()
+                    .connectTimeout(6, TimeUnit.SECONDS)
+                    .readTimeout(8, TimeUnit.SECONDS)
+                    .writeTimeout(8, TimeUnit.SECONDS)
+                    .callTimeout(15, TimeUnit.SECONDS)
+                    .build()
+            }
             .build()
 
     override fun onCreate() {

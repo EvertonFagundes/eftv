@@ -2,7 +2,6 @@ package com.eftv.android.ui
 
 import android.widget.ImageView
 import coil.load
-import coil.request.ImageRequest
 import com.eftv.android.PlaylistConfig
 import com.eftv.android.data.Channel
 import com.eftv.android.data.LocalServer
@@ -17,11 +16,11 @@ import com.eftv.android.data.NetworkInfo
  * imagem chegar, e o resultado parece "capa trocada". O padrao do Coil envia
  * apenas `Coil/<versao>`, que muitos CDNs bloqueiam.
  *
- * A ordem depende da rede:
- *  - Wi-Fi: tenta a URL direta (caminho que ja funcionava) e, se falhar,
- *    tenta o proxy local;
- *  - dados moveis: tenta o proxy local (DNS-over-HTTPS) primeiro e cai para
- *    a URL direta.
+ * A ordem depende da rede e do esquema da URL:
+ *  - HTTPS no Wi-Fi: tenta a URL direta e, se falhar, o proxy local;
+ *  - HTTP claro (ou qualquer URL nos dados moveis): tenta o proxy local
+ *    primeiro, porque a conexao direta costuma ficar pendurada no provedor;
+ *  - a segunda tentativa sempre usa o caminho oposto.
  *
  * Quando todas as tentativas falham, entra a capa gerada com as iniciais do
  * canal: muitas listas antigas apontam para `goo.gl`/`postimg`, que sairam do
@@ -29,16 +28,24 @@ import com.eftv.android.data.NetworkInfo
  */
 fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     val logo = channel.logo.trim()
+    // A capa fica no fundo da ImageView. O Coil troca apenas o src; se o
+    // download falhar, limpar o src ou carregar uma imagem transparente, a
+    // capa continua aparecendo atras. Antes o card ficava vazio nesses casos.
+    background = CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes)
+    setImageDrawable(null)
     if (logo.isBlank()) {
-        setImageDrawable(CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes))
         return
     }
 
     val proxyUrl = LocalServer.artworkProxyUrl(logo)
+    // Em HTTP claro a conexao direta com varios provedores fica pendurada
+    // (SYN aceito, resposta nunca chega) e o Coil espera ate o timeout. O
+    // proxy local resolve por DNS-over-HTTPS e responde rapido, entao ele
+    // vem primeiro. HTTPS continua direto no Wi-Fi.
     val useProxyFirst =
         proxyUrl != logo &&
             LocalServer.isServerReady() &&
-            NetworkInfo.label(context) == "movel"
+            (NetworkInfo.label(context) == "movel" || logo.startsWith("http://"))
 
     val first = if (useProxyFirst) proxyUrl else logo
     val second = if (first == logo) proxyUrl else logo
@@ -55,25 +62,32 @@ private fun ImageView.loadArtwork(
         ?.takeIf { it.isNotBlank() }
         ?: PlaylistConfig.USER_AGENT
 
-    val request = ImageRequest.Builder(context)
-        .data(data)
-        .placeholder(CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes))
-        .error(CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes))
-        .fallback(CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes))
-        .crossfade(150)
-        .apply {
-            if (userAgent.isNotBlank()) addHeader("User-Agent", userAgent)
-            channel.referer
-                ?.takeIf { it.isNotBlank() }
-                ?.let { addHeader("Referer", it) }
-        }
-        .listener(
+    // Reforca o fundo ao trocar para a segunda URL (proxy/direta).
+    background = CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes)
+    setImageDrawable(null)
+
+    // Coil 2.6: `ImageView.load(data) { ... }` cria o request com target na
+    // propria ImageView. Passar um ImageRequest pronto aqui faria o Coil
+    // trata-lo como *dado* (sem fetcher) e nada seria baixado.
+    load(data) {
+        if (userAgent.isNotBlank()) addHeader("User-Agent", userAgent)
+        channel.referer
+            ?.takeIf { it.isNotBlank() }
+            ?.let { addHeader("Referer", it) }
+        listener(
             onError = { _, _ ->
                 if (!fallbackData.isNullOrBlank() && fallbackData != data) {
                     loadArtwork(fallbackData, null, channel, fallbackRes)
+                } else {
+                    background = CoverPlaceholder.drawable(
+                        context,
+                        channel.name,
+                        channel.kind,
+                        fallbackRes,
+                    )
+                    setImageDrawable(null)
                 }
             },
         )
-        .build()
-    load(request)
+    }
 }

@@ -125,8 +125,8 @@ android {
         applicationId = "com.eftv.android"
         minSdk = 24
         targetSdk = 34
-        versionCode = 27
-        versionName = "1.5.2"
+        versionCode = 28
+        versionName = "1.5.3"
 
         // Debug no emulador usa 127.0.0.1; num celular, configure local.properties
         // com EFTV_API_URL=http://IP-DO-PC:8000
