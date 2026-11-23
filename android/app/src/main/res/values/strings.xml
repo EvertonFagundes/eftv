@@ -165,9 +165,9 @@
     <!-- Verificacao de email -->
     <string name="verify_title">Confirme seu e-mail</string>
     <string name="verify_email_for">Verificando e-mail para %1$s</string>
-    <string name="verify_subtitle">Enviamos um link de confirmação para o seu e-mail. Abra o link e volte ao app: a confirmação é automática.\n\nSe preferir, cole o link ou o código abaixo.</string>
-    <string name="verify_token_hint">Cole o link ou o código</string>
-    <string name="verify_button">Confirmar</string>
+    <string name="verify_subtitle">Enviamos um link de confirmação para o seu e-mail. Abra o link (no navegador ou no app de e-mail) e a confirmação é automática.\n\nDepois volte ao app e toque em "Já confirmei".</string>
+    <string name="verify_instructions">Não recebeu? Verifique a pasta de spam ou lixo eletrônico. O remetente pode aparecer como EFTV. Toque em "Reenviar e-mail" se precisar.</string>
+    <string name="verify_already_confirmed">Já confirmei</string>
     <string name="verify_resend">Reenviar e-mail</string>
     <string name="verify_open_browser">Abrir meu e-mail</string>
     <string name="verify_enter_token">Abra o link do e-mail ou cole o código aqui.</string>

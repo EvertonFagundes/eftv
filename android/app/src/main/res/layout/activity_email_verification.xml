@@ -65,32 +65,16 @@
             android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
             android:textColor="@color/on_surface_variant" />
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tokenLayout"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+        <TextView
+            android:id="@+id/verifyInstructions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:hint="@string/verify_token_hint"
-            app:boxBackgroundColor="@color/surface_container"
-            app:boxStrokeColor="@color/primary"
-            app:boxStrokeWidth="1dp"
-            app:boxStrokeWidthFocused="2dp"
-            app:hintTextColor="@color/on_surface_variant"
-            app:startIconDrawable="@drawable/ic_lock"
-            app:startIconTint="@color/on_surface_variant">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/tokenInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:imeOptions="actionDone"
-                android:inputType="text"
-                android:maxLength="255"
-                android:singleLine="true"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textColor="@color/on_background" />
-        </com.google.android.material.textfield.TextInputLayout>
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:text="@string/verify_instructions"
+            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            android:textColor="@color/on_surface_variant" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/verifyButton"
@@ -98,7 +82,7 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="24dp"
-            android:text="@string/verify_button"
+            android:text="@string/verify_already_confirmed"
             android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
             app:cornerRadius="16dp" />
 

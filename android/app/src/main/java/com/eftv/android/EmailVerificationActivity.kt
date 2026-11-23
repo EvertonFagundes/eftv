@@ -47,11 +47,21 @@ class EmailVerificationActivity : AppCompatActivity() {
         val email = intent.getStringExtra(EXTRA_EMAIL) ?: session.email().orEmpty()
         binding.emailDisplay.text = getString(R.string.verify_email_for, email)
 
-        // Se vier token via intent (deep link do email), preenche automaticamente
+        // Se vier token via intent (deep link do email), confirma automaticamente.
         val token = intent.getStringExtra(EXTRA_TOKEN)
             ?: intent.data?.getQueryParameter("token")
         if (token != null) {
-            binding.tokenInput.setText(token)
+            lifecycleScope.launch {
+                try {
+                    val result = api.verifyEmail(token)
+                    if (result.emailVerified) {
+                        session.setEmailVerified(true)
+                        openCatalog()
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Falha ao verificar via deep link")
+                }
+            }
         }
 
         binding.verifyButton.setOnClickListener { verifyEmail() }
@@ -67,14 +77,6 @@ class EmailVerificationActivity : AppCompatActivity() {
         // Se a conta ja foi verificada no servidor (outro aparelho/site), nao
         // deixa o usuario preso nesta tela.
         lifecycleScope.launch { checkIfAlreadyVerified() }
-        binding.tokenInput.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                verifyEmail()
-                true
-            } else {
-                false
-            }
-        }
     }
 
     override fun onResume() {
@@ -85,50 +87,13 @@ class EmailVerificationActivity : AppCompatActivity() {
     }
 
     private fun verifyEmail() {
-        val raw = binding.tokenInput.text?.toString().orEmpty().trim()
-
-        // Aceita o link inteiro (o usuario costuma colar o link do e-mail).
-        val token = when {
-            raw.isBlank() -> ""
-            raw.startsWith("http") -> Uri.parse(raw).getQueryParameter("token").orEmpty()
-            else -> raw
-        }
-
-        if (token.isBlank()) {
-            // Sem codigo: confere se ele ja confirmou pelo link.
-            setLoading(true)
-            binding.error.visibility = View.GONE
-            lifecycleScope.launch {
-                if (!checkIfAlreadyVerified(feedback = true)) {
-                    setLoading(false)
-                }
-            }
-            return
-        }
-
+        // O e-mail envia um LINK, nao um codigo. Aqui apenas conferimos se o
+        // usuario ja clicou no link (confirmacao automatica no servidor).
         setLoading(true)
         binding.error.visibility = View.GONE
         lifecycleScope.launch {
-            try {
-                val result = api.verifyEmail(token)
-                if (result.emailVerified) {
-                    // Atualiza sessão local (apenas a flag de email verificado)
-                    session.setEmailVerified(true)
-                    openCatalog()
-                } else {
-                    setLoading(false)
-                    showError(result.message.ifEmpty { getString(R.string.verify_failed) })
-                }
-            } catch (e: EftvApi.ApiException) {
+            if (!checkIfAlreadyVerified(feedback = true)) {
                 setLoading(false)
-                showError(when (e.statusCode) {
-                    400 -> getString(R.string.verify_invalid_or_expired_token)
-                    else -> e.detail
-                })
-            } catch (e: Exception) {
-                setLoading(false)
-                showError(getString(R.string.verify_network_error))
-                Timber.e(e, "Falha ao verificar email")
             }
         }
     }
@@ -208,7 +173,6 @@ class EmailVerificationActivity : AppCompatActivity() {
         binding.resendButton.isEnabled = !loading
         binding.openBrowserButton.isEnabled = !loading
         binding.switchAccountButton.isEnabled = !loading
-        binding.tokenInput.isEnabled = !loading
         binding.verifyProgress.visibility = if (loading) View.VISIBLE else View.GONE
     }
 
