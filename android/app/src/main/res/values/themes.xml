@@ -7,6 +7,11 @@
         existem no Android (ex.: inverse_surface, scrim_medium, success).
     -->
     <style name="Theme.EFTV" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Shape: cantos mais arredondados (visual moderno) -->
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.EFTV.Small</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.EFTV.Medium</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.EFTV.Large</item>
+
         <!-- Primary -->
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/on_primary</item>
@@ -73,5 +78,20 @@
 
     <style name="Theme.EFTV.Splash" parent="Theme.EFTV">
         <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+
+    <style name="ShapeAppearance.EFTV.Small" parent="ShapeAppearance.Material3.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">12dp</item>
+    </style>
+
+    <style name="ShapeAppearance.EFTV.Medium" parent="ShapeAppearance.Material3.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
+
+    <style name="ShapeAppearance.EFTV.Large" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
     </style>
 </resources>
