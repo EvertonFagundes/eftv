@@ -36,7 +36,7 @@ val releaseKeystoreFile: java.io.File? = keystoreProperties.getProperty("storeFi
 // Modo local: o catalogo vem do servidor embutido (127.0.0.1:8124), sem
 // login e sem backend na nuvem.
 val localMode: Boolean =
-    localProperties.getProperty("EFTV_LOCAL_MODE", "true").trim().toBoolean()
+    localProperties.getProperty("EFTV_LOCAL_MODE", "false").trim().toBoolean()
 
 /**
  * Gera PlaylistConfig.kt em tempo de build.
@@ -125,8 +125,8 @@ android {
         applicationId = "com.eftv.android"
         minSdk = 24
         targetSdk = 34
-        versionCode = 32
-        versionName = "1.5.7"
+        versionCode = 33
+        versionName = "1.5.8"
 
         // Debug no emulador usa 127.0.0.1; num celular, configure local.properties
         // com EFTV_API_URL=http://IP-DO-PC:8000
