@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
+import httpx
+
 from app.config import settings
 from app.database import close_db, init_db
 from app.routes import (
@@ -31,6 +33,21 @@ from app.tasks.subscription_checker import (
 scheduler = AsyncIOScheduler()
 
 
+async def self_ping() -> None:
+    """Pinga o proprio /ping para manter a instancia do Render acordada.
+
+    O plano free dorme apos ~15 min sem requisicao. O GitHub Actions keepalive
+    e a primeira linha de defesa; este ping interno e o backup caso o cron
+    atrase (o que acontece em horarios de pico).
+    """
+    url = f"http://127.0.0.1:{settings.PORT}/ping"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.get(url)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -44,6 +61,8 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(sync_pending_subscriptions, "interval", minutes=5, id="sync_pending")
     # Avisos por email: teste acabando e cartao recusado.
     scheduler.add_job(send_lifecycle_emails, "interval", hours=6, id="lifecycle_emails")
+    # Self-ping: mantem a instancia acordada (backup do keepalive externo).
+    scheduler.add_job(self_ping, "interval", minutes=5, id="self_ping")
     scheduler.start()
 
     yield
@@ -122,6 +141,12 @@ async def mercadopago_account_info() -> dict | None:
 
     info = await get_account_info()
     return info
+
+
+@app.get("/ping")
+async def ping() -> dict:
+    # Endpoint leve (sem banco/MP) para keepalive e self-ping.
+    return {"status": "ok"}
 
 
 @app.get("/health")
