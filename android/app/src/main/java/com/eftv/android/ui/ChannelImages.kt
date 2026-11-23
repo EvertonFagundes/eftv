@@ -1,11 +1,16 @@
 package com.eftv.android.ui
 
 import android.widget.ImageView
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import coil.load
 import com.eftv.android.PlaylistConfig
+import com.eftv.android.R
 import com.eftv.android.data.Channel
 import com.eftv.android.data.LocalServer
 import com.eftv.android.data.NetworkInfo
+import com.eftv.android.data.SeriesCoverFetcher
+import kotlinx.coroutines.launch
 
 /**
  * Carrega a arte do catalogo com os mesmos headers da playlist/streams.
@@ -34,11 +39,24 @@ fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     background = CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes)
     setImageDrawable(null)
 
-    // Card de serie agrupada: o provedor nao tem capa propria da serie (os
-    // episodios vinham soltos). Os logos dos episodios sao de outras coisas e
-    // apareciam aleatorios. Usamos a capa gerada (iniciais) para nao exibir
-    // imagem errada. Reversivel se o provedor passar a enviar capa de serie.
+    // Card de serie agrupada: o provedor M3U nao tem capa propria da serie.
+    // Buscamos uma capa real no TVMaze (API gratuita, sem chave) e, se
+    // encontrar, carregamos; caso contrario mantemos a capa gerada.
     if (channel.isSeriesCard) {
+        val view = this
+        view.setTag(R.id.series_cover_key, channel.name)
+        view.findViewTreeLifecycleOwner()?.lifecycleScope?.launch {
+            val url = SeriesCoverFetcher.fetch(channel.name)
+            if (view.getTag(R.id.series_cover_key) != channel.name) return@launch
+            if (!url.isNullOrBlank()) {
+                view.load(url) {
+                    (channel.userAgent?.takeIf { it.isNotBlank() }
+                        ?: com.eftv.android.PlaylistConfig.USER_AGENT).let { ua ->
+                        addHeader("User-Agent", ua)
+                    }
+                }
+            }
+        }
         return
     }
 
