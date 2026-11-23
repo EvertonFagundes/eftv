@@ -188,16 +188,32 @@ class Settings(BaseSettings):
         """Recusa chave curta/placeholder: ela assina JWT e codigos de reset."""
         cleaned = value.strip()
         if len(cleaned) < 32:
-            raise ValueError("SECRET_KEY deve ter pelo menos 32 caracteres")
-        if cleaned.lower() in {
+            raise ValueError(
+                "SECRET_KEY deve ter pelo menos 32 caracteres. "
+                "No Render use 'Generate Value' (nao digite o texto) ou rode "
+                "`openssl rand -hex 32` e cole o resultado."
+            )
+        # Placeholders que aparecem quando alguem digita o texto do botao do
+        # painel em vez de deixar o Render gerar, ou copia exemplo do .env.
+        placeholders = {
             "changeme",
             "change-me",
             "secret",
             "secret-key",
             "your-secret-key",
             "troque-esta-chave",
-        }:
-            raise ValueError("SECRET_KEY usa um valor previsivel; gere uma chave aleatoria")
+            "generate value",
+            "generate-value",
+            "your secret key here",
+            "minha-chave-secreta",
+        }
+        if cleaned.lower() in placeholders or "generate value" in cleaned.lower():
+            raise ValueError(
+                "SECRET_KEY ainda e um placeholder ('Generate Value' etc.). "
+                "No Render abra a variavel SECRET_KEY, clique em 'Generate Value' "
+                "para o Render criar uma chave aleatoria, ou rode "
+                "`openssl rand -hex 32` e cole o valor."
+            )
         return cleaned
 
     @field_validator("ALGORITHM")

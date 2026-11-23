@@ -135,3 +135,12 @@ def test_default_cors_allows_github_pages(monkeypatch):
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
     settings = Settings(SECRET_KEY="x" * 40, _env_file=None)
     assert "https://evertonfagundes.github.io" in settings.cors_origins
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["Generate Value", "generate value", "changeme", "secret", "x" * 10],
+)
+def test_secret_key_rejects_placeholders_and_short(bad):
+    with pytest.raises(ValueError):
+        Settings(SECRET_KEY=bad, _env_file=None)
