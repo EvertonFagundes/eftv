@@ -148,6 +148,7 @@
     <string name="login_network_error">Não foi possível falar com o servidor. Verifique a conexão.</string>
     <string name="login_network_error_debug">Não foi possível falar com o servidor (%1$s). Verifique a conexão e se a API está no ar.</string>
     <string name="login_version">Versão %1$s · %2$s</string>
+    <string name="login_version_release">Versão %1$s</string>
     <string name="login_legal">Ao continuar você concorda com os Termos de Uso e a Política de Privacidade.</string>
     <string name="subscription_inactive">Sua assinatura está inativa. Mostrando a lista local.</string>
     <string name="logout">Sair da conta</string>

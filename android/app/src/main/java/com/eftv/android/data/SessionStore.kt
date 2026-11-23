@@ -44,7 +44,7 @@ class SessionStore(context: Context) {
         prefs.edit()
             .putString(KEY_ACCESS, protect(tokens.accessToken))
             .putString(KEY_REFRESH, protect(tokens.refreshToken))
-            .putString(KEY_EMAIL, email)
+            .putString(KEY_EMAIL, protect(email))
             .putBoolean(KEY_EMAIL_VERIFIED, emailVerified)
             .putLong(KEY_EXPIRES_AT, expiresAt)
             .apply()
@@ -60,7 +60,7 @@ class SessionStore(context: Context) {
         return reveal(prefs.getString(KEY_REFRESH, null))
     }
 
-    fun email(): String? = prefs.getString(KEY_EMAIL, null)
+    fun email(): String? = reveal(prefs.getString(KEY_EMAIL, null))
 
     fun isEmailVerified(): Boolean = prefs.getBoolean(KEY_EMAIL_VERIFIED, false)
 
@@ -82,12 +82,12 @@ class SessionStore(context: Context) {
     // ------------------------------------------------------------------
 
     /**
-     * Cifra um token. Se o Keystore falhar (aparelho sem suporte, chave
-     * invalidada), grava em texto puro para o cliente nao perder a sessao.
+     * Cifra um token. Se o Keystore falhar, NAO grava em texto puro: a sessao
+     * simplesmente nao persiste (o usuario refaz login). Fail-closed.
      */
     private fun protect(value: String): String {
         if (value.isBlank()) return ""
-        val secret = key ?: return value
+        val secret = key ?: return ""
         return runCatching {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, secret)
@@ -95,8 +95,8 @@ class SessionStore(context: Context) {
             val payload = cipher.iv + encrypted
             PREFIX + Base64.encodeToString(payload, Base64.NO_WRAP)
         }.getOrElse {
-            Timber.w(it, "Falha ao cifrar a sessao; usando texto puro")
-            value
+            Timber.w(it, "Falha ao cifrar a sessao; nao persistindo")
+            ""
         }
     }
 

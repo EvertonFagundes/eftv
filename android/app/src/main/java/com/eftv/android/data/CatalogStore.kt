@@ -505,6 +505,7 @@ class CatalogStore private constructor(context: Context) {
         val batchSize = 500
         var batchCount = 0
         var insertChannel = db.compileStatement(INSERT_CHANNEL)
+        var transactionOpen = true
         db.beginTransaction()
         try {
             feed { channel ->
@@ -551,6 +552,10 @@ class CatalogStore private constructor(context: Context) {
             }
         } finally {
             insertChannel.close()
+            if (transactionOpen) {
+                runCatching { db.endTransaction() }
+                transactionOpen = false
+            }
         }
 
         if (total == 0) {
@@ -759,12 +764,10 @@ class CatalogStore private constructor(context: Context) {
         }
 
         override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            // Preserva dados pessoais (favoritos, historico, progresso) no downgrade.
             db.execSQL("DROP TABLE IF EXISTS channels")
             db.execSQL("DROP TABLE IF EXISTS channel_groups")
             db.execSQL("DROP TABLE IF EXISTS meta")
-            db.execSQL("DROP TABLE IF EXISTS favorites")
-            db.execSQL("DROP TABLE IF EXISTS recent")
-            db.execSQL("DROP TABLE IF EXISTS progress")
             createSchema(db)
         }
 

@@ -35,6 +35,12 @@ class CastServer(
 
     private var serverSocket: ServerSocket? = null
 
+    @Volatile
+    private var failedAttempts = 0
+
+    @Volatile
+    private var lockoutUntil = 0L
+
     /** Conexao em andamento, para o stop() nao deixar a thread presa no read. */
     @Volatile
     private var clientSocket: Socket? = null
@@ -107,11 +113,23 @@ class CastServer(
                 return
             }
             val (receivedPin, deviceName) = parsed
+            val now = System.currentTimeMillis()
+            if (now < lockoutUntil) {
+                onLog("PIN bloqueado por excesso de tentativas")
+                replyError(output, "Muitas tentativas. Aguarde.")
+                return
+            }
             if (receivedPin != pin) {
+                failedAttempts++
+                if (failedAttempts >= 5) {
+                    lockoutUntil = now + 30_000L
+                    failedAttempts = 0
+                }
                 onLog("PIN incorreto (${deviceName.ifBlank { "aparelho sem nome" }})")
                 replyError(output, "PIN incorreto")
                 return
             }
+            failedAttempts = 0
 
             CastProtocol.write(output, CastProtocol.TYPE_OK, ByteArray(0))
             // Sem timeout durante a transmissao: um video parado nao significa

@@ -399,7 +399,8 @@ class EftvApi(
 
     /** Cancela a renovacao; o acesso continua ate o fim do periodo pago. */
     suspend fun cancelSubscription(accessToken: String, subscriptionId: String) {
-        request("POST", "/subscriptions/$subscriptionId/cancel", accessToken = accessToken)
+        val encoded = java.net.URLEncoder.encode(subscriptionId, "UTF-8")
+        request("POST", "/subscriptions/$encoded/cancel", accessToken = accessToken)
     }
 
     private fun tokenPair(json: JSONObject) = TokenPair(

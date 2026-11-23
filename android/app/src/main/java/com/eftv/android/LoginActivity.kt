@@ -96,11 +96,12 @@ class LoginActivity : AppCompatActivity() {
         setContentView(binding.root)
         requestNotificationPermissionIfNeeded()
 
-        binding.versionText.text = getString(
-            R.string.login_version,
-            BuildConfig.VERSION_NAME,
-            BuildConfig.API_BASE_URL,
-        )
+        val versionLabel = if (BuildConfig.DEBUG) {
+            getString(R.string.login_version, BuildConfig.VERSION_NAME, BuildConfig.API_BASE_URL)
+        } else {
+            getString(R.string.login_version_release, BuildConfig.VERSION_NAME)
+        }
+        binding.versionText.text = versionLabel
 
         // Link externo (volta do pagamento ou confirmacao de email). Precisa
         // ser tratado antes do desvio automatico para o catalogo.

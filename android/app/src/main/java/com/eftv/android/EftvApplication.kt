@@ -1,5 +1,7 @@
 package com.eftv.android
 
+import com.eftv.android.BuildConfig
+
 import android.app.Application
 import android.os.Build
 import coil.ImageLoader
@@ -46,11 +48,21 @@ class EftvApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
 
-        // Log sempre, inclusive no APK de release: sem isso um problema no
-        // aparelho do cliente ("nao conecta", "fecha sozinho") chega sem
-        // nenhuma pista. O logcat e privado desde o Android 4.1: outro app nao
-        // le; so o usuario via depuracao USB.
-        Timber.plant(Timber.DebugTree())
+        // Log completo apenas em debug. Em release planta uma arvore que nao
+        // vaza detalhes sensiveis (tokens/URLs) no logcat.
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        } else {
+            Timber.plant(object : Timber.Tree() {
+                override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                    if (priority >= android.util.Log.WARN) {
+                        android.util.Log.println(priority, tag ?: "EFTV", message)
+                        t?.let { android.util.Log.getStackTraceString(it) }
+                            ?.let { android.util.Log.println(priority, tag ?: "EFTV", it) }
+                    }
+                }
+            })
+        }
 
         installCrashReporter()
 

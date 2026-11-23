@@ -135,7 +135,12 @@ class PlaylistRepository(
                 if (location.isNullOrBlank()) {
                     throw IOException("Redirecionamento sem Location (HTTP $code)")
                 }
-                current = URL(URL(current), location).toString()
+                val next = URL(URL(current), location).toString()
+                if (!next.startsWith("http://", ignoreCase = true) &&
+                    !next.startsWith("https://", ignoreCase = true)) {
+                    throw IOException("Redirecionamento inseguro: $next")
+                }
+                current = next
                 redirects++
                 continue
             }
