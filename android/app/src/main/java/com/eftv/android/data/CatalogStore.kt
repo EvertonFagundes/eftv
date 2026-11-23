@@ -488,52 +488,83 @@ class CatalogStore private constructor(context: Context) {
         val groupCounts = HashMap<String, Int>()
         var total = 0
 
+        // Limpa em transacao propria para a UI nao ver estado inconsistente
+        // enquanto a importacao roda.
         db.beginTransaction()
         try {
             db.execSQL("DELETE FROM channels")
             db.execSQL("DELETE FROM channel_groups")
             db.execSQL("DELETE FROM meta")
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
 
-            val insertChannel = db.compileStatement(INSERT_CHANNEL)
-            try {
-                feed { channel ->
-                    insertChannel.clearBindings()
-                    insertChannel.bindString(1, channel.tvgId)
-                    insertChannel.bindString(2, channel.name)
-                    insertChannel.bindString(3, channel.searchKey)
-                    insertChannel.bindString(4, channel.group)
-                    insertChannel.bindString(5, channel.group.normalizedForSearch())
-                    insertChannel.bindString(6, channel.logo)
-                    insertChannel.bindString(7, channel.url)
-                    insertChannel.bindString(8, channel.kind.name)
-                    bindNullable(insertChannel, 9, channel.userAgent)
-                    bindNullable(insertChannel, 10, channel.referer)
+        // Insere em lotes commitados, para que o que ja foi importado fique
+        // visivel e assistivel enquanto o restante continua em segundo plano.
+        val batchSize = 500
+        var batchCount = 0
+        var insertChannel = db.compileStatement(INSERT_CHANNEL)
+        db.beginTransaction()
+        try {
+            feed { channel ->
+                insertChannel.clearBindings()
+                insertChannel.bindString(1, channel.tvgId)
+                insertChannel.bindString(2, channel.name)
+                insertChannel.bindString(3, channel.searchKey)
+                insertChannel.bindString(4, channel.group)
+                insertChannel.bindString(5, channel.group.normalizedForSearch())
+                insertChannel.bindString(6, channel.logo)
+                insertChannel.bindString(7, channel.url)
+                insertChannel.bindString(8, channel.kind.name)
+                bindNullable(insertChannel, 9, channel.userAgent)
+                bindNullable(insertChannel, 10, channel.referer)
 
-                    // Episodios: guarda serie, temporada e episodio para agrupar.
-                    val info = if (channel.kind == ChannelKind.SERIES) {
-                        SeriesParser.parse(channel.name)
-                    } else {
-                        null
-                    }
-                    insertChannel.bindString(11, info?.key.orEmpty())
-                    insertChannel.bindString(12, info?.title.orEmpty())
-                    insertChannel.bindLong(13, (info?.season ?: 0).toLong())
-                    insertChannel.bindLong(14, (info?.episode ?: 0).toLong())
-
-                    if (insertChannel.executeInsert() != -1L) {
-                        total++
-                        groupCounts[channel.group] = (groupCounts[channel.group] ?: 0) + 1
-                        if (total % PROGRESS_STEP == 0) onProgress?.invoke(total)
-                    }
+                // Episodios: guarda serie, temporada e episodio para agrupar.
+                val info = if (channel.kind == ChannelKind.SERIES) {
+                    SeriesParser.parse(channel.name)
+                } else {
+                    null
                 }
-            } finally {
-                insertChannel.close()
-            }
+                insertChannel.bindString(11, info?.key.orEmpty())
+                insertChannel.bindString(12, info?.title.orEmpty())
+                insertChannel.bindLong(13, (info?.season ?: 0).toLong())
+                insertChannel.bindLong(14, (info?.episode ?: 0).toLong())
 
-            if (total == 0) {
-                throw IOException("A playlist nao retornou nenhum canal.")
+                if (insertChannel.executeInsert() != -1L) {
+                    total++
+                    groupCounts[channel.group] = (groupCounts[channel.group] ?: 0) + 1
+                    batchCount++
+                    if (batchCount >= batchSize) {
+                        // Commita o lote e reabre a transacao para o proximo.
+                        insertChannel.close()
+                        db.setTransactionSuccessful()
+                        db.endTransaction()
+                        // Atualiza meta parcial para a UI enxergar o progresso.
+                        writePartialMeta(sourceId, updatedAt, total)
+                        db.beginTransaction()
+                        insertChannel = db.compileStatement(INSERT_CHANNEL)
+                        batchCount = 0
+                    }
+                    if (total % PROGRESS_STEP == 0) onProgress?.invoke(total)
+                }
             }
+        } finally {
+            insertChannel.close()
+        }
 
+        if (total == 0) {
+            db.endTransaction()
+            throw IOException("A playlist nao retornou nenhum canal.")
+        }
+
+        // Lote final (caso nao tenha fechado no loop).
+        db.setTransactionSuccessful()
+        db.endTransaction()
+
+        // Grupos + meta final em transacao propria.
+        db.beginTransaction()
+        try {
             val insertGroup = db.compileStatement(
                 "INSERT INTO channel_groups(title, total) VALUES(?, ?)"
             )
@@ -556,7 +587,6 @@ class CatalogStore private constructor(context: Context) {
             } finally {
                 insertMeta.close()
             }
-
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -568,6 +598,24 @@ class CatalogStore private constructor(context: Context) {
         }
 
         return Metadata(sourceId = sourceId, updatedAt = updatedAt, total = total)
+    }
+
+    private fun writePartialMeta(sourceId: String, updatedAt: Long, total: Int) {
+        db.beginTransaction()
+        try {
+            db.execSQL("DELETE FROM meta")
+            val insertMeta = db.compileStatement("INSERT INTO meta(key, value) VALUES(?, ?)")
+            try {
+                putMeta(insertMeta, "source_id", sourceId)
+                putMeta(insertMeta, "updated_at", updatedAt.toString())
+                putMeta(insertMeta, "total", total.toString())
+            } finally {
+                insertMeta.close()
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     private fun buildFilter(

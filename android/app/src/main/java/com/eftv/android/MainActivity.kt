@@ -1021,6 +1021,15 @@ class MainActivity : AppCompatActivity() {
                                 R.string.importing_channels,
                                 NumberFormat.getIntegerInstance().format(count),
                             )
+                            // Mostra o que ja foi importado sem bloquear a tela:
+                            // o usuario pode navegar/assistir enquanto o restante
+                            // continua em segundo plano.
+                            val partial = repository.cached()
+                            if (partial != null) {
+                                lifecycleScope.launch {
+                                    applyCatalog(partial)
+                                }
+                            }
                         }
                     }
                 }

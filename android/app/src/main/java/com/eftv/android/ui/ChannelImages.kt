@@ -33,6 +33,15 @@ fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     // capa continua aparecendo atras. Antes o card ficava vazio nesses casos.
     background = CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes)
     setImageDrawable(null)
+
+    // Card de serie agrupada: o provedor nao tem capa propria da serie (os
+    // episodios vinham soltos). Os logos dos episodios sao de outras coisas e
+    // apareciam aleatorios. Usamos a capa gerada (iniciais) para nao exibir
+    // imagem errada. Reversivel se o provedor passar a enviar capa de serie.
+    if (channel.isSeriesCard) {
+        return
+    }
+
     if (logo.isBlank()) {
         return
     }
