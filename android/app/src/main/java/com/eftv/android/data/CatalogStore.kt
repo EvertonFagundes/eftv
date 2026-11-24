@@ -474,10 +474,13 @@ class CatalogStore private constructor(context: Context) {
     }
 
     /**
-     * Substitui o catalogo inteiro em uma unica transacao.
+     * Substitui o catalogo em lotes.
      *
-     * O parser entrega um canal por vez para [feed]. Se o download falhar ou a
-     * lista vier vazia, o rollback mantem o catalogo anterior intacto.
+     * O parser entrega um canal por vez para [feed]. A cada [batchSize]
+     * canais a transacao e commitada e o metadado parcial e atualizado, para
+     * o app exibir o que ja chegou enquanto o restante e importado. Se o
+     * download falhar no meio, o lote em andamento e revertido e os lotes
+     * anteriores permanecem com metadado parcial consistente.
      */
     fun replace(
         sourceId: String,
@@ -504,8 +507,9 @@ class CatalogStore private constructor(context: Context) {
         // visivel e assistivel enquanto o restante continua em segundo plano.
         val batchSize = 500
         var batchCount = 0
+        var committedTotal = 0
         var insertChannel = db.compileStatement(INSERT_CHANNEL)
-        var transactionOpen = true
+        var failure: Throwable? = null
         db.beginTransaction()
         try {
             feed { channel ->
@@ -541,8 +545,9 @@ class CatalogStore private constructor(context: Context) {
                         insertChannel.close()
                         db.setTransactionSuccessful()
                         db.endTransaction()
+                        committedTotal = total
                         // Atualiza meta parcial para a UI enxergar o progresso.
-                        writePartialMeta(sourceId, updatedAt, total)
+                        writePartialMeta(sourceId, updatedAt, committedTotal)
                         db.beginTransaction()
                         insertChannel = db.compileStatement(INSERT_CHANNEL)
                         batchCount = 0
@@ -550,22 +555,29 @@ class CatalogStore private constructor(context: Context) {
                     if (total % PROGRESS_STEP == 0) onProgress?.invoke(total)
                 }
             }
-        } finally {
-            insertChannel.close()
-            if (transactionOpen) {
-                runCatching { db.endTransaction() }
-                transactionOpen = false
+
+            if (total == 0) {
+                throw IOException("A playlist nao retornou nenhum canal.")
             }
+            // Commita o lote final (pode ter menos de batchSize canais).
+            db.setTransactionSuccessful()
+        } catch (t: Throwable) {
+            failure = t
+        } finally {
+            runCatching { insertChannel.close() }
+            // Fecha a transacao corrente: commit se deu certo, rollback se nao.
+            if (db.inTransaction()) db.endTransaction()
         }
 
-        if (total == 0) {
-            db.endTransaction()
-            throw IOException("A playlist nao retornou nenhum canal.")
+        val error = failure
+        if (error != null) {
+            // O lote incompleto foi revertido; mantem os lotes ja commitados
+            // com metadado consistente para o app nao exibir um catalogo vazio.
+            if (committedTotal > 0) {
+                runCatching { writePartialMeta(sourceId, updatedAt, committedTotal) }
+            }
+            throw error
         }
-
-        // Lote final (caso nao tenha fechado no loop).
-        db.setTransactionSuccessful()
-        db.endTransaction()
 
         // Grupos + meta final em transacao propria.
         db.beginTransaction()
