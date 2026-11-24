@@ -4,9 +4,9 @@
 
 | Item | Valor |
 | --- | --- |
-| Versao publicada | `1.5.12` (`versionCode 37`) |
-| APK publicado | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.12/eftv-v1.5.12.apk |
-| SHA-256 do APK | `c2c0c78c3c2d77b5bce5cfc4304ce62d5efa9cbb66d28727fc53f71e7a1001cd` |
+| Versao publicada | `1.5.13` (`versionCode 38`) |
+| APK publicado | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.13/eftv-v1.5.13.apk |
+| SHA-256 do APK | `12a90c76ad146831e3b117c0069ebee0bc4f25756c0b3d3975b1199c8014c3ee` |
 | APK gerado | `android/app/build/outputs/apk/release/app-release.apk` |
 | Chave | `android/eftv-release.jks` (fingerprint abaixo) |
 
