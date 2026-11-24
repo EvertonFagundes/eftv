@@ -18,13 +18,14 @@ import java.net.URLEncoder
  */
 object SeriesCoverFetcher {
 
-    private val cache = LruCache<String, String?>(64)
+    private val cache = LruCache<String, String>(64)
 
     suspend fun fetch(name: String): String? = withContext(Dispatchers.IO) {
         val key = name.trim().lowercase()
         if (key.isBlank()) return@withContext null
-        if (cache.get(key) != null || cache.snapshot().containsKey(key)) {
-            return@withContext cache.get(key)
+        cache.get(key)?.let { cached ->
+            // String vazia e o sentinela de "sem capa" (LruCache nao aceita null).
+            return@withContext cached.ifBlank { null }
         }
         val url = try {
             val q = URLEncoder.encode(name, "UTF-8")
@@ -46,7 +47,7 @@ object SeriesCoverFetcher {
             Timber.w(e, "Falha ao buscar capa da serie: %s", name)
             null
         }
-        cache.put(key, url)
+        cache.put(key, url.orEmpty())
         url
     }
 

@@ -11,6 +11,7 @@ import com.eftv.android.data.LocalServer
 import com.eftv.android.data.NetworkInfo
 import com.eftv.android.data.SeriesCoverFetcher
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Carrega a arte do catalogo com os mesmos headers da playlist/streams.
@@ -45,16 +46,23 @@ fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     if (channel.isSeriesCard) {
         val view = this
         view.setTag(R.id.series_cover_key, channel.name)
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val url = SeriesCoverFetcher.fetch(channel.name)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                if (view.getTag(R.id.series_cover_key) != channel.name) return@withContext
-                if (!url.isNullOrBlank()) {
-                    view.load(url) {
-                        (channel.userAgent?.takeIf { it.isNotBlank() }
-                            ?: com.eftv.android.PlaylistConfig.USER_AGENT).let { ua ->
-                            addHeader("User-Agent", ua)
-                        }
+        // A capa e apenas enfeite: se a busca falhar, mantemos a capa gerada
+        // em vez de derrubar o app. Escopo da view evita trabalho orfao.
+        view.findViewTreeLifecycleOwner()?.lifecycleScope?.launch {
+            val url = try {
+                SeriesCoverFetcher.fetch(channel.name)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Falha ao buscar capa da serie")
+                null
+            }
+            if (view.getTag(R.id.series_cover_key) != channel.name) return@launch
+            if (!url.isNullOrBlank()) {
+                view.load(url) {
+                    (channel.userAgent?.takeIf { it.isNotBlank() }
+                        ?: PlaylistConfig.USER_AGENT).let { ua ->
+                        addHeader("User-Agent", ua)
                     }
                 }
             }
