@@ -1,13 +1,12 @@
 # main.py - FastAPI app, middleware, lifespan, routers
 from contextlib import asynccontextmanager
 
+import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-
-import httpx
 
 from app.config import settings
 from app.database import close_db, init_db
