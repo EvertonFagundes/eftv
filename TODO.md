@@ -59,8 +59,13 @@ série (temporadas, episódios e botões de reprodução).
 
 ## Pendente de validação
 
-- [ ] **Capas em dados móveis.** Desligar o Wi-Fi, abrir a aba Séries e
-  confirmar que o proxy local entrega as capas externas.
+- [x] **Capas em dados móveis.**
+  Wi-Fi desligado e dados móveis ativos: a busca "Round 6" carregou as capas
+  reais de *Round 6* e *Round 6 O Desafio*. O Wi-Fi foi religado e os dados
+  móveis desligados em seguida.
+  - Observação: a capa de *Round 6 O Desafio* não é a do IMDb (*Squid Game:
+    The Challenge*); como o provedor entrega logo própria, ela tem prioridade.
+    Vale investigar se o logo do provedor está trocado.
 
 - [ ] **Próxima importação completa.** Conferir o ganho real dos lotes de 2.000
   e se o horário final do catálogo aparece correto.
