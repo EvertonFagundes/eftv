@@ -87,10 +87,11 @@ object SeriesCoverFetcher {
 
         val best = candidates.maxByOrNull { it.score } ?: return null
         // Titulos do provedor costumam vir com prefixo/sufixo ("[L]", "S01",
-        // "Nova Geracao"), entao a nota alta e dificil. Um unico resultado
-        // do IMDb para a consulta quase sempre e o casamento certo; com
-        // varios, exigimos ao menos o primeiro token em comum.
-        val accept = best.score >= 25 || (candidates.size == 1 && best.score >= 12)
+        // "Nova Geracao"). Um unico resultado do IMDb para a consulta quase
+        // sempre e o casamento certo. Nota zero acontece com titulos
+        // traduzidos ("Wandinha" -> "Wednesday", "Round 6" -> "Squid Game"):
+        // nesse caso vale a ordem de relevancia do proprio IMDb.
+        val accept = best.score >= 25 || candidates.size == 1 || best.score == 0
         return if (accept) best.image else null
     }
 
