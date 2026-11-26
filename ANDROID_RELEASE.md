@@ -6,7 +6,7 @@
 | --- | --- |
 | Versao publicada | `1.5.14` (`versionCode 39`) |
 | APK publicado | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.14/eftv-v1.5.14.apk |
-| SHA-256 do APK | preenchido apos o workflow da release `v1.5.14` |
+| SHA-256 do APK | `dac71068e60b73c70e7b71078fcc95aaa438b62485bd87c0deccccbe6d377220` |
 | APK gerado | `android/app/build/outputs/apk/release/app-release.apk` |
 | Chave | `android/eftv-release.jks` (fingerprint abaixo) |
 

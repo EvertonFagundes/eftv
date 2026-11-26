@@ -74,5 +74,6 @@ entrar na conta para validar as capas de série no aparelho.
   O painel do Render tem prioridade sobre o `render.yaml`; `/app/version`
   ainda responde 1.5.7/32.
 
-- [ ] **Publicar a release v1.5.14** com o APK assinado e atualizar o
-  `ANDROID_RELEASE.md` com o SHA-256 gerado pelo workflow.
+- [x] **Publicar a release v1.5.14** com o APK assinado.
+  Release: https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.14
+  SHA-256: `dac71068e60b73c70e7b71078fcc95aaa438b62485bd87c0deccccbe6d377220`
