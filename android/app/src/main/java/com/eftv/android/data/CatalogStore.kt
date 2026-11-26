@@ -22,6 +22,10 @@ class CatalogStore private constructor(context: Context) {
     private val helper = CatalogDatabase(context.applicationContext)
     private val db: SQLiteDatabase by lazy { helper.writableDatabase }
 
+    /** Indice materializado da aba Series (ver createSeriesCards). */
+    @Volatile
+    private var seriesIndexReady = false
+
     data class Metadata(
         val sourceId: String,
         val updatedAt: Long,
@@ -34,6 +38,9 @@ class CatalogStore private constructor(context: Context) {
             while (cursor.moveToNext()) {
                 values[cursor.getString(0)] = cursor.getString(1)
             }
+            // Importacao interrompida (app fechado no meio) nao vale como
+            // cache: o proximo start baixa a lista de novo.
+            if (values["importing"] == "1") return null
             val sourceId = values["source_id"] ?: return null
             val total = values["total"]?.toIntOrNull() ?: return null
             if (total <= 0) return null
@@ -120,6 +127,26 @@ class CatalogStore private constructor(context: Context) {
         letter: Char,
     ): Int {
         val prefix = letter.lowercaseChar().toString()
+        if (isGrouped(mode, kind)) {
+            if (!ensureSeriesIndex()) return -1
+            val (where, args) = buildFilter(
+                group, query, excludeAdults = excludeAdults, kind = ChannelKind.SERIES,
+            )
+            val condition = if (where.isEmpty()) {
+                "WHERE c.sortkey < ?"
+            } else {
+                "$where AND c.sortkey < ?"
+            }
+            val totalBefore = db.rawQuery(
+                "SELECT COUNT(*) FROM series_cards c $condition",
+                (args + prefix).toTypedArray(),
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+            val totalAll = countInternal(group, query, mode, kind, excludeAdults)
+            return if (totalBefore >= totalAll) -1 else totalBefore
+        }
+
         val (where, args) = buildFilter(group, query, excludeAdults = excludeAdults, kind = kind)
         // buildFilter ja devolve a clausula com "WHERE" (ou vazio).
         val condition = if (where.isEmpty()) {
@@ -185,14 +212,24 @@ class CatalogStore private constructor(context: Context) {
         kind: ChannelKind?,
         excludeAdults: Boolean,
     ): Int {
-        val (where, args) = buildFilter(group, query, excludeAdults = excludeAdults, kind = kind)
-        val select = if (isGrouped(mode, kind)) {
-            "COUNT(DISTINCT $GROUP_KEY)"
-        } else {
-            "COUNT(*)"
+        if (isGrouped(mode, kind)) {
+            // Uma linha por serie no indice materializado: contar e paginar
+            // nao varre mais os ~240 mil episodios.
+            if (!ensureSeriesIndex()) return 0
+            val (where, args) = buildFilter(
+                group, query, excludeAdults = excludeAdults, kind = ChannelKind.SERIES,
+            )
+            db.rawQuery(
+                "SELECT COUNT(*) FROM series_cards c $where",
+                args.toTypedArray(),
+            ).use { cursor ->
+                return if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
         }
+
+        val (where, args) = buildFilter(group, query, excludeAdults = excludeAdults, kind = kind)
         db.rawQuery(
-            "SELECT $select FROM ${fromClause(mode)} $where",
+            "SELECT COUNT(*) FROM ${fromClause(mode)} $where",
             args.toTypedArray(),
         ).use { cursor ->
             return if (cursor.moveToFirst()) cursor.getInt(0) else 0
@@ -243,47 +280,17 @@ class CatalogStore private constructor(context: Context) {
         offset: Int,
         excludeAdults: Boolean,
     ): List<Channel> {
+        if (!ensureSeriesIndex()) return emptyList()
         val (where, filterArgs) = buildFilter(
             group, query, excludeAdults = excludeAdults, kind = ChannelKind.SERIES,
         )
         val args = (filterArgs + limit.toString() + offset.toString()).toTypedArray()
-        /**
-         * Usa ROW_NUMBER() para selecionar o episodio representante de cada serie:
-         * aquele com logo nao vazio tem prioridade; se nenhum tiver logo, usa o
-         * primeiro episodio (menor temporada/episodio/id). Assim a capa da serie
-         * eh sempre de um episodio que realmente pertence a ela.
-         */
         val sql = """
-            WITH filtered AS (
-                SELECT c.*,
-                       CASE WHEN c.series_key = '' THEN 'u' || c.id ELSE c.series_key END AS gkey,
-                       CASE WHEN c.series_key = '' THEN c.name_key ELSE c.series_key END AS sortkey
-                FROM channels c
-                $where
-            ),
-            counts AS (
-                SELECT gkey,
-                       COUNT(*) AS episodes,
-                       COUNT(DISTINCT season) AS seasons
-                FROM filtered
-                GROUP BY gkey
-            ),
-            ranked AS (
-                SELECT f.*,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY f.gkey
-                           ORDER BY (f.logo = '') ASC, f.season ASC, f.episode ASC, f.id ASC
-                       ) AS rn
-                FROM filtered f
-            )
-            SELECT r.series_key, r.series_title, r.name, r.group_title, r.logo, r.url,
-                   r.user_agent, r.referer, r.tvg_id,
-                   cnt.episodes AS episodes, cnt.seasons AS seasons,
-                   r.gkey, r.sortkey
-            FROM ranked r
-            JOIN counts cnt ON cnt.gkey = r.gkey
-            WHERE r.rn = 1
-            ORDER BY r.sortkey, r.gkey
+            SELECT c.series_key, c.series_title, c.name, c.group_title, c.logo, c.url,
+                   c.user_agent, c.referer, c.tvg_id, c.episodes, c.seasons
+            FROM series_cards c
+            $where
+            ORDER BY c.sortkey, c.gkey
             LIMIT ? OFFSET ?
         """.trimIndent()
 
@@ -311,6 +318,66 @@ class CatalogStore private constructor(context: Context) {
             }
         }
         return result
+    }
+
+    /**
+     * Garante o indice materializado da aba Series.
+     *
+     * Bancos antigos (ou uma importacao interrompida) nao tem a tabela
+     * preenchida. Monta uma vez, fora da importacao; durante ela a aba
+     * mostra o indice anterior (ou vazio, na primeira instalacao).
+     */
+    private fun ensureSeriesIndex(): Boolean {
+        if (seriesIndexReady) return true
+        synchronized(this) {
+            if (seriesIndexReady) return true
+            if (isImporting()) {
+                // Importacao em andamento: usa o indice anterior, se houver,
+                // mas nao remonta no meio dos lotes.
+                return countRows("series_cards") > 0
+            }
+
+            if (countRows("series_cards") == 0) {
+                if (countRows("channels", "kind = 'SERIES'") == 0) {
+                    seriesIndexReady = true
+                    return true
+                }
+                val rebuilt = runCatching { rebuildSeriesIndex() }.isSuccess
+                if (!rebuilt) return false
+            }
+            seriesIndexReady = true
+            return true
+        }
+    }
+
+    private fun refreshSeriesIndex() {
+        synchronized(this) {
+            rebuildSeriesIndex()
+            seriesIndexReady = true
+        }
+    }
+
+    private fun isImporting(): Boolean =
+        db.rawQuery("SELECT value FROM meta WHERE key = 'importing'", null).use { cursor ->
+            cursor.moveToFirst() && cursor.getString(0) == "1"
+        }
+
+    private fun countRows(table: String, condition: String? = null): Int {
+        val where = condition?.let { " WHERE $it" }.orEmpty()
+        db.rawQuery("SELECT COUNT(*) FROM $table$where", null).use { cursor ->
+            return if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
+    }
+
+    private fun rebuildSeriesIndex() {
+        db.beginTransaction()
+        try {
+            db.execSQL("DELETE FROM series_cards")
+            db.execSQL(BUILD_SERIES_CARDS)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     /** Todos os episodios de uma serie, em ordem de temporada e episodio. */
@@ -498,6 +565,9 @@ class CatalogStore private constructor(context: Context) {
             db.execSQL("DELETE FROM channels")
             db.execSQL("DELETE FROM channel_groups")
             db.execSQL("DELETE FROM meta")
+            // Enquanto a importacao roda, o catalogo nao conta como cache
+            // valido e a aba Series nao tenta remontar o indice no meio.
+            db.execSQL("INSERT INTO meta(key, value) VALUES('importing', '1')")
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -574,7 +644,13 @@ class CatalogStore private constructor(context: Context) {
             // O lote incompleto foi revertido; mantem os lotes ja commitados
             // com metadado consistente para o app nao exibir um catalogo vazio.
             if (committedTotal > 0) {
-                runCatching { writePartialMeta(sourceId, updatedAt, committedTotal) }
+                // Importacao encerrada (mesmo com erro): o catalogo parcial
+                // e valido como cache e a aba Series precisa do indice novo.
+                runCatching {
+                    writePartialMeta(sourceId, updatedAt, committedTotal, importing = false)
+                }
+                runCatching { refreshSeriesIndex() }
+                    .onFailure { seriesIndexReady = false }
             }
             throw error
         }
@@ -602,6 +678,7 @@ class CatalogStore private constructor(context: Context) {
                 putMeta(insertMeta, "source_id", sourceId)
                 putMeta(insertMeta, "updated_at", updatedAt.toString())
                 putMeta(insertMeta, "total", total.toString())
+                putMeta(insertMeta, "importing", "0")
             } finally {
                 insertMeta.close()
             }
@@ -609,6 +686,10 @@ class CatalogStore private constructor(context: Context) {
         } finally {
             db.endTransaction()
         }
+
+        // Monta o indice da aba Series uma vez por importacao.
+        runCatching { refreshSeriesIndex() }
+            .onFailure { seriesIndexReady = false }
 
         // Libera o WAL gerado pela importacao assim que possivel.
         runCatching {
@@ -618,7 +699,12 @@ class CatalogStore private constructor(context: Context) {
         return Metadata(sourceId = sourceId, updatedAt = updatedAt, total = total)
     }
 
-    private fun writePartialMeta(sourceId: String, updatedAt: Long, total: Int) {
+    private fun writePartialMeta(
+        sourceId: String,
+        updatedAt: Long,
+        total: Int,
+        importing: Boolean = true,
+    ) {
         db.beginTransaction()
         try {
             db.execSQL("DELETE FROM meta")
@@ -627,6 +713,7 @@ class CatalogStore private constructor(context: Context) {
                 putMeta(insertMeta, "source_id", sourceId)
                 putMeta(insertMeta, "updated_at", updatedAt.toString())
                 putMeta(insertMeta, "total", total.toString())
+                putMeta(insertMeta, "importing", if (importing) "1" else "0")
             } finally {
                 insertMeta.close()
             }
@@ -735,8 +822,10 @@ class CatalogStore private constructor(context: Context) {
             // v3: tipo do conteudo (ao vivo / filme / serie).
             // v4: serie, temporada e episodio (agrupamento de series).
             // v5: group_key (grupo sem acento, para a busca por categoria).
-            // Nos tres casos o catalogo e baixado de novo, preservando
-            // favoritos, historico e progresso.
+            // v6: series_cards (uma linha por serie, para a aba Series ser
+            //     paginada sem reagrupar o catalogo inteiro a cada pagina).
+            // Nos casos que trocam o catalogo, ele e baixado de novo,
+            // preservando favoritos, historico e progresso.
             if (oldVersion < 4) {
                 db.execSQL("DROP TABLE IF EXISTS channels")
                 db.execSQL("DROP TABLE IF EXISTS channel_groups")
@@ -748,6 +837,10 @@ class CatalogStore private constructor(context: Context) {
                     "ALTER TABLE channels ADD COLUMN group_key TEXT NOT NULL DEFAULT ''",
                 )
                 backfillGroupKey(db)
+            }
+            if (oldVersion in 4..5) {
+                // O indice e montado sob demanda na primeira abertura da aba.
+                createSeriesCards(db)
             }
         }
 
@@ -779,6 +872,7 @@ class CatalogStore private constructor(context: Context) {
             // Preserva dados pessoais (favoritos, historico, progresso) no downgrade.
             db.execSQL("DROP TABLE IF EXISTS channels")
             db.execSQL("DROP TABLE IF EXISTS channel_groups")
+            db.execSQL("DROP TABLE IF EXISTS series_cards")
             db.execSQL("DROP TABLE IF EXISTS meta")
             createSchema(db)
         }
@@ -820,6 +914,47 @@ class CatalogStore private constructor(context: Context) {
             )
             db.execSQL("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             createPersonalTables(db)
+            createSeriesCards(db)
+        }
+
+        /**
+         * Uma linha por serie, montada no fim da importacao.
+         *
+         * Sem ela, cada pagina da aba Series reagrupava ~240 mil episodios
+         * com window functions: a tela ficava minutos em "Carregando..." e
+         * consumia centenas de MB.
+         */
+        private fun createSeriesCards(db: SQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS series_cards (
+                    gkey TEXT PRIMARY KEY,
+                    series_key TEXT NOT NULL DEFAULT '',
+                    sortkey TEXT NOT NULL,
+                    series_title TEXT NOT NULL DEFAULT '',
+                    name TEXT NOT NULL,
+                    name_key TEXT NOT NULL,
+                    group_title TEXT NOT NULL,
+                    group_key TEXT NOT NULL,
+                    logo TEXT NOT NULL DEFAULT '',
+                    url TEXT NOT NULL,
+                    user_agent TEXT,
+                    referer TEXT,
+                    tvg_id TEXT NOT NULL DEFAULT '',
+                    episodes INTEGER NOT NULL DEFAULT 0,
+                    seasons INTEGER NOT NULL DEFAULT 0,
+                    kind TEXT NOT NULL DEFAULT 'SERIES'
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS idx_series_cards_sort " +
+                    "ON series_cards(sortkey, gkey)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS idx_series_cards_filters " +
+                    "ON series_cards(group_key, name_key)"
+            )
         }
 
         private fun createPersonalTables(db: SQLiteDatabase) {
@@ -854,7 +989,7 @@ class CatalogStore private constructor(context: Context) {
 
         companion object {
             private const val DB_NAME = "catalog.db"
-            private const val DB_VERSION = 5
+            private const val DB_VERSION = 6
         }
     }
 
@@ -876,8 +1011,41 @@ class CatalogStore private constructor(context: Context) {
         """
 
         /** Uma linha por serie; item sem marcador de episodio fica solto (chave propria). */
-        private const val GROUP_KEY =
-            "CASE WHEN c.series_key = '' THEN 'u' || c.id ELSE c.series_key END"
+        private val BUILD_SERIES_CARDS = """
+            INSERT INTO series_cards
+                (gkey, series_key, sortkey, series_title, name, name_key,
+                 group_title, group_key, logo, url, user_agent, referer, tvg_id,
+                 episodes, seasons, kind)
+            WITH filtered AS (
+                SELECT c.*,
+                       CASE WHEN c.series_key = '' THEN 'u' || c.id ELSE c.series_key END AS gkey,
+                       CASE WHEN c.series_key = '' THEN c.name_key ELSE c.series_key END AS sortkey
+                FROM channels c
+                WHERE c.kind = 'SERIES'
+            ),
+            counts AS (
+                SELECT gkey,
+                       COUNT(*) AS episodes,
+                       COUNT(DISTINCT season) AS seasons
+                FROM filtered
+                GROUP BY gkey
+            ),
+            ranked AS (
+                SELECT f.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY f.gkey
+                           ORDER BY (f.logo = '') ASC, f.season ASC, f.episode ASC, f.id ASC
+                       ) AS rn
+                FROM filtered f
+            )
+            SELECT r.gkey, r.series_key, r.sortkey, r.series_title, r.name, r.sortkey,
+                   r.group_title, r.group_key, r.logo, r.url, r.user_agent, r.referer,
+                   r.tvg_id, cnt.episodes, cnt.seasons, 'SERIES'
+            FROM ranked r
+            JOIN counts cnt ON cnt.gkey = r.gkey
+            WHERE r.rn = 1
+        """.trimIndent()
+
         private const val PROGRESS_STEP = 5_000
         private const val MAX_RECENTS = 100
     }

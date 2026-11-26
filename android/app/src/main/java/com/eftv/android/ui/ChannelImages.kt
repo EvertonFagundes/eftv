@@ -40,33 +40,60 @@ fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     background = CoverPlaceholder.drawable(context, channel.name, channel.kind, fallbackRes)
     setImageDrawable(null)
 
-    // Card de serie agrupada: o provedor M3U nao tem capa propria da serie.
-    // Buscamos uma capa real no TVMaze (API gratuita, sem chave) e, se
-    // encontrar, carregamos; caso contrario mantemos a capa gerada.
+    // Card de serie agrupada: quando o provedor traz uma capa propria, ela
+    // vem primeiro (com o mesmo proxy/headers dos demais cards). So quando
+    // nao ha capa, ou o download falha, buscamos uma capa real por titulo
+    // (IMDb/TVMaze) e, por fim, mantemos a capa gerada.
     if (channel.isSeriesCard) {
         val view = this
         view.setTag(R.id.series_cover_key, channel.name)
+
         // A capa e apenas enfeite: se a busca falhar, mantemos a capa gerada
         // em vez de derrubar o app. Escopo da view evita trabalho orfao.
-        view.findViewTreeLifecycleOwner()?.lifecycleScope?.launch {
-            val url = try {
-                SeriesCoverFetcher.fetch(channel.name)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.w(e, "Falha ao buscar capa da serie")
-                null
-            }
-            if (view.getTag(R.id.series_cover_key) != channel.name) return@launch
-            if (!url.isNullOrBlank()) {
-                view.load(url) {
-                    (channel.userAgent?.takeIf { it.isNotBlank() }
-                        ?: PlaylistConfig.USER_AGENT).let { ua ->
-                        addHeader("User-Agent", ua)
-                    }
+        val loadFetchedCover: () -> Unit = {
+            view.findViewTreeLifecycleOwner()?.lifecycleScope?.launch {
+                val url = try {
+                    SeriesCoverFetcher.fetch(channel.name)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(e, "Falha ao buscar capa da serie")
+                    null
+                }
+                if (view.getTag(R.id.series_cover_key) != channel.name) return@launch
+                if (!url.isNullOrBlank()) {
+                    val proxy = LocalServer.artworkProxyUrl(url)
+                    val proxyFirst = proxy != url &&
+                        LocalServer.isServerReady() &&
+                        NetworkInfo.label(view.context) == "movel"
+                    val first = if (proxyFirst) proxy else url
+                    val second = if (first == url) proxy else url
+                    // A capa externa nao pertence ao provedor: nao envia o
+                    // Referer dele para o CDN do IMDb/TVMaze.
+                    view.loadArtwork(
+                        first,
+                        second,
+                        channel.copy(userAgent = null, referer = null),
+                        fallbackRes,
+                    )
                 }
             }
+            Unit
         }
+
+        if (logo.isBlank()) {
+            loadFetchedCover()
+            return
+        }
+
+        val proxyUrl = LocalServer.artworkProxyUrl(logo)
+        val useProxyFirst =
+            proxyUrl != logo &&
+                LocalServer.isServerReady() &&
+                (NetworkInfo.label(context) == "movel" || logo.startsWith("http://"))
+        val first = if (useProxyFirst) proxyUrl else logo
+        val second = if (first == logo) proxyUrl else logo
+        loadArtwork(first, second, channel, fallbackRes, onFinalError = loadFetchedCover)
         return
     }
 
@@ -94,6 +121,7 @@ private fun ImageView.loadArtwork(
     fallbackData: String?,
     channel: Channel,
     fallbackRes: Int,
+    onFinalError: (() -> Unit)? = null,
 ) {
     val userAgent = channel.userAgent
         ?.takeIf { it.isNotBlank() }
@@ -114,7 +142,7 @@ private fun ImageView.loadArtwork(
         listener(
             onError = { _, _ ->
                 if (!fallbackData.isNullOrBlank() && fallbackData != data) {
-                    loadArtwork(fallbackData, null, channel, fallbackRes)
+                    loadArtwork(fallbackData, null, channel, fallbackRes, onFinalError)
                 } else {
                     background = CoverPlaceholder.drawable(
                         context,
@@ -123,6 +151,7 @@ private fun ImageView.loadArtwork(
                         fallbackRes,
                     )
                     setImageDrawable(null)
+                    onFinalError?.invoke()
                 }
             },
         )

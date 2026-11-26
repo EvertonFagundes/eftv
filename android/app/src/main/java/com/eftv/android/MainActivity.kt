@@ -115,6 +115,8 @@ class MainActivity : AppCompatActivity() {
             (BuildConfig.DEBUG && intent.getBooleanExtra(EXTRA_SKIP_AUTH, false))
 
     private var refreshJob: Job? = null
+    private var importingCatalog = false
+    private var importedCount = 0
     private var lastCatalogReportAt = 0L
     private var filterJob: Job? = null
     private val pageJobs = HashMap<Int, Job>()
@@ -1014,25 +1016,29 @@ class MainActivity : AppCompatActivity() {
                     repository = PlaylistRepository(this@MainActivity, source)
                 }
 
+                importingCatalog = true
+                importedCount = 0
+                binding.toolbar.subtitle = buildSubtitle()
+
                 val result = repository.refresh { count ->
                     runOnUiThread {
+                        importingCatalog = true
+                        importedCount = count
                         if (!hasContent && !isFinishing) {
                             binding.stateText.text = getString(
                                 R.string.importing_channels,
                                 NumberFormat.getIntegerInstance().format(count),
                             )
-                            // Mostra o que ja foi importado sem bloquear a tela:
-                            // o usuario pode navegar/assistir enquanto o restante
-                            // continua em segundo plano.
-                            val partial = repository.cached()
-                            if (partial != null) {
-                                lifecycleScope.launch {
-                                    applyCatalog(partial)
-                                }
-                            }
+                        }
+                        // Atualiza apenas o contador. Reaplicar o catalogo a
+                        // cada lote reiniciava a consulta da aba Series e a
+                        // lista nunca carregava durante a importacao.
+                        if (!isFinishing) {
+                            binding.toolbar.subtitle = buildSubtitle()
                         }
                     }
                 }
+                importingCatalog = false
                 applyCatalog(result.metadata)
 
                 if (result.error != null) {
@@ -1045,6 +1051,8 @@ class MainActivity : AppCompatActivity() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                importingCatalog = false
+                if (!isFinishing) binding.toolbar.subtitle = buildSubtitle()
                 Timber.e(e, "Falha ao carregar o catalogo")
                 reportCatalogFailure(e)
                 if (hasContent) {
@@ -1122,6 +1130,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildSubtitle(shown: Int? = null): CharSequence {
+        if (importingCatalog) {
+            val text = getString(
+                R.string.importing_catalog,
+                NumberFormat.getIntegerInstance().format(importedCount),
+            )
+            val dot = ContextCompat.getColor(this, R.color.warning)
+            return SpannableString("●  $text").apply {
+                setSpan(ForegroundColorSpan(dot), 0, 1, 0)
+            }
+        }
         val (status, colorRes) = when {
             deviceBlocked -> getString(R.string.status_blocked) to R.color.error
             source.url.isBlank() -> getString(R.string.status_demo) to R.color.warning

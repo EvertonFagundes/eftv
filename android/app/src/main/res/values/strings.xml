@@ -5,6 +5,7 @@
     <string name="loading_channels">Carregando canais...</string>
     <string name="loading_channel">Carregando…</string>
     <string name="importing_channels">Importando canais… %1$s</string>
+    <string name="importing_catalog">Importando %1$s itens</string>
     <string name="empty_catalog">A lista não retornou canais.</string>
     <string name="empty_search">Nenhum item encontrado para essa busca.</string>
     <string name="load_error">Não foi possível carregar a lista de canais.</string>
