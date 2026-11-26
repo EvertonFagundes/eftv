@@ -49,6 +49,20 @@ async def test_version_reports_configured_update(monkeypatch):
     assert response.update_available_from is True
 
 
+async def test_version_strips_whitespace_from_apk_url(monkeypatch):
+    """O painel do Render pode salvar a URL com quebra de linha no final."""
+    monkeypatch.setattr(settings, "APP_LATEST_VERSION_CODE", 12)
+    monkeypatch.setattr(settings, "APP_LATEST_VERSION_NAME", "1.2.0\n")
+    monkeypatch.setattr(settings, "APP_APK_URL", "https://exemplo/eftv-1.2.0.apk\n")
+    monkeypatch.setattr(settings, "APP_UPDATE_NOTES", "Correcoes\n")
+
+    response = await app_client.app_version()
+
+    assert response.apk_url == "https://exemplo/eftv-1.2.0.apk"
+    assert response.version_name == "1.2.0"
+    assert response.notes == "Correcoes"
+
+
 async def test_version_says_nothing_when_no_apk_published(monkeypatch):
     monkeypatch.setattr(settings, "APP_LATEST_VERSION_CODE", 0)
     monkeypatch.setattr(settings, "APP_APK_URL", "")

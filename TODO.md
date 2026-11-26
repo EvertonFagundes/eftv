@@ -71,7 +71,9 @@ série (temporadas, episódios e botões de reprodução).
 
 ## Operação
 
-- [ ] **Render:** o painel ainda responde 1.5.7/32. Atualizar
+- [ ] **Render:** o painel ainda responde 1.5.13/38. Atualizar
   `APP_LATEST_VERSION_CODE=40`, `APP_LATEST_VERSION_NAME=1.5.15` e
   `APP_APK_URL` para o APK da 1.5.15. O painel tem prioridade sobre o
   `render.yaml`.
+  - [ ] Fazer o deploy do backend 1.2.1: o código passa a remover espaços da
+    URL do APK; o painel estava devolvendo a URL com `\n` no final.

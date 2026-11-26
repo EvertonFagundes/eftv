@@ -48,12 +48,15 @@ class CrashReportRequest(BaseModel):
 @router.get("/version", response_model=AppVersionResponse)
 async def app_version():
     """Ultima versao do app (consulta feita na abertura, uma vez por dia)."""
-    configured = bool(settings.APP_APK_URL and settings.APP_LATEST_VERSION_CODE > 0)
+    # O painel do Render aceita colar o valor com quebra de linha/espaços; sem
+    # o strip o app recebia uma URL de APK inválida ("...apk\n").
+    apk_url = settings.APP_APK_URL.strip()
+    configured = bool(apk_url and settings.APP_LATEST_VERSION_CODE > 0)
     return AppVersionResponse(
         version_code=settings.APP_LATEST_VERSION_CODE,
-        version_name=settings.APP_LATEST_VERSION_NAME,
-        apk_url=settings.APP_APK_URL,
-        notes=settings.APP_UPDATE_NOTES,
+        version_name=settings.APP_LATEST_VERSION_NAME.strip(),
+        apk_url=apk_url,
+        notes=settings.APP_UPDATE_NOTES.strip(),
         mandatory=settings.APP_UPDATE_MANDATORY,
         update_available_from=configured,
     )
