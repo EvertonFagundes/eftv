@@ -54,6 +54,8 @@ série (temporadas, episódios e botões de reprodução).
 
 - [x] **Release v1.5.15** com o APK assinado.
   Release: https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.15
+  SHA-256: `287adc6e580166e2148869d29911b00c03fe1fcfd2b7aa1424d5b6564a8a0bbe`
+  APK publicado baixado, conferido e instalado por cima da 1.5.15 local.
 
 ## Pendente de validação
 
