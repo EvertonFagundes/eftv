@@ -1,5 +1,7 @@
 package com.eftv.android.data
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -24,7 +26,21 @@ object SeriesCoverFetcher {
 
     private data class Candidate(val score: Int, val image: String)
 
-    private val cache = LruCache<String, String>(128)
+    private const val PREFS_NAME = "series_cover_urls"
+    private const val MEMORY_CACHE_ENTRIES = 2_048
+
+    private val cache = LruCache<String, String>(MEMORY_CACHE_ENTRIES)
+    private var prefs: SharedPreferences? = null
+
+    /**
+     * As URLs ficam tambem em disco: o catalogo tem milhares de series e, sem
+     * isso, cada reinicio do app refazia a busca no IMDb para todas as capas
+     * visitadas.
+     */
+    fun init(context: Context) {
+        prefs = context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     suspend fun fetch(name: String): String? = withContext(Dispatchers.IO) {
         val key = name.trim().lowercase()
@@ -33,8 +49,15 @@ object SeriesCoverFetcher {
             // String vazia e o sentinela de "sem capa" (LruCache nao aceita null).
             return@withContext cached.ifBlank { null }
         }
+        prefs?.getString(key, null)?.let { stored ->
+            cache.put(key, stored)
+            return@withContext stored.ifBlank { null }
+        }
         val url = fetchImdb(name) ?: fetchTvmaze(name)
         cache.put(key, url.orEmpty())
+        if (!url.isNullOrBlank()) {
+            prefs?.edit()?.putString(key, url)?.apply()
+        }
         url
     }
 

@@ -182,7 +182,10 @@ class ChannelAdapter(
             binding.root.alpha = 0.6f
             binding.channelName.text = binding.root.context.getString(R.string.loading_channel)
             binding.channelGroup.text = ""
-            binding.channelLogo.dispose()
+            // Sem limpar o fundo/tag, o card em carregamento herdava a capa do
+            // item anterior (ou recebia uma capa buscada para ele).
+            cancelImage()
+            binding.channelLogo.background = null
             binding.channelLogo.setImageResource(R.drawable.ic_tv)
             binding.liveBadge.isVisible = false
             binding.qualityBadge.isVisible = false
@@ -198,6 +201,7 @@ class ChannelAdapter(
         /** Cancela o download pendente para a capa antiga nao cair em outro item. */
         fun cancelImage() {
             binding.channelLogo.dispose()
+            binding.channelLogo.setTag(R.id.series_cover_key, null)
         }
 
         fun stopAnimations() {
@@ -283,7 +287,10 @@ class ChannelAdapter(
             binding.root.alpha = 0.6f
             binding.vodTitle.text = binding.root.context.getString(R.string.loading_channel)
             binding.vodGroup.text = ""
-            binding.vodPoster.dispose()
+            // Sem limpar o fundo/tag, o card em carregamento herdava a capa do
+            // item anterior (ou recebia uma capa buscada para ele).
+            cancelImage()
+            binding.vodPoster.background = null
             binding.vodPoster.setImageResource(R.drawable.ic_movie)
             binding.kindBadge.isVisible = false
             binding.qualityBadge.isVisible = false
@@ -300,6 +307,7 @@ class ChannelAdapter(
         /** Cancela o download pendente para a capa antiga nao cair em outro item. */
         fun cancelImage() {
             binding.vodPoster.dispose()
+            binding.vodPoster.setTag(R.id.series_cover_key, null)
         }
 
         fun stopAnimations() {

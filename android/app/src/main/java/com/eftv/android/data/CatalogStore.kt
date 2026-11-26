@@ -575,7 +575,9 @@ class CatalogStore private constructor(context: Context) {
 
         // Insere em lotes commitados, para que o que ja foi importado fique
         // visivel e assistivel enquanto o restante continua em segundo plano.
-        val batchSize = 500
+        // 2.000 reduz para 1/4 o numero de commits/WAL sem atrasar a primeira
+        // pagina do catalogo de forma perceptivel.
+        val batchSize = 2_000
         var batchCount = 0
         var committedTotal = 0
         var insertChannel = db.compileStatement(INSERT_CHANNEL)
@@ -656,6 +658,7 @@ class CatalogStore private constructor(context: Context) {
         }
 
         // Grupos + meta final em transacao propria.
+        val finishedAt = System.currentTimeMillis()
         db.beginTransaction()
         try {
             val insertGroup = db.compileStatement(
@@ -676,7 +679,7 @@ class CatalogStore private constructor(context: Context) {
             val insertMeta = db.compileStatement("INSERT INTO meta(key, value) VALUES(?, ?)")
             try {
                 putMeta(insertMeta, "source_id", sourceId)
-                putMeta(insertMeta, "updated_at", updatedAt.toString())
+                putMeta(insertMeta, "updated_at", finishedAt.toString())
                 putMeta(insertMeta, "total", total.toString())
                 putMeta(insertMeta, "importing", "0")
             } finally {
@@ -696,7 +699,7 @@ class CatalogStore private constructor(context: Context) {
             db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
         }
 
-        return Metadata(sourceId = sourceId, updatedAt = updatedAt, total = total)
+        return Metadata(sourceId = sourceId, updatedAt = finishedAt, total = total)
     }
 
     private fun writePartialMeta(

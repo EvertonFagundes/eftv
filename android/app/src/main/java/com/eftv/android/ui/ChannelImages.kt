@@ -1,7 +1,9 @@
 package com.eftv.android.ui
 
+import android.content.Context
+import android.content.ContextWrapper
 import android.widget.ImageView
-import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import coil.load
 import com.eftv.android.PlaylistConfig
@@ -34,6 +36,9 @@ import timber.log.Timber
  */
 fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     val logo = channel.logo.trim()
+    // O RecyclerView reaproveita as views: sem trocar a chave, uma busca de
+    // capa ainda em andamento podia terminar e pintar o item errado.
+    setTag(R.id.series_cover_key, if (channel.isSeriesCard) channel.name else null)
     // A capa fica no fundo da ImageView. O Coil troca apenas o src; se o
     // download falhar, limpar o src ou carregar uma imagem transparente, a
     // capa continua aparecendo atras. Antes o card ficava vazio nesses casos.
@@ -46,38 +51,45 @@ fun ImageView.loadChannelArt(channel: Channel, fallbackRes: Int) {
     // (IMDb/TVMaze) e, por fim, mantemos a capa gerada.
     if (channel.isSeriesCard) {
         val view = this
-        view.setTag(R.id.series_cover_key, channel.name)
 
         // A capa e apenas enfeite: se a busca falhar, mantemos a capa gerada
-        // em vez de derrubar o app. Escopo da view evita trabalho orfao.
+        // em vez de derrubar o app. O escopo vem da Activity (o item ainda
+        // pode nao estar anexado no momento do bind; o
+        // findViewTreeLifecycleOwner() devolvia null e a busca nunca rodava).
         val loadFetchedCover: () -> Unit = {
-            view.findViewTreeLifecycleOwner()?.lifecycleScope?.launch {
-                val url = try {
-                    SeriesCoverFetcher.fetch(channel.name)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Timber.w(e, "Falha ao buscar capa da serie")
-                    null
+            val startFetch = {
+                val owner = view.context.findLifecycleOwner()
+                owner?.lifecycleScope?.launch {
+                    if (view.getTag(R.id.series_cover_key) != channel.name) return@launch
+                    val url = try {
+                        SeriesCoverFetcher.fetch(channel.name)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.w(e, "Falha ao buscar capa da serie")
+                        null
+                    }
+                    if (view.getTag(R.id.series_cover_key) != channel.name) return@launch
+                    if (!url.isNullOrBlank()) {
+                        val proxy = LocalServer.artworkProxyUrl(url)
+                        val proxyFirst = proxy != url &&
+                            LocalServer.isServerReady() &&
+                            NetworkInfo.label(view.context) == "movel"
+                        val first = if (proxyFirst) proxy else url
+                        val second = if (first == url) proxy else url
+                        // A capa externa nao pertence ao provedor: nao envia o
+                        // Referer dele para o CDN do IMDb/TVMaze.
+                        view.loadArtwork(
+                            first,
+                            second,
+                            channel.copy(userAgent = null, referer = null),
+                            fallbackRes,
+                        )
+                    }
                 }
-                if (view.getTag(R.id.series_cover_key) != channel.name) return@launch
-                if (!url.isNullOrBlank()) {
-                    val proxy = LocalServer.artworkProxyUrl(url)
-                    val proxyFirst = proxy != url &&
-                        LocalServer.isServerReady() &&
-                        NetworkInfo.label(view.context) == "movel"
-                    val first = if (proxyFirst) proxy else url
-                    val second = if (first == url) proxy else url
-                    // A capa externa nao pertence ao provedor: nao envia o
-                    // Referer dele para o CDN do IMDb/TVMaze.
-                    view.loadArtwork(
-                        first,
-                        second,
-                        channel.copy(userAgent = null, referer = null),
-                        fallbackRes,
-                    )
-                }
+                Unit
             }
+            if (view.isAttachedToWindow) startFetch() else view.post { startFetch() }
             Unit
         }
 
@@ -156,4 +168,14 @@ private fun ImageView.loadArtwork(
             },
         )
     }
+}
+
+/**
+ * Activity dona do contexto, mesmo quando ele vem embrulhado em um
+ * ContextThemeWrapper (caso comum dos itens do RecyclerView).
+ */
+private tailrec fun Context.findLifecycleOwner(): LifecycleOwner? = when (this) {
+    is LifecycleOwner -> this
+    is ContextWrapper -> baseContext.findLifecycleOwner()
+    else -> null
 }

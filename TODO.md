@@ -1,10 +1,26 @@
 # Pendências — correções de 25/11/2026
 
-Estado: 1.5.14 (`versionCode 39`) compilada, testada em unidade e instalada no
-aparelho. A sessão do app expirou (HTTP 401) e a tela de login apareceu; falta
-entrar na conta para validar as capas de série no aparelho.
+Estado: 1.5.15 (`versionCode 40`) compilada, testada e instalada no aparelho.
+Capas reais validadas na aba Séries (007, 011ZE, 100 Code, 100 Coisas..., 100
+Days Wild), na busca por "Wandinha" (pôster de *Wednesday*) e na abertura da
+série (temporadas, episódios e botões de reprodução).
 
 ## Concluído nesta rodada
+
+- [x] **Capas de série não apareciam no aparelho.**
+  O `findViewTreeLifecycleOwner()` devolvia `null` no momento do bind e a busca
+  nunca iniciava. Agora o dono do ciclo de vida é localizado subindo pelo
+  `ContextWrapper` até a Activity; a capa externa (IMDb/TVMaze) é carregada e o
+  provedor continua tendo prioridade quando entrega logo própria.
+
+- [x] **Cache persistente de capas.**
+  As URLs encontradas ficam em `SharedPreferences` (`series_cover_urls`), além
+  do cache em memória de 2.048 entradas. Reiniciar o app não refaz a busca no
+  IMDb para as capas já visitadas.
+
+- [x] **Skeleton com sobra de capa.**
+  Cards em "Carregando..." limpam background e a chave da busca de capa; uma
+  busca antiga não pinta mais o item reciclado.
 
 - [x] **Aba Séries não carrega durante a importação.**
   `refreshCatalog` não reaplica mais o catálogo a cada 5.000 registros. Durante
@@ -12,68 +28,48 @@ entrar na conta para validar as capas de série no aparelho.
   uma única vez ao terminar.
 
 - [x] **Consulta de séries pesada (CTE + window functions).**
-  Criada a tabela materializada `series_cards` (uma linha por série, com
-  episódios, temporadas e a melhor capa). A aba Séries agora faz `COUNT(*)` e
-  `LIMIT/OFFSET` nela, sem varrer os ~240 mil episódios a cada página.
-  - Banco migrado para a versão 6; o índice é montado no fim da importação ou
-    sob demanda na primeira abertura da aba.
-  - Simulação com 240.000 linhas e 16.210 séries: índice montado em ~1,8 s.
+  Tabela materializada `series_cards` (uma linha por série, com episódios,
+  temporadas e a melhor capa). A aba Séries faz `COUNT(*)` e `LIMIT/OFFSET`
+  nela. Com 9.730 séries a aba abriu direto, sem "Carregando..." prolongado.
+  - Banco na versão 6; índice montado no fim da importação ou sob demanda.
+  - Simulação com 240.000 linhas e 16.210 séries: índice em ~1,8 s no desktop.
 
-- [x] **Contador enganoso durante a importação.**
-  O subtítulo mostra "Importando N itens" enquanto importa e a contagem real
-  da aba ao terminar.
+- [x] **Memória alta.**
+  PSS medido no aparelho caiu para ~189 MB (pico anterior: ~644 MB) depois do
+  índice materializado e da carga em lotes.
 
-- [x] **Capas de série.**
-  Ordem nova: `channel.logo` do provedor (quando existe) → IMDb suggestions →
-  TVMaze → capa gerada com as iniciais. O IMDb cobre os títulos reais do
-  provedor, inclusive com prefixo ("007 Estrada para o Milhao [L]" →
-  "007: Road to a Million"); o TVMaze ficou como reserva.
-  - A busca externa usa proxy local nos dados móveis e não envia o Referer do
-    provedor para o CDN.
-  - Falha de capa nunca derruba o app.
+- [x] **Desempenho da importação.**
+  Lote de commit subiu de 500 para 2.000 registros (1/4 dos commits e do WAL).
+
+- [x] **Horário do catálogo.**
+  `updated_at` passa a ser gravado na conclusão da importação, não no início.
+
+- [x] **Capas de série (ordem e resiliência).**
+  `channel.logo` do provedor → IMDb suggestions → TVMaze → capa gerada.
+  A busca externa usa proxy local nos dados móveis e não envia o Referer do
+  provedor para o CDN. Falha de capa nunca derruba o app.
 
 - [x] **Crash do `LruCache` ao não encontrar capa.**
   Sentinela de string vazia para "sem capa"; cache não recebe `null`.
 
+- [x] **Release v1.5.15** com o APK assinado.
+  Release: https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.15
+
 ## Pendente de validação
 
-- [ ] **Entrar na conta no aparelho e conferir as capas de série.**
-  A release 1.5.14 está instalada; a sessão anterior expirou. Depois do login:
-  abrir a aba **Séries**, confirmar capas reais (não só as geradas), rolar
-  várias páginas e abrir uma série.
+- [ ] **Capas em dados móveis.** Desligar o Wi-Fi, abrir a aba Séries e
+  confirmar que o proxy local entrega as capas externas.
 
-- [ ] **Tempo de montagem do índice no aparelho.**
-  Medir a primeira abertura da aba após a migração v5 → v6. Se passar de
-  ~20 s, avaliar montar o índice em segundo plano já na abertura do app.
+- [ ] **Próxima importação completa.** Conferir o ganho real dos lotes de 2.000
+  e se o horário final do catálogo aparece correto.
 
-## Prioridade média
-
-- [ ] **Memória alta.** PSS chegou a ~644 MB e native heap ~489 MB durante a
-  importação/consulta antiga. Reavaliar depois do índice materializado; se
-  continuar, limitar o cache de memória do Coil (`maxSizePercent`) e revisar
-  cursores.
-
-- [ ] **Skeletons com sobra de capa.** Os cards de "Carregando..." herdam o
-  `background` gerado de itens anteriores. Limpar o background no estado de
-  carregamento.
-
-- [ ] **Desempenho da importação.** 240 mil registros em ~10 min (~400/s).
-  Avaliar lote maior (500 → 2.000) e reduzir gravações de metadado parcial.
-
-- [ ] **Horário do catálogo.** `updated_at` é gravado no início da importação;
-  no fim o app mostra o horário de início, não o de conclusão.
-
-- [ ] **Cache persistente de capas.** O cache do IMDb/TVMaze é só em memória;
-  ao reiniciar o app as capas são buscadas de novo. Persistir as URLs
-  encontradas evitaria tráfego repetido.
+- [ ] **Primeira montagem do índice em instalação limpa (v5 → v6).**
+  Medir em um aparelho sem o índice pronto; se passar de ~20 s, montar em
+  segundo plano na abertura do app.
 
 ## Operação
 
-- [ ] **Render:** atualizar no painel `APP_LATEST_VERSION_CODE=39`,
-  `APP_LATEST_VERSION_NAME=1.5.14` e `APP_APK_URL` para o APK da 1.5.14.
-  O painel do Render tem prioridade sobre o `render.yaml`; `/app/version`
-  ainda responde 1.5.7/32.
-
-- [x] **Publicar a release v1.5.14** com o APK assinado.
-  Release: https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.14
-  SHA-256: `dac71068e60b73c70e7b71078fcc95aaa438b62485bd87c0deccccbe6d377220`
+- [ ] **Render:** o painel ainda responde 1.5.7/32. Atualizar
+  `APP_LATEST_VERSION_CODE=40`, `APP_LATEST_VERSION_NAME=1.5.15` e
+  `APP_APK_URL` para o APK da 1.5.15. O painel tem prioridade sobre o
+  `render.yaml`.

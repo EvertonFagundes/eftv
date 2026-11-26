@@ -11,6 +11,7 @@ import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.eftv.android.data.DeviceIdentity
 import com.eftv.android.data.LogUtils
+import com.eftv.android.data.SeriesCoverFetcher
 import com.eftv.android.data.api.EftvApi
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -65,6 +66,9 @@ class EftvApplication : Application(), ImageLoaderFactory {
         }
 
         installCrashReporter()
+
+        // Cache persistente das capas de serie (IMDb/TVMaze).
+        SeriesCoverFetcher.init(this)
 
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(this))
