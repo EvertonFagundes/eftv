@@ -121,6 +121,21 @@ url = (_provider_url(subscription) or settings.IPTV_PLAYLIST_URL).strip()
   campo de linha própria, ou corrigir a URL dela.
 - Rotas relacionadas em `backend/app/routes/admin.py` (linhas ~604-666).
 
+### Correção aplicada em 27/11 (backend 1.2.2)
+
+`GET /player/playlist-text` não usa mais uma única URL sem validação. Ele tenta,
+nesta ordem:
+
+1. linha própria da assinatura;
+2. `IPTV_PLAYLIST_URL` (se for diferente).
+
+Para cada uma, só aceita resposta cujo conteúdo comece com `#EXTM3U` ou
+`#EXTINF`. Uma página do nginx, login do provedor ou HTTP 200 vazio é descartado
+e a próxima fonte é tentada. Os logs mostram apenas o rótulo da fonte e o
+motivo/tamanho, nunca a URL com credenciais. Com isso, uma linha própria errada
+não bloqueia mais o 4G quando a playlist compartilhada está correta; se as duas
+estiverem erradas, o retorno é 502 com o motivo de cada uma.
+
 ### Outras hipóteses, em ordem
 
 1. Deploy do Render ainda não concluído quando o teste rodou (retestar depois).

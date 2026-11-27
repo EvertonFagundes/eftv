@@ -1,6 +1,7 @@
 # routes/player.py - Acesso do app nativo ao catalogo e a playlist
 import hashlib
 import ipaddress
+import logging
 import socket
 import uuid
 from datetime import UTC, datetime
@@ -35,6 +36,12 @@ from app.services.streams import (
 )
 
 router = APIRouter(prefix="/player", tags=["Player"])
+
+logger = logging.getLogger(__name__)
+
+# Limite do texto da playlist e tamanho usado para reconhecer o cabecalho M3U.
+PLAYLIST_MAX_BYTES = 32 * 1024 * 1024
+PLAYLIST_HEAD_BYTES = 8 * 1024
 
 
 class SubscriptionInfo(BaseModel):
@@ -85,6 +92,73 @@ def _provider_url(subscription: Subscription | None) -> str | None:
     if not subscription.provider_playlist_url or subscription.provider_revoked_at is not None:
         return None
     return subscription.provider_playlist_url.strip() or None
+
+
+def _playlist_sources(subscription: Subscription | None) -> list[tuple[str, str]]:
+    """Fontes para o fallback do backend, na ordem de preferencia.
+
+    A linha propria vem primeiro, mas uma resposta HTML/erro dela nao pode
+    impedir o uso da playlist compartilhada: era o que deixava o 4G sem
+    catalogo quando o cadastro do assinante apontava para uma pagina do nginx.
+    """
+    fontes: list[tuple[str, str]] = []
+    propria = _provider_url(subscription)
+    if propria:
+        fontes.append(("linha do assinante", propria))
+    compartilhada = (settings.IPTV_PLAYLIST_URL or "").strip()
+    if compartilhada and all(compartilhada != url for _, url in fontes):
+        fontes.append(("playlist compartilhada", compartilhada))
+    return fontes
+
+
+def _parece_playlist_m3u(conteudo: bytes) -> bool:
+    """Reconhece M3U pelo cabecalho, sem confiar no Content-Type do provedor.
+
+    O caso que motivou isso: o Render recebia 200 com a pagina padrao do nginx
+    e o app tratava como playlist, resultando em "nenhum canal".
+    """
+    inicio = conteudo[:PLAYLIST_HEAD_BYTES]
+    if inicio.startswith(b"\xef\xbb\xbf"):
+        inicio = inicio[3:]
+    inicio = inicio.lstrip()
+    if not inicio:
+        return False
+    primeira = inicio.splitlines()[0].strip().upper()
+    return primeira.startswith(b"#EXTM3U") or primeira.startswith(b"#EXTINF")
+
+
+def _descricao_erro(exc: Exception) -> str:
+    """Motivo seguro para log/resposta: nunca inclui a URL com credenciais."""
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    if isinstance(exc, httpx.HTTPError):
+        return "falha de conexao"
+    return str(exc) or exc.__class__.__name__
+
+
+async def _baixar_playlist(url: str, headers: dict[str, str]) -> bytes:
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("URL invalida")
+    if not _url_publica(url):
+        raise ValueError("destino nao permitido")
+
+    async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
+        response = await client.get(url, headers=headers)
+        for _ in range(5):
+            if response.status_code not in range(300, 400):
+                break
+            location = response.headers.get("location")
+            if not location:
+                raise ValueError("redirecionamento sem Location")
+            proxima = urljoin(str(response.url), location)
+            if not proxima.startswith(("http://", "https://")) or not _url_publica(proxima):
+                raise ValueError("redirecionamento inseguro")
+            response = await client.get(proxima, headers=headers)
+        if not 200 <= response.status_code < 300:
+            raise ValueError(f"provedor respondeu HTTP {response.status_code}")
+        if len(response.content) > PLAYLIST_MAX_BYTES:
+            raise ValueError("playlist muito grande")
+        return response.content
 
 
 @router.get("/playlist", response_model=PlaylistAccessResponse)
@@ -205,11 +279,9 @@ async def get_playlist_text(
     sempre a configurada no painel: o cliente nao pode escolher o destino.
     """
     del device_id  # O dependency ja vincula o aparelho.
-    url = (_provider_url(subscription) or settings.IPTV_PLAYLIST_URL).strip()
-    if not url or not url.startswith(("http://", "https://")):
+    fontes = _playlist_sources(subscription)
+    if not fontes:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Playlist nao configurada.")
-    if not _url_publica(url):
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Destino da playlist nao permitido.")
 
     headers = {
         "User-Agent": settings.IPTV_PLAYLIST_USER_AGENT,
@@ -219,33 +291,37 @@ async def get_playlist_text(
     if settings.IPTV_PLAYLIST_REFERER:
         headers["Referer"] = settings.IPTV_PLAYLIST_REFERER
 
-    try:
-        async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
-            response = await client.get(url, headers=headers)
-            for _ in range(5):
-                if response.status_code not in range(300, 400):
-                    break
-                location = response.headers.get("location")
-                if not location:
-                    raise ValueError("Redirecionamento sem Location")
-                proxima = urljoin(str(response.url), location)
-                if not proxima.startswith(("http://", "https://")) or not _url_publica(proxima):
-                    raise ValueError("Redirecionamento inseguro")
-                response = await client.get(proxima, headers=headers)
-            if not 200 <= response.status_code < 300:
-                raise ValueError(f"Provedor respondeu HTTP {response.status_code}")
-            if len(response.content) > 32 * 1024 * 1024:
-                raise ValueError("Playlist muito grande")
-            return Response(
-                content=response.content,
-                media_type="audio/x-mpegurl; charset=utf-8",
-                headers={"Cache-Control": "no-store"},
+    falhas: list[str] = []
+    for rotulo, url in fontes:
+        try:
+            conteudo = await _baixar_playlist(url, headers)
+        except (httpx.HTTPError, ValueError) as exc:
+            motivo = _descricao_erro(exc)
+            logger.warning("Playlist %s indisponivel: %s", rotulo, motivo)
+            falhas.append(f"{rotulo}: {motivo}")
+            continue
+        if not _parece_playlist_m3u(conteudo):
+            # 200 com HTML (nginx, login do provedor) nao e playlist. Sem esta
+            # checagem o app recebia "nenhum canal" e apagava a experiencia.
+            logger.warning(
+                "Playlist %s nao parece M3U (%s bytes)",
+                rotulo,
+                len(conteudo),
             )
-    except (httpx.HTTPError, ValueError) as exc:
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
-            f"Nao foi possivel buscar a playlist: {exc}",
-        ) from exc
+            falhas.append(f"{rotulo}: resposta nao e uma playlist M3U ({len(conteudo)} bytes)")
+            continue
+
+        logger.info("Playlist %s OK (%s bytes)", rotulo, len(conteudo))
+        return Response(
+            content=conteudo,
+            media_type="audio/x-mpegurl; charset=utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    raise HTTPException(
+        status.HTTP_502_BAD_GATEWAY,
+        "Nao foi possivel obter uma playlist valida. " + "; ".join(falhas),
+    )
 
 
 @router.get("/device", response_model=DeviceAccessResponse)

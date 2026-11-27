@@ -53,6 +53,13 @@ passando, compilação Android OK.
   cadastrada, que tem precedência sobre a env var em `player.py`. Detalhes em
   `docs/ESTADO-ATUAL.md`.
 
+- [x] **Fallback do backend robusto (1.2.2).**
+  `/player/playlist-text` agora tenta a linha própria e, se ela devolver
+  HTML/erro, tenta a `IPTV_PLAYLIST_URL`. Só aceita resposta que comece com
+  `#EXTM3U`/`#EXTINF`; a mensagem de erro não expõe URL nem credenciais.
+  Assim, uma linha própria quebrada não bloqueia mais o 4G quando a playlist
+  compartilhada está correta.
+
 ## Correção de 27/11/2026 — capas de série pela API
 
 - [x] **Imagens aleatórias na aba Séries.** O logo da playlist era priorizado

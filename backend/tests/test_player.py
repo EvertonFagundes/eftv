@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.database import get_db
+from app.routes import player
 from app.routes.player import router
 from app.security.dependencies import get_current_active_subscription
 from app.services.devices import DeviceLimitError
@@ -203,3 +204,88 @@ def test_playlist_ignores_a_revoked_provider_line(client, monkeypatch):
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["playlist_url"] == "https://provider.example/shared.m3u"
+
+
+def test_playlist_detection_accepts_m3u_with_bom_or_extinf():
+    assert player._parece_playlist_m3u(b"\xef\xbb\xbf\n#EXTM3U\n#EXTINF:-1,Teste\n")
+    assert player._parece_playlist_m3u(b"#EXTINF:-1,Teste\nhttps://example/stream\n")
+    assert not player._parece_playlist_m3u(b"<!DOCTYPE html><html>nginx</html>")
+
+
+def test_playlist_text_falls_back_to_shared_when_own_line_is_html(monkeypatch):
+    """Linha propria quebrada nao pode impedir o fallback do backend."""
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/shared.m3u")
+    subscription = FakeSubscription()
+    subscription.provider_playlist_url = "https://provider.example/own.m3u"
+    client = build_client()
+    client.app.dependency_overrides[get_current_active_subscription] = lambda: subscription
+
+    chamadas: list[str] = []
+
+    async def fake_download(url, headers):
+        chamadas.append(url)
+        if "own" in url:
+            return b"<!DOCTYPE html><html><title>Welcome to nginx!</title></html>"
+        return b"#EXTM3U\n#EXTINF:-1,Teste\nhttps://example/stream\n"
+
+    monkeypatch.setattr(player, "_baixar_playlist", fake_download)
+
+    response = client.get("/player/playlist-text", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.content.startswith(b"#EXTM3U")
+    assert chamadas == [
+        "https://provider.example/own.m3u",
+        "https://provider.example/shared.m3u",
+    ]
+
+
+def test_playlist_text_reports_both_invalid_without_leaking_urls(monkeypatch):
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/shared.m3u")
+    subscription = FakeSubscription()
+    subscription.provider_playlist_url = "https://provider.example/own.m3u"
+    client = build_client()
+    client.app.dependency_overrides[get_current_active_subscription] = lambda: subscription
+
+    async def fake_download(url, headers):
+        return b"<!DOCTYPE html><html><title>Welcome to nginx!</title></html>"
+
+    monkeypatch.setattr(player, "_baixar_playlist", fake_download)
+
+    response = client.get("/player/playlist-text", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_502_BAD_GATEWAY
+    detail = response.json()["detail"]
+    assert "linha do assinante" in detail
+    assert "playlist compartilhada" in detail
+    assert "provider.example" not in detail
+    assert "nginx" not in detail
+
+
+def test_playlist_text_prefers_valid_own_line(monkeypatch):
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/shared.m3u")
+    subscription = FakeSubscription()
+    subscription.provider_playlist_url = "https://provider.example/own.m3u"
+    client = build_client()
+    client.app.dependency_overrides[get_current_active_subscription] = lambda: subscription
+
+    chamadas: list[str] = []
+
+    async def fake_download(url, headers):
+        chamadas.append(url)
+        return b"#EXTM3U\n#EXTINF:-1,Teste\nhttps://example/stream\n"
+
+    monkeypatch.setattr(player, "_baixar_playlist", fake_download)
+
+    response = client.get("/player/playlist-text", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert chamadas == ["https://provider.example/own.m3u"]
+
+
+def test_playlist_text_without_configuration_returns_503(client, monkeypatch):
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "")
+
+    response = client.get("/player/playlist-text", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
