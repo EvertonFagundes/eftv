@@ -838,10 +838,11 @@ class MainActivity : AppCompatActivity() {
         repository.backendFetch = {
             val token = session.accessToken().orEmpty()
             val texto = api.playlistText(token)
+            // Diagnostico sem expor conteudo (a playlist pode ter credenciais).
             Timber.w(
-                "Playlist pelo backend: %d bytes, inicio=%s",
+                "Playlist pelo backend: %d bytes, formato=%s",
                 texto.length,
-                texto.take(400),
+                if (texto.startsWith("#EXTM3U")) "m3u" else "desconhecido",
             )
             texto.byteInputStream(Charsets.UTF_8)
         }
