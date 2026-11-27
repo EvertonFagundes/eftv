@@ -602,23 +602,9 @@ class CatalogStore private constructor(context: Context) {
         val groupCounts = HashMap<String, Int>()
         var total = 0
 
-        // Limpa em transacao propria para a UI nao ver estado inconsistente
-        // enquanto a importacao roda.
-        db.beginTransaction()
-        try {
-            db.execSQL("DELETE FROM channels")
-            db.execSQL("DELETE FROM channel_groups")
-            db.execSQL("DELETE FROM series_cards")
-            db.execSQL("DELETE FROM meta")
-            // Enquanto a importacao roda, o catalogo nao conta como cache
-            // valido. O indice da aba Series e mantido lote a lote abaixo, por
-            // isso nao precisa ser remontado no meio da importacao.
-            db.execSQL("INSERT INTO meta(key, value) VALUES('importing', '1')")
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-            seriesIndexReady = true
-        }
+        // Nao limpa antes de saber que a playlist tem canais: se a origem
+        // falhar e devolver texto vazio, o catalogo salvo continua intacto.
+        var cleared = false
 
         // Insere em lotes commitados, para que o que ja foi importado fique
         // visivel e assistivel enquanto o restante continua em segundo plano.
@@ -631,9 +617,24 @@ class CatalogStore private constructor(context: Context) {
         var insertSeriesCard = db.compileStatement(INSERT_SERIES_CARD)
         var updateSeriesCard = db.compileStatement(UPDATE_SERIES_CARD)
         var failure: Throwable? = null
-        db.beginTransaction()
         try {
             feed { channel ->
+                if (!cleared) {
+                    db.beginTransaction()
+                    try {
+                        db.execSQL("DELETE FROM channels")
+                        db.execSQL("DELETE FROM channel_groups")
+                        db.execSQL("DELETE FROM series_cards")
+                        db.execSQL("DELETE FROM meta")
+                        db.execSQL("INSERT INTO meta(key, value) VALUES('importing', '1')")
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
+                        seriesIndexReady = true
+                    }
+                    cleared = true
+                    db.beginTransaction()
+                }
                 insertChannel.clearBindings()
                 insertChannel.bindString(1, channel.tvgId)
                 insertChannel.bindString(2, channel.name)

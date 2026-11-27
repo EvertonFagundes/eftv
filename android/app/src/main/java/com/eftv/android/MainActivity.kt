@@ -837,7 +837,13 @@ class MainActivity : AppCompatActivity() {
         repository = PlaylistRepository(this, source)
         repository.backendFetch = {
             val token = session.accessToken().orEmpty()
-            api.playlistText(token).byteInputStream(Charsets.UTF_8)
+            val texto = api.playlistText(token)
+            Timber.w(
+                "Playlist pelo backend: %d bytes, inicio=%s",
+                texto.length,
+                texto.lineSequence().firstOrNull()?.take(24).orEmpty(),
+            )
+            texto.byteInputStream(Charsets.UTF_8)
         }
     }
 
