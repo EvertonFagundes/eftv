@@ -117,6 +117,7 @@ class PlaylistRepository(
                         )
                         return openStream(
                             LocalServer.remotePlaylistUrl(source.url, forceDoh = attempt == 2),
+                            readTimeoutMs = 45_000,
                         )
                     } catch (e: CancellationException) {
                         throw e
@@ -154,15 +155,19 @@ class PlaylistRepository(
         return openStream(source.url)
     }
 
-    private fun openStream(url: String, maxRedirects: Int = 5): InputStream {
+    private fun openStream(
+        url: String,
+        maxRedirects: Int = 5,
+        readTimeoutMs: Int = 30_000,
+    ): InputStream {
         var current = url
         var redirects = 0
         var cookies: String? = null
 
         while (true) {
             val connection = URL(current).openConnection() as HttpURLConnection
-            connection.connectTimeout = 20_000
-            connection.readTimeout = 120_000
+            connection.connectTimeout = 15_000
+            connection.readTimeout = readTimeoutMs
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("User-Agent", source.userAgent.ifBlank { PlaylistConfig.USER_AGENT })
             connection.setRequestProperty("Accept", "*/*")

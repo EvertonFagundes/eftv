@@ -221,7 +221,7 @@ class EftvApi(
         try {
             connection.requestMethod = "GET"
             connection.connectTimeout = 30_000
-            connection.readTimeout = 180_000
+            connection.readTimeout = 120_000
             connection.setRequestProperty("Accept", "audio/x-mpegurl, */*")
             connection.setRequestProperty("Authorization", "Bearer $accessToken")
             deviceId?.let { connection.setRequestProperty("X-Device-Id", it) }
