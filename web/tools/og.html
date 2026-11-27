@@ -7,57 +7,63 @@
   html, body { width: 1200px; height: 630px; overflow: hidden; }
   body {
     font-family: "Segoe UI", Inter, Arial, sans-serif;
-    background: #050b16;
-    color: #e8eef7;
+    background: #04070f;
+    color: #f4f7fc;
     position: relative;
   }
   .bg {
     position: absolute; inset: 0;
     background:
-      radial-gradient(900px 600px at 88% -10%, rgba(47,155,255,0.35), transparent 60%),
-      radial-gradient(700px 500px at 100% 110%, rgba(11,91,211,0.35), transparent 60%),
-      linear-gradient(135deg, #071426 0%, #050b16 55%, #0a2444 100%);
+      radial-gradient(900px 600px at 88% -10%, rgba(56,189,248,0.30), transparent 60%),
+      radial-gradient(700px 500px at 100% 110%, rgba(124,58,237,0.32), transparent 60%),
+      linear-gradient(135deg, #071426 0%, #04070f 55%, #0a1a33 100%);
   }
   .grid-lines {
     position: absolute; inset: 0;
     background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
                       linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
-    background-size: 60px 60px;
+    background-size: 56px 56px;
     mask-image: radial-gradient(circle at 30% 40%, #000 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(circle at 30% 40%, #000 30%, transparent 75%);
   }
-  .wrap { position: relative; padding: 72px 0 0 84px; width: 760px; }
-  .brand { display: flex; align-items: center; gap: 16px; margin-bottom: 46px; }
+  .wrap { position: relative; padding: 66px 0 0 84px; width: 780px; }
+  .brand { display: flex; align-items: center; gap: 16px; margin-bottom: 40px; }
   .mark {
-    width: 68px; height: 68px; border-radius: 18px;
-    background: linear-gradient(135deg, #2f9bff, #0b5bd3);
+    width: 66px; height: 66px; border-radius: 18px;
+    background: linear-gradient(135deg, #38bdf8, #2563eb 55%, #7c3aed);
     display: grid; place-items: center;
-    box-shadow: 0 18px 40px rgba(47,155,255,0.35);
+    box-shadow: 0 18px 40px rgba(56,189,248,0.32);
   }
   .mark svg { width: 30px; height: 30px; fill: #fff; margin-left: 4px; }
-  .brand-name { font-size: 46px; font-weight: 800; letter-spacing: -1px; }
-  .brand-name b { color: #2f9bff; }
+  .brand-name { font-size: 44px; font-weight: 800; letter-spacing: -1px; }
+  .brand-name b { color: #7dd3fc; }
   h1 {
-    font-size: 58px; line-height: 1.06; letter-spacing: -2px;
-    font-weight: 800; margin-bottom: 22px;
+    font-size: 56px; line-height: 1.04; letter-spacing: -2.2px;
+    font-weight: 800; margin-bottom: 20px;
   }
-  h1 span { color: #2f9bff; }
-  .sub { font-size: 24px; color: #a9bad2; line-height: 1.45; max-width: 620px; margin-bottom: 24px; }
+  h1 span {
+    background: linear-gradient(90deg, #7dd3fc 0%, #60a5fa 42%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub { font-size: 22px; color: #9aa9c0; line-height: 1.45; max-width: 620px; margin-bottom: 22px; }
   .price {
     display: inline-flex; align-items: baseline; gap: 10px;
-    background: rgba(47,155,255,0.12);
-    border: 1px solid rgba(47,155,255,0.35);
-    border-radius: 999px; padding: 12px 24px; margin-bottom: 18px;
+    background: rgba(56,189,248,0.10);
+    border: 1px solid rgba(125,211,252,0.30);
+    border-radius: 999px; padding: 11px 24px; margin-bottom: 16px;
   }
   .price strong { font-size: 30px; font-weight: 800; }
-  .price em { font-style: normal; font-size: 17px; color: #a9bad2; }
+  .price em { font-style: normal; font-size: 17px; color: #9aa9c0; }
   .chips { display: flex; gap: 12px; }
   .chip {
-    font-size: 16px; font-weight: 700; color: #cfe0f7;
-    background: rgba(255,255,255,0.06);
+    font-size: 15px; font-weight: 700; color: #c6d2e4;
+    background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.12);
     padding: 9px 16px; border-radius: 999px;
   }
-  .chip.live { color: #ff6b85; border-color: rgba(255,77,109,0.35); background: rgba(255,77,109,0.10); }
+  .chip.live { color: #ff9aac; border-color: rgba(255,92,122,0.35); background: rgba(255,92,122,0.10); }
   .phone {
     position: absolute; right: 78px; top: 58px;
     width: 292px; height: 552px; border-radius: 40px;
@@ -71,8 +77,8 @@
     padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
   }
   .phone-head b { font-size: 15px; }
-  .phone-head b i { color: #2f9bff; font-style: normal; }
-  .phone-live { font-size: 9px; font-weight: 800; color: #ff6b85; letter-spacing: 0.5px; }
+  .phone-head b i { color: #7dd3fc; font-style: normal; }
+  .phone-live { font-size: 9px; font-weight: 800; color: #ff9aac; letter-spacing: 0.5px; }
   .phone-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   .row {
     display: flex; align-items: center; gap: 10px;
@@ -88,7 +94,7 @@
   .row-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .row-info b { font-size: 12px; white-space: nowrap; }
   .row-info small { font-size: 9px; color: #8fa3be; }
-  .row .dot { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: #ff4d6d; flex-shrink: 0; }
+  .row .dot { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: #ff5c7a; flex-shrink: 0; }
   .phone-nav {
     position: absolute; bottom: 0; left: 0; right: 0; height: 54px;
     display: flex; align-items: center; justify-content: space-around;
@@ -96,12 +102,12 @@
     font-size: 9px; color: #8fa3be;
   }
   .phone-nav span { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-  .phone-nav span.on { color: #2f9bff; }
+  .phone-nav span.on { color: #7dd3fc; }
   .phone-nav i { font-style: normal; font-size: 14px; }
   .footer {
     position: absolute; left: 84px; bottom: 20px;
     display: flex; align-items: center; gap: 14px;
-    font-size: 14px; color: #7e93b0; font-weight: 600;
+    font-size: 14px; color: #6f7f99; font-weight: 600;
   }
   .footer .sep { width: 4px; height: 4px; border-radius: 50%; background: #3d5474; }
 </style>
@@ -116,15 +122,15 @@
       <div class="brand-name">EF<b>TV</b></div>
     </div>
 
-    <h1>Seus canais favoritos,<br>em <span>um só lugar</span>.</h1>
-    <p class="sub">Canais ao vivo, filmes e séries no celular, TV ou navegador. Instale como app e assista em segundos.</p>
+    <h1>Todo o entretenimento.<br><span>Em uma única tela.</span></h1>
+    <p class="sub">Canais ao vivo, filmes e séries em um app web que instala como nativo. Sem fidelidade e sem complicação.</p>
 
     <div class="price"><strong>R$ 19,90</strong><em>/mês · 7 dias grátis</em></div>
 
     <div class="chips">
-      <span class="chip live">● AO VIVO</span>
-      <span class="chip">Filmes e séries</span>
-      <span class="chip">Sem fidelidade</span>
+      <span class="chip live">● AO VIVO + VOD</span>
+      <span class="chip">2 dispositivos</span>
+      <span class="chip">1 tela por vez</span>
     </div>
   </div>
 

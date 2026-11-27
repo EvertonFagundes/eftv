@@ -25,7 +25,7 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 
 ## O que já está pronto
 
-- [x] Landing page PT-BR (hero, recursos, prints reais, catálogo, planos R$ 19,90, PWA, CTA).
+- [x] Landing page PT-BR premium (hero cinematográfico, bento de experiência, pilares Ao Vivo/Filmes/Séries, catálogo filtrável, planos R$ 19,90, PWA e CTA), com animações de entrada, menu mobile e OG image atualizada.
 - [x] App shell com sidebar, views: Ao Vivo, Filmes, Séries, Categorias, Favoritos, Continuar, Recentes, Conta, Ajustes, Ajuda, Busca.
 - [x] Login/cadastro/esqueci senha/verificação de e-mail (endpoints reais).
 - [x] Catálogo real pela playlist licenciada:
@@ -57,7 +57,7 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 - [x] `DEMO_FALLBACK: false` em produção; `DEMO_MODE: true` mantém `?demo=1` para a landing/testes.
 - [ ] Substituir `web/app/assets/media/demo.mp4` e os canais de exemplo por conteúdo autorizado.
 - [ ] Testar instalação em Android Chrome, iPhone Safari, Edge/Chrome desktop (o smoke test valida só Chrome headless).
-- [ ] Revisar textos jurídicos/planos (2 dispositivos, 1 tela) na landing.
+- [x] Revisar textos jurídicos/planos na landing (conferido com `/plans` e `/auth`: R$ 19,90/mês, 7 dias grátis, 2 dispositivos e 1 tela por vez).
 - [ ] Opcional: TWA/Bubblewrap para Play Store.
 - [ ] Opcional: capas de série via TVMaze/IMDb (hoje usa o `tvg-logo` do provedor; algumas listas têm logo trocado).
 - [ ] Opcional: cache offline de páginas já visitadas do catálogo (hoje o catálogo inteiro fica no IndexedDB).

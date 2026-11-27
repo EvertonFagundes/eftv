@@ -3,285 +3,456 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#071426">
-  <meta name="description" content="EFTV — Canais ao vivo, filmes e séries em um só lugar. Streaming por assinatura, sem fidelidade. Assista no celular, TV, tablet ou navegador.">
-  <meta property="og:title" content="EFTV — Canais ao vivo, filmes e séries em um só lugar">
-  <meta property="og:description" content="Streaming por assinatura: canais ao vivo, filmes, séries e esportes. Sem fidelidade, cancele quando quiser.">
+  <meta name="theme-color" content="#04070f">
+  <meta name="description" content="EFTV — canais ao vivo, filmes e séries em um app web que instala como nativo. Teste grátis de 7 dias, 2 dispositivos e 1 tela por vez.">
+  <meta property="og:title" content="EFTV — Todo o entretenimento em uma única tela">
+  <meta property="og:description" content="Canais ao vivo, filmes e séries por assinatura. Teste grátis de 7 dias, sem fidelidade, no navegador ou instalado como app.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://eftv.com.br">
-  <meta property="og:image" content="assets/img/og.png">
+  <meta property="og:image" content="assets/img/og.png?v=2">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="assets/img/og.png">
-  <title>EFTV — Canais ao vivo, filmes e séries em um só lugar</title>
+  <meta name="twitter:image" content="assets/img/og.png?v=2">
+  <title>EFTV — Todo o entretenimento em uma única tela</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css?v=4">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../app/assets/img/apple-touch-icon.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="EFTV">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script>document.documentElement.classList.add("js");</script>
 </head>
 <body>
 
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+
   <!-- Header -->
-  <header class="site-header">
+  <header class="site-header" id="topo">
     <div class="wrap header-inner">
-      <a class="brand" href="#" aria-label="EFTV — início">
-        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z"/></svg>
-        <span class="brand-name">EF<b>TV</b></span>
+      <a class="brand" href="#topo" aria-label="EFTV — início">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+        </span>
+        <span class="brand-name">EF<span>TV</span></span>
       </a>
 
-      <nav class="main-nav" aria-label="Navegação principal">
-        <a href="#recursos">Recursos</a>
-        <a href="#prints">Prints</a>
-        <a href="#canais">Canais</a>
+      <nav class="main-nav" id="main-nav" aria-label="Navegação principal">
+        <a href="#experiencia">Experiência</a>
+        <a href="#conteudo">Conteúdo</a>
+        <a href="#canais">Catálogo</a>
         <a href="#planos">Planos</a>
       </nav>
 
       <div class="header-actions">
-        <a href="../app/index.html" class="btn btn-ghost">Abrir app web</a>
-        <a href="#planos" class="btn btn-primary">Assinar agora</a>
+        <a href="../app/index.html" class="btn btn-ghost header-app">Abrir app</a>
+        <a href="#planos" class="btn btn-primary header-cta">Assinar agora</a>
+        <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="main-nav">
+          <span></span><span></span><span></span>
+        </button>
       </div>
     </div>
   </header>
 
-  <!-- Hero -->
-  <section class="hero" id="hero">
-    <div class="wrap">
-      <div class="hero-grid">
+  <main id="main">
+
+    <!-- Hero -->
+    <section class="hero" id="hero">
+      <div class="hero-glow hero-glow-a" aria-hidden="true"></div>
+      <div class="hero-glow hero-glow-b" aria-hidden="true"></div>
+
+      <div class="wrap hero-grid">
         <div class="hero-content">
-          <span class="badge">PWA — instala com 1 clique</span>
-          <h1>Seus canais favoritos,<br>em um só lugar.</h1>
+          <span class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> Streaming premium · ao vivo + on demand</span>
+          <h1>Todo o entretenimento.<br><span class="text-gradient">Em uma única tela.</span></h1>
           <p class="hero-subtitle">
-            Canais ao vivo, filmes, séries e esportes por assinatura.
-            Sem APK de fonte desconhecida: abre no navegador ou instala como app.
+            Canais ao vivo, filmes e séries em um app web que instala como nativo.
+            Sem fidelidade, sem APK de fonte desconhecida e sem complicação.
           </p>
           <div class="hero-actions">
-            <a href="#planos" class="btn btn-primary btn-lg">Assinar agora</a>
-            <a href="../app/index.html" class="btn btn-outline btn-lg">Testar app web</a>
+            <a href="../app/index.html#conta" class="btn btn-primary btn-lg">Começar teste grátis <span aria-hidden="true">→</span></a>
+            <a href="../app/index.html" class="btn btn-outline btn-lg">Explorar o app</a>
           </div>
-          <p class="hero-trust">
-            <span class="trust-chip">✓ Sem fidelidade</span>
-            <span class="trust-chip">✓ Cancele a qualquer momento</span>
-            <span class="trust-chip">✓ 2 dispositivos · 1 tela por vez</span>
-          </p>
-        </div>
-
-        <div class="hero-visual">
-          <div class="phone-frame">
-            <img
-              src="../app/assets/img/screens/app-ao-vivo.png"
-              alt="Print real do app EFTV mostrando canais ao vivo, busca e categorias"
-              width="412" height="915" loading="eager">
-          </div>
-          <p class="hero-caption">Print real do app web/PWA</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Recursos -->
-  <section id="recursos" class="features">
-    <div class="wrap">
-      <div class="section-head">
-        <h2>Por que escolher a EFTV?</h2>
-        <p>Tudo o que você espera de um streaming, sem a burocracia dos apps tradicionais.</p>
-      </div>
-
-      <div class="features-grid">
-        <article class="feat-card">
-          <div class="feat-icon">📺</div>
-          <h3>Canais ao vivo</h3>
-          <p>Esportes, notícias, entretenimento 24h em HD e Full HD. Zapping instantâneo.</p>
-        </article>
-        <article class="feat-card">
-          <div class="feat-icon">🎬</div>
-          <h3>Filmes e Séries</h3>
-          <p>Catálogo sob demanda com lançamentos e clássicos. Continue assistindo de onde parou.</p>
-        </article>
-        <article class="feat-card">
-          <div class="feat-icon">📱</div>
-          <h3>Multi-dispositivo</h3>
-          <p>Celular, tablet, TV box e computador. Até 2 dispositivos conectados, com 1 tela por vez.</p>
-        </article>
-        <article class="feat-card">
-          <div class="feat-icon">🚫</div>
-          <h3>Sem fidelidade</h3>
-          <p>Cancele quando quiser, sem multa. Controle total da sua assinatura.</p>
-        </article>
-        <article class="feat-card">
-          <div class="feat-icon">⚡</div>
-          <h3>PWA instalável</h3>
-          <p>Não precisa baixar APK de fontes desconhecidas. Abre no navegador e vira atalho na tela inicial.</p>
-        </article>
-        <article class="feat-card">
-          <div class="feat-icon">🔒</div>
-          <h3>Pagamento seguro</h3>
-          <p>Checkout via Mercado Pago (PIX, cartão, boleto). Conteúdo licenciado e seguro.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- Prints reais do app -->
-  <section id="prints" class="shots">
-    <div class="wrap">
-      <div class="section-head">
-        <h2>Veja o EFTV por dentro</h2>
-        <p>Prints reais do app web/PWA: o mesmo catálogo, player e conta do aplicativo Android.</p>
-      </div>
-
-      <div class="shots-grid">
-        <figure class="shot shot-phone">
-          <img src="../app/assets/img/screens/app-ao-vivo.png" alt="Tela Ao Vivo do EFTV com canais, busca e barra A-Z" loading="lazy">
-          <figcaption><strong>Ao vivo</strong> — busca sem acento, categorias e índice A-Z</figcaption>
-        </figure>
-        <figure class="shot shot-wide">
-          <img src="../app/assets/img/screens/app-player-paisagem.png" alt="Player do EFTV com controles de qualidade, áudio e legenda" loading="lazy">
-          <figcaption><strong>Player</strong> — qualidade, áudio, legenda e voltar ao vivo</figcaption>
-        </figure>
-        <figure class="shot shot-wide">
-          <img src="../app/assets/img/screens/app-desktop.png" alt="EFTV aberto no computador com menu lateral e catálogo em grade" loading="lazy">
-          <figcaption><strong>No computador</strong> — menu lateral, favoritos e continuar assistindo</figcaption>
-        </figure>
-      </div>
-    </div>
-  </section>
-
-  <!-- Canais (mock realista) -->
-  <section id="canais" class="channels">
-    <div class="wrap">
-      <div class="section-head">
-        <h2>Catálogo de canais</h2>
-        <p>Uma seleção premium de canais ao vivo e conteúdo sob demanda.</p>
-      </div>
-
-      <div class="chips">
-        <button class="chip active" data-cat="todos">Todos</button>
-        <button class="chip" data-cat="esportes">Esportes</button>
-        <button class="chip" data-cat="noticias">Notícias</button>
-        <button class="chip" data-cat="filmes">Filmes</button>
-        <button class="chip" data-cat="series">Séries</button>
-        <button class="chip" data-cat="infantil">Infantil</button>
-      </div>
-
-      <div class="channels-grid" id="channels-grid">
-        <!-- preenchido por JS -->
-      </div>
-
-      <div class="channels-cta">
-        <a href="#planos" class="btn btn-primary btn-lg">Ver catálogo completo</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- Planos -->
-  <section id="planos" class="plans">
-    <div class="wrap">
-      <div class="section-head">
-        <h2>Planos para todos os perfis</h2>
-        <p>Escolha o ideal para você. Pode mudar ou cancelar a qualquer momento.</p>
-      </div>
-
-      <div class="plans-grid">
-        <article class="plan-card featured">
-          <div class="plan-badge">Mais escolhido</div>
-          <h3>Mensal</h3>
-          <div class="price"><span class="big">R$ 19,90</span><span class="small">/mês</span></div>
-          <ul class="plan-list">
-            <li>✓ Canais ao vivo</li>
-            <li>✓ Filmes e séries</li>
-            <li>✓ 2 dispositivos</li>
-            <li>✓ 1 tela simultânea</li>
-            <li>✓ Cancelar quando quiser</li>
-            <li>✓ Teste grátis de 7 dias</li>
-          </ul>
-          <a href="../app/index.html#conta" class="btn btn-primary btn-lg btn-block">Assinar mensal</a>
-        </article>
-        <article class="plan-card">
-          <h3>Anual</h3>
-          <div class="price"><span class="big">R$ 199,00</span><span class="small">/ano</span></div>
-          <p class="plan-note">Economize 17% vs mensal</p>
-          <ul class="plan-list">
-            <li>✓ Canais ao vivo</li>
-            <li>✓ Filmes e séries</li>
-            <li>✓ 2 dispositivos</li>
-            <li>✓ 1 tela simultânea</li>
-            <li>✓ Cancelar quando quiser</li>
-            <li>✓ Teste grátis de 7 dias</li>
-          </ul>
-          <a href="../app/index.html#conta" class="btn btn-outline btn-lg btn-block">Assinar anual</a>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- Como instalar (PWA) -->
-  <section class="install">
-    <div class="wrap">
-      <div class="install-card">
-        <div class="install-text">
-          <h2>Não precisa baixar APK</h2>
-          <p>Abra o EFTV no navegador do seu celular e toque em <strong>“Instalar app”</strong> (ou no menu do Chrome/Edge > “Adicionar à tela inicial”). Pronto: o EFTV vira um atalho na sua tela inicial, igual a um app nativo.</p>
-          <div class="install-steps">
-            <div class="step"><span>1</span>Abra <code>eftv.com.br/app</code></div>
-            <div class="step"><span>2</span>Toque em <strong>Instalar app</strong></div>
-            <div class="step"><span>3</span>Use direto da tela inicial</div>
+          <div class="hero-trust">
+            <span class="trust-chip"><strong>7 dias</strong> grátis</span>
+            <span class="trust-chip"><strong>2</strong> dispositivos</span>
+            <span class="trust-chip"><strong>1</strong> tela por vez</span>
+            <span class="trust-chip">Cancele quando quiser</span>
           </div>
         </div>
-        <div class="install-visual">
-          <div class="mock-install">
-            <div class="mock-bar">
-              <span class="mock-icon">📱</span>
-              <span class="mock-url">eftv.com.br/app</span>
-              <button class="mock-btn">Instalar app</button>
+
+        <div class="hero-stage" aria-label="Prévia do app EFTV">
+          <div class="stage-glow" aria-hidden="true"></div>
+
+          <div class="screen-frame screen-landscape">
+            <div class="screen-bar" aria-hidden="true">
+              <span></span><span></span><span></span>
+              <em>EFTV Player</em>
             </div>
+            <img
+              src="assets/img/player-hero.png"
+              alt="Player do EFTV com controles de reprodução e qualidade"
+              width="915" height="360" loading="eager" fetchpriority="high">
+          </div>
+
+          <div class="screen-frame screen-phone">
+            <img
+              src="../app/assets/img/screens/app-categorias.png"
+              alt="Tela de categorias do EFTV com capas de filmes e séries"
+              width="824" height="1830" loading="eager">
+          </div>
+
+          <div class="float-card float-live">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span>AO VIVO</span>
+            <strong>Esportes</strong>
+          </div>
+          <div class="float-card float-progress">
+            <span>Continuar assistindo</span>
+            <strong>De onde você parou</strong>
+            <i aria-hidden="true"></i>
+          </div>
+          <div class="float-card float-quality">
+            <strong>HD</strong>
+            <span>qualidade adaptativa</span>
           </div>
         </div>
       </div>
-    </div>
-  </section>
 
-  <!-- CTA final -->
-  <section class="cta">
-    <div class="wrap">
-      <h2>Pronto para assistir?</h2>
-      <p>Crie sua conta, aproveite o teste grátis de 7 dias e assista onde quiser.</p>
-      <a href="#planos" class="btn btn-primary btn-lg">Começar agora</a>
-    </div>
-  </section>
+      <div class="wrap hero-strip" aria-label="Categorias disponíveis">
+        <span>AO VIVO</span>
+        <span>FILMES</span>
+        <span>SÉRIES</span>
+        <span>ESPORTES</span>
+        <span>INFANTIL</span>
+        <span>NOTÍCIAS</span>
+      </div>
+    </section>
+
+    <!-- Experiência -->
+    <section class="experience" id="experiencia">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <span class="section-kicker">A experiência</span>
+          <h2>Feito para assistir.<br>Não para configurar.</h2>
+          <p>Uma interface limpa, um player completo e o catálogo certo na hora certa. O EFTV foi desenhado para começar rápido e continuar sem atrito.</p>
+        </div>
+
+        <div class="bento">
+          <article class="bento-card bento-large" data-reveal>
+            <div class="bento-copy">
+              <span class="bento-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.2v5.6L15 12z"/></svg>
+              </span>
+              <span class="card-kicker">Player</span>
+              <h3>Um player que acompanha o seu ritmo.</h3>
+              <p>Qualidade adaptativa, troca de áudio e legenda, Picture-in-Picture e retomada de onde parou. Tudo sem sair da tela.</p>
+              <ul class="mini-list">
+                <li>HLS, MP4 e transmissões ao vivo</li>
+                <li>Controles na tela de bloqueio</li>
+                <li>Reconexão automática</li>
+              </ul>
+            </div>
+            <div class="bento-visual">
+              <div class="phone-mini">
+                <img src="../app/assets/img/screens/app-player.png" alt="Player do EFTV em um celular" width="824" height="1830" loading="lazy">
+              </div>
+            </div>
+          </article>
+
+          <article class="bento-card bento-live" data-reveal data-reveal-delay="1">
+            <span class="bento-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>
+            </span>
+            <span class="card-kicker">Ao vivo</span>
+            <h3>O agora, sem atraso.</h3>
+            <p>Esportes, notícias e entretenimento em tempo real, com zapping rápido e favoritos sempre à mão.</p>
+            <div class="live-line" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+          </article>
+
+          <article class="bento-card bento-catalog" data-reveal data-reveal-delay="2">
+            <span class="bento-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v16H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M8 4v16"/></svg>
+            </span>
+            <span class="card-kicker">Catálogo</span>
+            <h3>Filmes e séries para a próxima sessão.</h3>
+            <p>Lançamentos, clássicos e temporadas completas organizados por categoria, com busca sem acento e retomada de progresso.</p>
+          </article>
+
+          <article class="bento-card bento-pwa" data-reveal>
+            <div class="bento-copy">
+              <span class="bento-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M12 7v6M9.5 10.5 12 13l2.5-2.5"/></svg>
+              </span>
+              <span class="card-kicker">PWA</span>
+              <h3>Instala em segundos.</h3>
+              <p>Abra no navegador e adicione à tela inicial. Sem loja de aplicativos, sem download pesado e sem APK de origem desconhecida.</p>
+            </div>
+            <div class="mock-browser" aria-hidden="true">
+              <div class="mock-browser-bar"><span></span><span></span><span></span><em>eftv.com.br/app</em></div>
+              <div class="mock-install-pill"><strong>Instalar EFTV</strong><span>Adicionar à tela inicial</span></div>
+            </div>
+          </article>
+
+          <article class="bento-card bento-devices" data-reveal data-reveal-delay="1">
+            <span class="bento-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="13" height="10" rx="2"/><path d="M6 18h6M9 14v4"/><rect x="16" y="8" width="5.5" height="12" rx="1.8"/></svg>
+            </span>
+            <span class="card-kicker">Multi-dispositivo</span>
+            <h3>Do celular para a TV.</h3>
+            <p>Até 2 dispositivos conectados e 1 tela por vez. Assista no navegador, no celular, no tablet ou no computador.</p>
+            <div class="device-visual" aria-hidden="true">
+              <span class="device-chip">
+                <svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M10.5 18.5h3"/></svg>
+              </span>
+              <span class="device-chip">
+                <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M11 18h2"/></svg>
+              </span>
+              <span class="device-chip">
+                <svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M8 21h8M12 17v4"/></svg>
+              </span>
+              <span class="device-status"><i></i> até 2 conectados</span>
+            </div>
+          </article>
+
+          <article class="bento-card bento-secure" data-reveal data-reveal-delay="2">
+            <span class="bento-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.2 2.8 7.4 7 10 4.2-2.6 7-5.8 7-10V6z"/><path d="m9.2 12 1.9 1.9 3.8-3.8"/></svg>
+            </span>
+            <span class="card-kicker">Pagamento</span>
+            <h3>Checkout seguro.</h3>
+            <p>Assinatura processada pelo Mercado Pago, com cartão de crédito e renovação mensal. Cancele quando quiser, sem multa.</p>
+            <div class="secure-visual" aria-hidden="true">
+              <span class="secure-chip">
+                <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19M6 15h4"/></svg>
+              </span>
+              <span class="secure-label"><strong>Mercado Pago</strong><span>Checkout protegido</span></span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Conteúdo -->
+    <section class="pillars" id="conteudo">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <span class="section-kicker">Conteúdo</span>
+          <h2>Três jeitos de nunca ficar<br>sem o que assistir.</h2>
+          <p>Do ao vivo ao on demand: escolha o clima, abra o app e deixe a próxima sessão começar.</p>
+        </div>
+
+        <div class="pillars-grid">
+          <article class="pillar pillar-live" data-reveal>
+            <div class="pillar-copy">
+              <span class="pillar-tag">Ao vivo</span>
+              <h3>O agora,<br>sem atraso.</h3>
+              <p>Esportes, notícias e entretenimento em tempo real para acompanhar o que está acontecendo.</p>
+              <a href="../app/index.html" class="link-arrow">Abrir ao vivo <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="pillar-visual">
+              <div class="phone-mini">
+                <img src="../app/assets/img/screens/app-ao-vivo.png" alt="Tela Ao Vivo do EFTV com canais e busca" width="824" height="1830" loading="lazy">
+              </div>
+            </div>
+          </article>
+
+          <article class="pillar pillar-movies" data-reveal data-reveal-delay="1">
+            <div class="pillar-copy">
+              <span class="pillar-tag">Filmes</span>
+              <h3>Sessão da<br>sua escolha.</h3>
+              <p>Lançamentos, clássicos e gêneros para todos os gostos, organizados para você encontrar rápido.</p>
+              <a href="../app/index.html" class="link-arrow">Ver filmes <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="pillar-visual">
+              <div class="browser-mini">
+                <div class="browser-mini-bar"><span></span><span></span><span></span></div>
+                <img src="../app/assets/img/screens/app-desktop.png" alt="Catálogo do EFTV aberto no computador" width="1280" height="800" loading="lazy">
+              </div>
+            </div>
+          </article>
+
+          <article class="pillar pillar-series" data-reveal data-reveal-delay="2">
+            <div class="pillar-copy">
+              <span class="pillar-tag">Séries</span>
+              <h3>Um episódio<br>puxa o outro.</h3>
+              <p>Temporadas completas, continuidade de progresso e aquele “só mais um” que nunca falha.</p>
+              <a href="../app/index.html" class="link-arrow">Ver séries <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="pillar-visual">
+              <div class="phone-mini">
+                <img src="../app/assets/img/screens/app-player.png" alt="Player do EFTV reproduzindo uma série" width="824" height="1830" loading="lazy">
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Catálogo -->
+    <section class="channels" id="canais">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <span class="section-kicker">Catálogo</span>
+          <h2>Um universo de conteúdo.</h2>
+          <p>Uma prévia das categorias que você encontra no app. O catálogo completo é atualizado direto no EFTV.</p>
+        </div>
+
+        <div class="chips" role="group" aria-label="Filtrar catálogo por categoria">
+          <button class="chip active" type="button" data-cat="todos" aria-pressed="true">Todos</button>
+          <button class="chip" type="button" data-cat="tv" aria-pressed="false">TV aberta</button>
+          <button class="chip" type="button" data-cat="esportes" aria-pressed="false">Esportes</button>
+          <button class="chip" type="button" data-cat="noticias" aria-pressed="false">Notícias</button>
+          <button class="chip" type="button" data-cat="filmes" aria-pressed="false">Filmes</button>
+          <button class="chip" type="button" data-cat="docs" aria-pressed="false">Documentários</button>
+          <button class="chip" type="button" data-cat="infantil" aria-pressed="false">Infantil</button>
+        </div>
+
+        <div class="channels-grid" id="channels-grid" aria-live="polite">
+          <!-- preenchido por JS -->
+        </div>
+
+        <p class="channels-note">Prévia ilustrativa. Canais e títulos variam conforme o catálogo licenciado.</p>
+
+        <div class="channels-cta">
+          <a href="../app/index.html" class="btn btn-primary btn-lg">Abrir catálogo completo</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Planos -->
+    <section class="plans" id="planos">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <span class="section-kicker">Planos</span>
+          <h2>Um plano. Tudo incluído.</h2>
+          <p>Sem fidelidade, sem surpresa no checkout e com 7 dias grátis para testar. Cancele quando quiser.</p>
+        </div>
+
+        <div class="plan-showcase">
+          <article class="plan-card" data-reveal>
+            <div class="plan-badge">Plano único</div>
+            <div class="plan-top">
+              <div>
+                <span class="plan-kicker">EFTV Mensal</span>
+                <h3>Acesso completo</h3>
+              </div>
+              <span class="plan-live-pill"><span class="live-dot" aria-hidden="true"></span> Ao vivo + VOD</span>
+            </div>
+            <div class="price"><span class="big">R$ 19,90</span><span class="small">/mês</span></div>
+            <p class="plan-note">7 dias grátis para novos assinantes. Cancele quando quiser.</p>
+            <ul class="plan-list">
+              <li>Canais ao vivo</li>
+              <li>Filmes e séries</li>
+              <li>2 dispositivos conectados</li>
+              <li>1 tela simultânea</li>
+              <li>PWA instalável no celular e no desktop</li>
+              <li>Player com retomada de progresso</li>
+            </ul>
+            <a href="../app/index.html#conta" class="btn btn-primary btn-lg btn-block">Começar teste grátis <span aria-hidden="true">→</span></a>
+            <p class="plan-payment">Pagamento processado pelo Mercado Pago.</p>
+          </article>
+
+          <aside class="plan-side" data-reveal data-reveal-delay="1">
+            <span class="plan-side-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.2 2.8 7.4 7 10 4.2-2.6 7-5.8 7-10V6z"/><path d="m9.2 12 1.9 1.9 3.8-3.8"/></svg>
+            </span>
+            <h3>Simples por dentro.<br>Completo por fora.</h3>
+            <p>Você não precisa escolher entre canais, filmes e séries. O EFTV já entrega tudo em uma única assinatura.</p>
+            <ul class="plan-side-list">
+              <li><strong>Sem fidelidade</strong><span>Saia quando quiser, sem multa.</span></li>
+              <li><strong>Sem APK desconhecido</strong><span>Use no navegador ou instale como PWA.</span></li>
+              <li><strong>Um app, várias telas</strong><span>Celular, tablet, computador e TV box.</span></li>
+              <li><strong>Suporte ao assinante</strong><span>Ajuda para começar e para continuar assistindo.</span></li>
+            </ul>
+            <a href="../app/index.html" class="link-arrow">Conhecer o app <span aria-hidden="true">→</span></a>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- Instalação PWA -->
+    <section class="install" id="instalar">
+      <div class="wrap">
+        <div class="install-card" data-reveal>
+          <div class="install-text">
+            <span class="section-kicker">PWA</span>
+            <h2>Não precisa baixar APK.</h2>
+            <p>Abra o EFTV no navegador do celular e toque em <strong>“Instalar app”</strong>. Em poucos segundos ele vira um atalho na sua tela inicial, com a mesma experiência de um app nativo.</p>
+            <div class="install-steps">
+              <div class="step"><span>1</span>Abra <code>eftv.com.br/app</code></div>
+              <div class="step"><span>2</span>Toque em <strong>Instalar app</strong></div>
+              <div class="step"><span>3</span>Use direto da tela inicial</div>
+            </div>
+            <a href="../app/index.html" class="btn btn-outline btn-lg">Abrir app web</a>
+          </div>
+          <div class="install-visual" aria-hidden="true">
+            <div class="install-phone">
+              <div class="install-screen">
+                <div class="install-app-icon">EF<span>TV</span></div>
+                <div class="install-prompt">
+                  <strong>Instalar EFTV</strong>
+                  <span>Adicionar à tela inicial</span>
+                  <div class="install-prompt-actions">
+                    <em>Instalar</em>
+                    <em>Agora não</em>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="install-glow"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA final -->
+    <section class="cta">
+      <div class="wrap">
+        <div class="cta-panel" data-reveal>
+          <span class="section-kicker">Pronto para começar?</span>
+          <h2>Sua próxima sessão<br>começa agora.</h2>
+          <p>Crie sua conta, aproveite 7 dias grátis e assista onde quiser. Sem fidelidade e sem complicação.</p>
+          <a href="../app/index.html#conta" class="btn btn-primary btn-lg">Começar teste grátis <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <footer class="site-footer">
     <div class="wrap">
       <div class="footer-grid">
         <div class="footer-brand">
-          <a class="brand" href="#">
-            <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z"/></svg>
-            <span class="brand-name">EF<b>TV</b></span>
+          <a class="brand" href="#topo" aria-label="EFTV — início">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12z"/></svg>
+            </span>
+            <span class="brand-name">EF<span>TV</span></span>
           </a>
-          <p>Streaming por assinatura feito para você.</p>
+          <p>Streaming por assinatura para quem quer assistir sem complicação.</p>
         </div>
-        <nav class="footer-nav">
+        <nav class="footer-nav" aria-label="Produto">
           <h4>Produto</h4>
           <ul>
-            <li><a href="#canais">Canais</a></li>
-            <li><a href="#recursos">Recursos</a></li>
+            <li><a href="#experiencia">Experiência</a></li>
+            <li><a href="#conteudo">Conteúdo</a></li>
+            <li><a href="#canais">Catálogo</a></li>
             <li><a href="#planos">Planos</a></li>
           </ul>
         </nav>
-        <nav class="footer-nav">
-          <h4>Empresa</h4>
+        <nav class="footer-nav" aria-label="App">
+          <h4>App</h4>
           <ul>
-            <li><a href="#">Sobre</a></li>
-            <li><a href="#">Suporte</a></li>
+            <li><a href="../app/index.html">Abrir app web</a></li>
+            <li><a href="#instalar">Instalar PWA</a></li>
+            <li><a href="../app/index.html#conta">Minha conta</a></li>
           </ul>
         </nav>
-        <nav class="footer-nav">
+        <nav class="footer-nav" aria-label="Legal">
           <h4>Legal</h4>
           <ul>
             <li><a href="../../termos.html" target="_blank" rel="noopener">Termos de Uso</a></li>
@@ -291,10 +462,11 @@
       </div>
       <div class="footer-bottom">
         <p>&copy; 2024–2026 EFTV. Todos os direitos reservados.</p>
+        <p>Conteúdo licenciado. Catálogo sujeito a disponibilidade.</p>
       </div>
     </div>
   </footer>
 
-  <script src="assets/js/main.js"></script>
+  <script src="assets/js/main.js?v=4"></script>
 </body>
 </html>
