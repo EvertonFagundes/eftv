@@ -1,5 +1,28 @@
 # Pendências — correções de 25/11/2026
 
+## Correção de 27/11/2026 — keepalive e importação em dados móveis
+
+- [x] **Backend dormindo.** O cron do GitHub agendava 5 min, mas entregava só
+  ~3 execuções/dia (buracos de até 16h). O `self_ping` morria junto com o
+  processo e não acordava a instância. Agora o keepalive é uma corrente contínua
+  de `workflow_dispatch` a cada ~9 min; o cron virou reserva. `self_ping` usa a
+  URL pública e registra falhas.
+- [x] **Aviso do tempo de importação.** A tela informa que pode levar alguns
+  minutos e que o que já chegou pode ser assistido.
+- [x] **Lista progressiva.** Cada lote commitado (2.000 itens) atualiza a UI.
+  O primeiro lote libera a lista; os seguintes só atualizam contagem e páginas
+  já carregadas, sem reiniciar a paginação/aba Séries.
+- [x] **Séries durante a importação.** `series_cards` passa a ser alimentado
+  lote a lote (com `INSERT OR IGNORE` + `UPDATE`, compatível com SQLite antigo).
+- [x] **Importação em dados móveis.** O proxy local agora é esperado por até 30 s,
+  tem segunda tentativa com DoH forçado (`&doh=1`) e só depois cai para o
+  download direto. `resolveSource` tenta de novo se o Render estiver acordando
+  e o timeout de leitura subiu para 120 s. Redirecionamentos mantêm cookies e
+  não permitem `https -> http`.
+
+Estado: 1.5.17 (`versionCode 42`), 230 testes do backend e 6 do servidor local
+passando, compilação Android OK.
+
 ## Correção de 27/11/2026 — capas de série pela API
 
 - [x] **Imagens aleatórias na aba Séries.** O logo da playlist era priorizado
