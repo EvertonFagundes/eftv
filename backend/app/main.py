@@ -147,7 +147,12 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Corpo maximo antes de qualquer parsing (webhook/JSON). Fica dentro do CORS
 # para a resposta 413 tambem sair com os cabecalhos de origem.
-app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.MAX_REQUEST_BODY_BYTES)
+app.add_middleware(
+    BodySizeLimitMiddleware,
+    max_bytes=settings.MAX_REQUEST_BODY_BYTES,
+    # Upload do cache da playlist chega comprimido e e bem maior que JSON.
+    large_paths={"/admin/playlist/cache": settings.PLAYLIST_CACHE_MAX_UPLOAD_BYTES},
+)
 
 # CORS. Wildcard com credenciais e proibido pelo navegador e permitiria
 # qualquer site ler a resposta autenticada; nesse caso desliga credentials.

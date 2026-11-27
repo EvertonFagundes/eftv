@@ -188,6 +188,37 @@ Saídas possíveis:
 3. Relay em IP residencial/brasileiro (VPS no Brasil ou túnel para a máquina
    local), mantendo a atualização automática; mais infraestrutura.
 
+### Contorno implementado: cache persistente (backend 1.2.6)
+
+- Tabela `playlist_cache` (linha única, conteúdo gzip) criada no startup por
+  `Base.metadata.create_all`.
+- `PUT /admin/playlist/cache` (admin) recebe a M3U comprimida; `GET` mostra
+  tamanho/idade e `DELETE` limpa. O corpo é validado (`#EXTM3U`/`#EXTINF`) e
+  tem limite de 128 MiB descomprimido / 32 MiB comprimido.
+- `GET /player/playlist-text` tenta o provedor e, se falhar ou estiver em
+  cooldown, serve o cache com `X-Playlist-Source: cache` e
+  `X-Playlist-Cache-Age`. Cache com mais de 72 h leva `Warning: 110`.
+- Após uma falha completa, o backend evita repetir a sequência lenta por 10 min
+  (`recently_failed`); o probe do `/health` continua testando o provedor a cada
+  10 min e limpa o cooldown quando volta a funcionar.
+- Upload local (rede que alcança o provedor):
+
+  ```powershell
+  cd C:\Users\evert\eftv\backend
+  $env:IPTV_PLAYLIST_URL = "<URL completa do painel do provedor>"
+  .\.venv\Scripts\python.exe scripts\upload_playlist_cache.py
+  ```
+
+  O script pede e-mail/senha de admin, baixa a M3U, confere o cabeçalho,
+  comprime e envia. Ele mostra o **fingerprint** da URL (nunca a URL); compare
+  com `/health.playlist_probe.configured.url_fingerprint`. Se for diferente, a
+  URL configurada no Render está errada e deve ser corrigida antes do upload.
+- O cache contém as credenciais do provedor nas URLs dos canais: nunca
+  versionar, exportar ou colocar em log. O acesso é só de admin no upload e de
+  assinantes ativos na entrega.
+- Enquanto o provedor bloquear o Render, repita o upload periodicamente (ex.:
+  semanal) para o catálogo não ficar defasado.
+
 ### Outras hipóteses, em ordem
 
 1. Deploy do Render ainda não concluído quando o teste rodou (retestar depois).

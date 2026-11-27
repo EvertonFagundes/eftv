@@ -3,7 +3,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,13 @@ from app.security.dependencies import get_current_user, require_admin
 from app.services.devices import revoke_all_devices
 from app.services.mercadopago import sync_preapproval
 from app.services.plans import get_or_create_plan
+from app.services.playlist_cache import (
+    PlaylistCacheError,
+    cache_metadata,
+    clear_playlist,
+    decode_upload,
+    save_playlist,
+)
 from app.services.playlist_expiry import check_playlist_expiry
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -183,6 +190,68 @@ async def get_playlist_expiry(
     payload = result.to_dict()
     payload["cache_seconds"] = settings.PLAYLIST_EXPIRY_CACHE_SECONDS
     return payload
+
+
+@router.get("/playlist/cache")
+async def get_playlist_cache(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Estado do cache local da playlist (sem expor o conteudo)."""
+    info = await cache_metadata(db)
+    if info is None:
+        return {
+            "cached": False,
+            "max_bytes": settings.PLAYLIST_CACHE_MAX_BYTES,
+            "max_upload_bytes": settings.PLAYLIST_CACHE_MAX_UPLOAD_BYTES,
+            "stale_hours": settings.PLAYLIST_CACHE_STALE_HOURS,
+        }
+    return {
+        "cached": True,
+        **info.to_dict(),
+        "max_bytes": settings.PLAYLIST_CACHE_MAX_BYTES,
+        "max_upload_bytes": settings.PLAYLIST_CACHE_MAX_UPLOAD_BYTES,
+        "stale_hours": settings.PLAYLIST_CACHE_STALE_HOURS,
+    }
+
+
+@router.put("/playlist/cache")
+async def upload_playlist_cache(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Recebe a M3U comprimida baixada em uma rede que alcanca o provedor.
+
+    O corpo pode ser gzip (recomendado) ou a M3U crua. O limite descomprimido
+    e ``PLAYLIST_CACHE_MAX_BYTES``; o middleware libera ate
+    ``PLAYLIST_CACHE_MAX_UPLOAD_BYTES`` para esta rota.
+    """
+    body = await request.body()
+    if len(body) > settings.PLAYLIST_CACHE_MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Upload maior que o limite do cache",
+        )
+    try:
+        raw = decode_upload(body)
+        info = await save_playlist(db, raw, source="upload")
+    except PlaylistCacheError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return {"cached": True, **info.to_dict()}
+
+
+@router.delete("/playlist/cache")
+async def delete_playlist_cache(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Remove o cache; o backend volta a depender so do provedor."""
+    await clear_playlist(db)
+    return {"cached": False}
 
 
 @router.get("/users")

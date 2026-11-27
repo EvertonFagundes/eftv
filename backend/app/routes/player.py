@@ -23,11 +23,17 @@ from app.services.devices import (
     revoke_all_devices,
     revoke_device,
 )
+from app.services.playlist_cache import (
+    CacheInfo,
+    PlaylistCacheError,
+    load_cached_playlist,
+)
 from app.services.playlist_fetch import (
     PlaylistFetchError,
     fetch_playlist,
     looks_like_m3u,
     playlist_headers,
+    recently_failed,
     url_publica,
 )
 from app.services.streams import (
@@ -128,6 +134,8 @@ def _descricao_erro(exc: Exception) -> str:
 
 async def _baixar_playlist(url: str, headers: dict[str, str]) -> bytes:
     """Baixa a M3U usando o servico de fallbacks (HTTPS/IP/API/DoH)."""
+    if recently_failed(url):
+        raise PlaylistFetchError("provedor bloqueado recentemente")
     result = await fetch_playlist(
         url,
         headers,
@@ -235,10 +243,28 @@ async def get_playlist_access(
     )
 
 
+def _playlist_response(conteudo: bytes, cache: CacheInfo | None = None) -> Response:
+    """Resposta M3U; o cache leva cabecalhos para o app/web saberem da copia."""
+    headers = {
+        "Cache-Control": "no-store",
+        "X-Playlist-Source": "cache" if cache is not None else "provider",
+    }
+    if cache is not None:
+        headers["X-Playlist-Cache-Age"] = str(cache.age_seconds)
+        if cache.stale:
+            headers["Warning"] = '110 - "Response is stale"'
+    return Response(
+        content=conteudo,
+        media_type="audio/x-mpegurl; charset=utf-8",
+        headers=headers,
+    )
+
+
 @router.get("/playlist-text", response_class=Response)
 async def get_playlist_text(
     subscription: Subscription = Depends(get_current_active_subscription),
     device_id: str = Depends(get_device_id),
+    db: AsyncSession = Depends(get_db),
 ):
     """Entrega o texto da playlist buscado pelo backend.
 
@@ -246,6 +272,9 @@ async def get_playlist_text(
     consegue chegar aos servidores de DoH. O backend (em Render) tem DNS
     livre e tops HTTPS com o app, entao serve como ultimo recurso. A URL e
     sempre a configurada no painel: o cliente nao pode escolher o destino.
+
+    Quando o provedor bloqueia o Render (geobloqueio), usa a ultima copia
+    valida enviada por um admin a partir de uma rede autorizada.
     """
     del device_id  # O dependency ja vincula o aparelho.
     fontes = _playlist_sources(subscription)
@@ -275,11 +304,26 @@ async def get_playlist_text(
             continue
 
         logger.info("Playlist %s OK (%s bytes)", rotulo, len(conteudo))
-        return Response(
-            content=conteudo,
-            media_type="audio/x-mpegurl; charset=utf-8",
-            headers={"Cache-Control": "no-store"},
+        return _playlist_response(conteudo)
+
+    # Provedor indisponivel/bloqueado: a copia local mantem o catalogo vivo.
+    try:
+        cached = await load_cached_playlist(db)
+    except PlaylistCacheError as exc:
+        logger.warning("Cache da playlist invalido: %s", exc)
+        cached = None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Cache da playlist indisponivel: %s", exc.__class__.__name__)
+        cached = None
+    if cached is not None:
+        conteudo, info = cached
+        logger.warning(
+            "Usando cache da playlist de %s (%s bytes, idade=%ss)",
+            info.updated_at.isoformat(),
+            len(conteudo),
+            info.age_seconds,
         )
+        return _playlist_response(conteudo, cache=info)
 
     raise HTTPException(
         status.HTTP_502_BAD_GATEWAY,

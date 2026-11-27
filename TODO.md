@@ -73,6 +73,12 @@ passando, compilação Android OK.
     (IP brasileiro), não do Render; o log de release não registra a fonte.
   - Depois de resolver, restringir os detalhes de `/health.playlist_probe`
     (IPs/tentativas) a admin ou remover; hoje ficam públicos para diagnóstico.
+  - [x] **Contorno implementado (1.2.6):** cache persistente em
+    `playlist_cache`, upload admin em `PUT /admin/playlist/cache` e fallback em
+    `/player/playlist-text`. Script: `backend/scripts/upload_playlist_cache.py`.
+  - [ ] **Rodar o upload local** em uma rede que alcance o provedor e validar
+    `/player/playlist-text` com o app/web. Comparar o fingerprint da URL do
+    script com `/health.playlist_probe.configured.url_fingerprint`.
 
 - [x] **Fallback do backend robusto (1.2.2).**
   `/player/playlist-text` agora tenta a linha própria e, se ela devolver

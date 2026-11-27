@@ -50,6 +50,10 @@ _DEFAULT_FALLBACK_IPS = ("172.67.143.94", "104.21.87.130")
 _ip_cache: dict[str, tuple[float, list[str]]] = {}
 _doh_cache: dict[str, tuple[float, list[str]]] = {}
 _route_cache: dict[str, tuple[float, Candidate]] = {}
+# Depois de uma falha completa, evita repetir a sequencia lenta em cada
+# request. O probe do /health chama fetch_playlist direto e continua testando.
+_failure_cache: dict[str, float] = {}
+FAILURE_COOLDOWN_SECONDS = 10 * 60
 
 
 class PlaylistFetchError(ValueError):
@@ -193,6 +197,25 @@ def _safe_error(exc: Exception) -> str:
 
 def _hash_url(url: str) -> str:
     return hashlib.sha256(url.strip().encode("utf-8")).hexdigest()
+
+
+def recently_failed(url: str) -> bool:
+    """True quando a ultima tentativa completa falhou ha pouco."""
+    until = _failure_cache.get(_hash_url(url))
+    return until is not None and time.monotonic() < until
+
+
+def mark_ok(url: str) -> None:
+    _failure_cache.pop(_hash_url(url), None)
+
+
+def mark_failure(url: str) -> None:
+    _failure_cache[_hash_url(url)] = time.monotonic() + FAILURE_COOLDOWN_SECONDS
+
+
+def clear_failure_cache() -> None:
+    """Limpa o cooldown (testes/consulta manual)."""
+    _failure_cache.clear()
 
 
 def _netloc(host: str, port: int | None, scheme: str) -> str:
@@ -657,6 +680,7 @@ async def fetch_playlist(
                 result.content_type = attempt.content_type
                 result.content_length = attempt.content_length
                 _route_cache[key] = (time.monotonic(), candidate)
+                mark_ok(source)
                 logger.info(
                     "Playlist OK via %s (%s bytes, total=%s)",
                     candidate.label,
@@ -723,6 +747,7 @@ async def fetch_playlist(
     except Exception as exc:  # noqa: BLE001
         result.attempts.append(Attempt(label="geral", scheme="", error=_safe_error(exc)))
 
+    mark_failure(source)
     result.duration_ms = int((time.monotonic() - started) * 1000)
     return result
 

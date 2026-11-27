@@ -59,7 +59,7 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "EFTV API"
-    APP_VERSION: str = "1.2.5"
+    APP_VERSION: str = "1.2.6"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"  # development, staging, production
     # URL publica da API. O webhook de Assinaturas e configurado no proprio
@@ -145,6 +145,11 @@ class Settings(BaseSettings):
     # devolve a URL nem o conteudo da playlist.
     IPTV_PLAYLIST_PROBE_ENABLED: bool = True
     IPTV_PLAYLIST_PROBE_BYTES: int = 2 * 1024 * 1024
+    # Cache da ultima playlist valida. O upload chega comprimido do Brasil
+    # quando o provedor bloqueia o Render; o limite e do conteudo descomprimido.
+    PLAYLIST_CACHE_MAX_BYTES: int = 128 * 1024 * 1024
+    PLAYLIST_CACHE_MAX_UPLOAD_BYTES: int = 32 * 1024 * 1024
+    PLAYLIST_CACHE_STALE_HOURS: int = 72
     # De quanto em quanto tempo o app deve revalidar o acesso
     IPTV_PLAYLIST_REFRESH_SECONDS: int = 300
     # Consulta do vencimento da playlist no provedor (painel admin). Restrita

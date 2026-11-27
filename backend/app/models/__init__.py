@@ -7,6 +7,7 @@ from app.models.device_login_code import DeviceLoginCode
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.playback_session import PlaybackSession
+from app.models.playlist_cache import PlaylistCache
 from app.models.rate_limit import RateLimitCounter
 from app.models.refresh_token import RefreshToken
 from app.models.stream_session import StreamSession
@@ -22,6 +23,7 @@ __all__ = [
     "Category",
     "Channel",
     "PlaybackSession",
+    "PlaylistCache",
     "StreamSession",
     "ClientError",
     "DeviceLoginCode",

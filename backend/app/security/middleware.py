@@ -52,15 +52,26 @@ class BodySizeLimitMiddleware:
     limite.
     """
 
-    def __init__(self, app, max_bytes: int = 1_048_576) -> None:
+    def __init__(
+        self,
+        app,
+        max_bytes: int = 1_048_576,
+        large_paths: dict[str, int] | None = None,
+    ) -> None:
         self.app = app
         self.max_bytes = int(max_bytes)
+        # Rotas que precisam de um limite maior (upload do cache da playlist).
+        self.large_paths = {
+            path.rstrip("/"): int(limit) for path, limit in (large_paths or {}).items()
+        }
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
+        path = str(scope.get("path", "")).rstrip("/")
+        limit = self.large_paths.get(path, self.max_bytes)
         headers = {
             key.decode("latin-1").lower(): value.decode("latin-1")
             for key, value in scope.get("headers", [])
@@ -68,7 +79,7 @@ class BodySizeLimitMiddleware:
         declared = headers.get("content-length")
         if declared:
             try:
-                if int(declared) > self.max_bytes:
+                if int(declared) > limit:
                     await _send_too_large(send)
                     return
             except ValueError:
@@ -84,7 +95,7 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_bytes:
+                if received > limit:
                     raise BodyTooLargeError
             return message
 

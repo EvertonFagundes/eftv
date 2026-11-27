@@ -10,6 +10,7 @@ from app.routes import player
 from app.routes.player import router
 from app.security.dependencies import get_current_active_subscription
 from app.services.devices import DeviceLimitError
+from app.services.playlist_cache import CacheInfo
 
 DEVICE_HEADERS = {
     "X-Device-Id": "test-device-0001",
@@ -28,10 +29,15 @@ class FakeSubscription:
         self.provider_revoked_at = None
 
 
+async def fake_db():
+    yield object()
+
+
 def build_client(days: int = 20) -> TestClient:
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_active_subscription] = lambda: FakeSubscription(days)
+    app.dependency_overrides[get_db] = fake_db
     return TestClient(app)
 
 
@@ -250,7 +256,11 @@ def test_playlist_text_reports_both_invalid_without_leaking_urls(monkeypatch):
     async def fake_download(url, headers):
         return b"<!DOCTYPE html><html><title>Welcome to nginx!</title></html>"
 
+    async def no_cache(db):
+        return None
+
     monkeypatch.setattr(player, "_baixar_playlist", fake_download)
+    monkeypatch.setattr(player, "load_cached_playlist", no_cache)
 
     response = client.get("/player/playlist-text", headers=DEVICE_HEADERS)
 
@@ -260,6 +270,36 @@ def test_playlist_text_reports_both_invalid_without_leaking_urls(monkeypatch):
     assert "playlist compartilhada" in detail
     assert "provider.example" not in detail
     assert "nginx" not in detail
+
+
+def test_playlist_text_uses_cache_when_provider_is_blocked(monkeypatch):
+    monkeypatch.setattr(settings, "IPTV_PLAYLIST_URL", "https://provider.example/shared.m3u")
+    client = build_client()
+
+    async def fake_download(url, headers):
+        raise player.PlaylistFetchError("bloqueado")
+
+    info = CacheInfo(
+        updated_at=datetime.now(UTC),
+        size_bytes=32,
+        compressed_bytes=24,
+        sha256="a" * 64,
+        source="upload",
+    )
+    cached_m3u = b"#EXTM3U\n#EXTINF:-1,Teste\nhttps://example/stream\n"
+
+    async def fake_cache(db):
+        return cached_m3u, info
+
+    monkeypatch.setattr(player, "_baixar_playlist", fake_download)
+    monkeypatch.setattr(player, "load_cached_playlist", fake_cache)
+
+    response = client.get("/player/playlist-text", headers=DEVICE_HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.content == cached_m3u
+    assert response.headers["x-playlist-source"] == "cache"
+    assert response.headers["x-playlist-cache-age"] == "0"
 
 
 def test_playlist_text_prefers_valid_own_line(monkeypatch):
