@@ -1,9 +1,14 @@
 # routes/player.py - Acesso do app nativo ao catalogo e a playlist
 import hashlib
+import ipaddress
+import socket
 import uuid
 from datetime import UTC, datetime
+from urllib.parse import urljoin, urlsplit
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -159,6 +164,88 @@ async def get_playlist_access(
             days_remaining=days_remaining,
         ),
     )
+
+
+def _url_publica(url: str) -> bool:
+    """Bloqueia SSRF: so aceta hosts publicos (o destino vem do painel)."""
+    host = (urlsplit(url).hostname or "").strip().lower()
+    if not host or host in ("localhost",) or host.endswith((".local", ".internal")):
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return False
+    return True
+
+
+@router.get("/playlist-text", response_class=Response)
+async def get_playlist_text(
+    subscription: Subscription = Depends(get_current_active_subscription),
+    device_id: str = Depends(get_device_id),
+):
+    """Entrega o texto da playlist buscado pelo backend.
+
+    Em algumas operadoras o celular nao resolve o dominio do provedor nem
+    consegue chegar aos servidores de DoH. O backend (em Render) tem DNS
+    livre e tops HTTPS com o app, entao serve como ultimo recurso. A URL e
+    sempre a configurada no painel: o cliente nao pode escolher o destino.
+    """
+    del device_id  # O dependency ja vincula o aparelho.
+    url = (_provider_url(subscription) or settings.IPTV_PLAYLIST_URL).strip()
+    if not url or not url.startswith(("http://", "https://")):
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Playlist nao configurada.")
+    if not _url_publica(url):
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Destino da playlist nao permitido.")
+
+    headers = {
+        "User-Agent": settings.IPTV_PLAYLIST_USER_AGENT,
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+    }
+    if settings.IPTV_PLAYLIST_REFERER:
+        headers["Referer"] = settings.IPTV_PLAYLIST_REFERER
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
+            response = await client.get(url, headers=headers)
+            for _ in range(5):
+                if response.status_code not in range(300, 400):
+                    break
+                location = response.headers.get("location")
+                if not location:
+                    raise ValueError("Redirecionamento sem Location")
+                proxima = urljoin(str(response.url), location)
+                if not proxima.startswith(("http://", "https://")) or not _url_publica(proxima):
+                    raise ValueError("Redirecionamento inseguro")
+                response = await client.get(proxima, headers=headers)
+            if not 200 <= response.status_code < 300:
+                raise ValueError(f"Provedor respondeu HTTP {response.status_code}")
+            if len(response.content) > 32 * 1024 * 1024:
+                raise ValueError("Playlist muito grande")
+            return Response(
+                content=response.content,
+                media_type="audio/x-mpegurl; charset=utf-8",
+                headers={"Cache-Control": "no-store"},
+            )
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Nao foi possivel buscar a playlist: {exc}",
+        ) from exc
 
 
 @router.get("/device", response_model=DeviceAccessResponse)

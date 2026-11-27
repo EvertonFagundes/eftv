@@ -211,6 +211,34 @@ class EftvApi(
         )
     }
 
+    /**
+     * Texto da playlist buscado pelo backend. Ultimo recurso em operadoras
+     * que bloqueiam tanto o DNS do provedor quanto os servidores de DoH.
+     */
+    suspend fun playlistText(accessToken: String): String = withContext(Dispatchers.IO) {
+        val connection = URL(baseUrl.trimEnd('/') + "/player/playlist-text")
+            .openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 30_000
+            connection.readTimeout = 180_000
+            connection.setRequestProperty("Accept", "audio/x-mpegurl, */*")
+            connection.setRequestProperty("Authorization", "Bearer $accessToken")
+            deviceId?.let { connection.setRequestProperty("X-Device-Id", it) }
+            deviceName?.let { connection.setRequestProperty("X-Device-Name", it) }
+
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                val detail = runCatching { connection.errorStream?.bufferedReader()?.readText() }
+                    .getOrNull().orEmpty()
+                throw ApiException(code, detail.take(300).ifBlank { "HTTP $code" })
+            }
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     suspend fun deviceAccess(accessToken: String): DeviceAccess {
         val json = request("GET", "/player/device", accessToken = accessToken)
         val array = json.optJSONArray("devices")

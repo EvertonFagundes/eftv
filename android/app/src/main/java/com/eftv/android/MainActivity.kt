@@ -827,8 +827,17 @@ class MainActivity : AppCompatActivity() {
                     return@launch
                 }
             }
-            repository = PlaylistRepository(this@MainActivity, source)
+            configureRepository()
             loadCatalog()
+        }
+    }
+
+    /** Repositorio com o fallback de playlist pelo backend (uteis em 4G). */
+    private fun configureRepository() {
+        repository = PlaylistRepository(this, source)
+        repository.backendFetch = {
+            val token = session.accessToken().orEmpty()
+            api.playlistText(token).byteInputStream(Charsets.UTF_8)
         }
     }
 
@@ -1030,7 +1039,7 @@ class MainActivity : AppCompatActivity() {
                         return@launch
                     }
                     // O vinculo pode ter mudado a origem (servidor x local).
-                    repository = PlaylistRepository(this@MainActivity, source)
+                    configureRepository()
                 }
 
                 importingCatalog = true

@@ -20,6 +20,12 @@ class PlaylistRepository(
     private val appContext = context.applicationContext
     val catalogStore = CatalogStore.get(appContext)
 
+    /**
+     * Busca da playlist pelo backend (DNS livre) quando o proxy local e o
+     * download direto falham — comum em operadoras que bloqueiam DoH.
+     */
+    var backendFetch: (suspend () -> InputStream)? = null
+
     private val sourceId: String =
         if (source.url.isBlank()) {
             "assets-v2"
@@ -125,6 +131,21 @@ class PlaylistRepository(
                 }
             } else {
                 Timber.w("Servidor local nao respondeu apos 30s")
+            }
+            // O backend tem DNS livre e o app fala HTTPS com ele ate em 4G.
+            backendFetch?.let { fetch ->
+                try {
+                    Timber.i("Baixando playlist pelo backend (DNS livre)")
+                    return fetch()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(
+                        e,
+                        "Backend nao entregou a playlist: %s",
+                        LogUtils.redactThrowable(e),
+                    )
+                }
             }
             if (mobile) {
                 Timber.w("Tentando download direto em dados moveis (pode ser bloqueado pela operadora)")
