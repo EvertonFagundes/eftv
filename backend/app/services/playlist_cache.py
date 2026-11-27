@@ -167,9 +167,11 @@ async def save_playlist(
             row.source = info.source
             row.updated_at = now
         await db.commit()
+        # Nao mantem os 84 MB descomprimidos na memoria depois do upload: o
+        # proximo request carrega do banco e deixa a copia pronta para servir.
         global _cached_raw, _cached_sha
-        _cached_raw = raw
-        _cached_sha = sha256
+        _cached_raw = None
+        _cached_sha = None
 
     logger.info(
         "Cache da playlist atualizado (%s bytes, %s comprimido, fonte=%s)",
