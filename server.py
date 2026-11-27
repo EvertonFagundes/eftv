@@ -1720,6 +1720,12 @@ class Handler(SimpleHTTPRequestHandler):
         if not is_http_url(target):
             self._error("Somente URLs http(s) podem ser baixadas.", 400)
             return
+        # Segunda tentativa do app: descarta o IP em cache (que pode ser um
+        # bloqueio da operadora) e resolve o host de novo no DoH antes de abrir.
+        if (params.get("doh") or [""])[0].strip().lower() in ("1", "true", "sim"):
+            host = (urlsplit(target).hostname or "").strip()
+            if host and not _eh_ip_literal(host):
+                _consulta_doh(host, "A", force=True)
         if not proxy_alvo_permitido(target):
             self._error("Endereco de destino nao permitido.", 403)
             return

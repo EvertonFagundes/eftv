@@ -421,7 +421,9 @@ class EftvApi(
         try {
             connection.requestMethod = method
             connection.connectTimeout = 30_000
-            connection.readTimeout = 60_000
+            // Render free pode levar ~1 min para acordar; 60s cortava a
+            // requisicao justamente no primeiro acesso do dia.
+            connection.readTimeout = 120_000
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("User-Agent", "EFTV-Android/${BuildConfig.VERSION_NAME}")
             accessToken?.let { connection.setRequestProperty("Authorization", "Bearer $it") }

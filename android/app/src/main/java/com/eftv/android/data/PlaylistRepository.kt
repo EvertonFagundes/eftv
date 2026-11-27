@@ -86,30 +86,44 @@ class PlaylistRepository(
     }
 
     /**
-     * Abre a playlist pelo servidor local (DNS-over-HTTPS + User-Agent/Referer)
-     * e cai para o download direto se ele não responder.
+     * Abre a playlist pelo servidor local (DNS-over-HTTPS + User-Agent/Referer).
      *
-     * Nos dados móveis a operadora às vezes não resolve o domínio do provedor
-     * ou devolve um IP de bloqueio. O download direto então falha e o catálogo
-     * fica vazio, mesmo com internet funcionando. O proxy local já resolvia os
-     * streams assim; agora o catálogo usa o mesmo caminho.
+     * Nos dados moveis a operadora as vezes nao resolve o dominio do provedor
+     * ou devolve um IP de bloqueio; baixar direto entao falha e o catalogo fica
+     * vazio. Por isso esperamos o servidor embutido subir (ate 30 s, o mesmo
+     * tempo usado na abertura do app) e tentamos duas vezes pelo proxy: a
+     * segunda forca DoH, ignorando o cache de DNS da operadora. O download
+     * direto fica apenas como ultimo recurso.
      */
     private suspend fun openPlaylistInput(): InputStream {
+        val mobile = NetworkInfo.label(appContext) == "movel"
         if (source.fromServer && source.url.startsWith("http")) {
-            if (LocalServer.waitUntilReady(timeoutMs = 8_000)) {
-                try {
-                    Timber.i("Baixando playlist pelo proxy local (DoH)")
-                    return openStream(LocalServer.remotePlaylistUrl(source.url))
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Timber.w(
-                        "Proxy local nao baixou a playlist; tentando direto: %s",
-                        LogUtils.redactThrowable(e),
-                    )
+            if (LocalServer.waitUntilReady(timeoutMs = 30_000)) {
+                for (attempt in 1..2) {
+                    try {
+                        Timber.i(
+                            "Baixando playlist pelo proxy local (DoH, tentativa %d)",
+                            attempt,
+                        )
+                        return openStream(
+                            LocalServer.remotePlaylistUrl(source.url, forceDoh = attempt == 2),
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.w(
+                            e,
+                            "Proxy local falhou na tentativa %d: %s",
+                            attempt,
+                            LogUtils.redactThrowable(e),
+                        )
+                    }
                 }
             } else {
-                Timber.w("Servidor local nao respondeu; baixando playlist direto")
+                Timber.w("Servidor local nao respondeu apos 30s")
+            }
+            if (mobile) {
+                Timber.w("Tentando download direto em dados moveis (pode ser bloqueado pela operadora)")
             }
         }
         return openStream(source.url)
@@ -118,6 +132,7 @@ class PlaylistRepository(
     private fun openStream(url: String, maxRedirects: Int = 5): InputStream {
         var current = url
         var redirects = 0
+        var cookies: String? = null
 
         while (true) {
             val connection = URL(current).openConnection() as HttpURLConnection
@@ -130,11 +145,16 @@ class PlaylistRepository(
             source.referer?.takeIf { it.isNotBlank() }?.let { referer ->
                 connection.setRequestProperty("Referer", referer)
             }
+            // Alguns provedores exigem sessao entre redirecionamentos.
+            cookies?.let { connection.setRequestProperty("Cookie", it) }
             connection.requestMethod = "GET"
 
             val code = connection.responseCode
             if (code in 300..399 && redirects < maxRedirects) {
                 val location = connection.getHeaderField("Location")
+                connection.getHeaderField("Set-Cookie")?.takeIf { it.isNotBlank() }?.let {
+                    cookies = it
+                }
                 connection.disconnect()
                 if (location.isNullOrBlank()) {
                     throw IOException("Redirecionamento sem Location (HTTP $code)")
@@ -143,6 +163,10 @@ class PlaylistRepository(
                 if (!next.startsWith("http://", ignoreCase = true) &&
                     !next.startsWith("https://", ignoreCase = true)) {
                     throw IOException("Redirecionamento inseguro: $next")
+                }
+                if (current.startsWith("https://", ignoreCase = true) &&
+                    !next.startsWith("https://", ignoreCase = true)) {
+                    throw IOException("Redirecionamento inseguro (https -> http)")
                 }
                 current = next
                 redirects++

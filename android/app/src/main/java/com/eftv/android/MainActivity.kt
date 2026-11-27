@@ -842,7 +842,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         return try {
-            api.playlist(token).toSource()
+            try {
+                api.playlist(token).toSource()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                // 4xx (login/blocked/expired) nao muda com uma segunda chamada.
+                if (e is EftvApi.ApiException && e.statusCode in 400..499 && e.statusCode != 408) {
+                    throw e
+                }
+                // Render free dormindo: primeira requisicao pode expirar.
+                Timber.w(e, "Backend frio/indisponivel; tentando buscar a playlist de novo")
+                delay(2_000)
+                api.playlist(token).toSource()
+            }
         } catch (e: EftvApi.ApiException) {
             when (e.statusCode) {
                 401 -> {

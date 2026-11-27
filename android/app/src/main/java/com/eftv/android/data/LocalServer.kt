@@ -48,9 +48,10 @@ object LocalServer {
     }
 
     /** URL do proxy local para baixar a playlist do provedor (DoH + headers). */
-    fun remotePlaylistUrl(target: String): String {
+    fun remotePlaylistUrl(target: String, forceDoh: Boolean = false): String {
         val encoded = java.net.URLEncoder.encode(target.trim(), "UTF-8")
-        return "$BASE_URL/api/playlist-remote?url=$encoded"
+        val suffix = if (forceDoh) "&doh=1" else ""
+        return "$BASE_URL/api/playlist-remote?url=$encoded$suffix"
     }
 
     /** True depois que o servidor embutido respondeu ao menos uma vez. */
