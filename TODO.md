@@ -25,7 +25,7 @@
   for fechado no meio de uma importação, `recoverInterruptedImport()` valida os
   lotes já commitados como cache, em vez de apagar tudo e recomeçar.
 
-Estado: 1.5.22 (`versionCode 47`), 230 testes do backend e 6 do servidor local
+Estado: 1.5.23 (`versionCode 48`), 230 testes do backend e 6 do servidor local
 passando, compilação Android OK.
 
 ### Validação em 4G (aparelho conectado)
