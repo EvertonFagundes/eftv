@@ -40,6 +40,12 @@ FIRST_LINE_CHARS = 80
 DOH_CACHE_SECONDS = 600
 ROUTE_CACHE_SECONDS = 600
 
+# Ultimo recurso deste provedor: a rede local recebe estes IPs de borda do
+# CDN, mas o DNS do Render recebe os IPs de origem que servem nginx. O acesso
+# por IP preserva Host/SNI; ``IPTV_PLAYLIST_FALLBACK_IPS`` tem prioridade e
+# pode substituir esta lista quando o CDN mudar.
+_DEFAULT_FALLBACK_IPS = ("172.67.143.94", "104.21.87.130")
+
 # cache de IPs por host e de rota vencedora por playlist (hash)
 _ip_cache: dict[str, tuple[float, list[str]]] = {}
 _doh_cache: dict[str, tuple[float, list[str]]] = {}
@@ -692,6 +698,8 @@ async def fetch_playlist(
                 for item in (settings.IPTV_PLAYLIST_FALLBACK_IPS or "").split(",")
                 if item.strip()
             ]
+            if not fallback_ips:
+                fallback_ips = list(_DEFAULT_FALLBACK_IPS)
             _append_unique(result.resolved_ips, [ip for ip in fallback_ips if _public_ip(ip)])
             found = await try_candidates(
                 client,
