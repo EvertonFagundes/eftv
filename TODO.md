@@ -25,8 +25,24 @@
   for fechado no meio de uma importação, `recoverInterruptedImport()` valida os
   lotes já commitados como cache, em vez de apagar tudo e recomeçar.
 
-Estado: 1.5.18 (`versionCode 43`), 230 testes do backend e 6 do servidor local
+Estado: 1.5.22 (`versionCode 47`), 230 testes do backend e 6 do servidor local
 passando, compilação Android OK.
+
+### Validação em 4G (aparelho conectado)
+
+- Wi-Fi desligado, dados móveis ligados: conectividade OK (`ping 8.8.8.8`).
+- O app abriu e carregou o catálogo salvo sem importar de novo (meta confirmada).
+- Ao forçar "Atualizar lista": proxy local deu timeout nas duas tentativas e o
+  download direto falhou com `UnknownHostException` para `rtv30t.com` (DNS da
+  operadora bloqueado) — era exatamente o cenário que o fallback do backend
+  resolve.
+- **Bloqueio encontrado:** o backend acessa a URL configurada, mas ela devolve
+  uma página padrão do nginx ("Welcome to nginx!", 235 bytes), não uma playlist.
+  O URL licenciado está no painel do Render (`IPTV_PLAYLIST_URL`, `sync: false`)
+  e precisa ser corrigido pelo usuário. Com URL válida, o fallback por HTTPS do
+  backend completa a importação em dados móveis.
+- `CatalogStore.replace()` agora só limpa o catálogo quando chega o primeiro
+  canal: uma playlist vazia não apaga mais a lista salva no aparelho.
 
 ## Correção de 27/11/2026 — capas de série pela API
 
