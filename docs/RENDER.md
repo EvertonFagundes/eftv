@@ -63,21 +63,24 @@ Quando for atender cliente de verdade, aplique o [`render.yaml`](../render.yaml)
 ## Manter a API acordada (opcional, so para teste)
 
 O workflow [`.github/workflows/keepalive.yml`](../.github/workflows/keepalive.yml)
-faz `GET /health` a cada 10 minutos. E o suficiente para o Render nao hibernar,
-entao o primeiro acesso do cliente deixa de esperar ~1 minuto.
+faz `GET /ping` e encadeia a proxima execucao por `workflow_dispatch` com
+~9 minutos de atraso. Isso e necessario porque o cron do GitHub e pouco
+confiavel: em horarios de pico ele ja entregou apenas algumas execucoes por dia
+(com intervalos de ate 16h), tempo suficiente para o Render hibernar.
 
-Ele roda sozinho, sem servico externo. Para conferir: aba **Actions** >
-**Manter API acordada** > **Run workflow**.
+O `self_ping` do backend (a cada 5 min) e apenas reforco: ele roda dentro do
+processo e nao consegue acordar uma instancia que ja foi desligada.
 
-Se quiser um intervalo mais pontual, um monitor gratuito como o UptimeRobot
-(checagem a cada 5 minutos) faz o mesmo papel, sem depender do cron do GitHub.
+Para conferir: aba **Actions** > **Manter API acordada** > **Run workflow**.
+A URL pode ser trocada pela variavel de repositorio `KEEPALIVE_URL`.
 
 Limites dessa abordagem:
 
 - consome as 750 horas de instancia free do mes (~730h em um mes de 31 dias);
 - nao impede o Postgres free de expirar em 30 dias;
-- o GitHub pode atrasar execucoes agendadas em horarios de pico;
-- se o repositorio ficar 60 dias sem atividade, o GitHub desativa o agendamento.
+- uma execucao manual reinicia a corrente se ela parar;
+- se o repositorio ficar 60 dias sem atividade, o GitHub desativa o agendamento
+  (a corrente por dispatch continua, pois conta como atividade).
 
 Se o plano for atender cliente pagante, troque para Starter + Basic: sai mais
 barato do que manter esse esquema e nao tem esses riscos.

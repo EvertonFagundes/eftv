@@ -1,4 +1,5 @@
 # main.py - FastAPI app, middleware, lifespan, routers
+import logging
 from contextlib import asynccontextmanager
 
 import httpx
@@ -30,21 +31,26 @@ from app.tasks.subscription_checker import (
 )
 
 scheduler = AsyncIOScheduler()
+logger = logging.getLogger(__name__)
 
 
 async def self_ping() -> None:
-    """Pinga o proprio /ping para manter a instancia do Render acordada.
+    """Pinga o /ping publico para manter a instancia do Render acordada.
 
-    O plano free dorme apos ~15 min sem requisicao. O GitHub Actions keepalive
-    e a primeira linha de defesa; este ping interno e o backup caso o cron
-    atrase (o que acontece em horarios de pico).
+    O ping interno e apenas um reforco: quando o Render desliga o processo, o
+    agendador morre junto e nao ha como se acordar sozinho. Por isso a linha
+    principal e o keepalive externo (GitHub Actions). Usar a URL publica faz a
+    requisicao passar pela borda (Cloudflare/Render), que e o trafego que conta
+    como atividade; falhas ficam registradas para diagnostico.
     """
-    url = f"http://127.0.0.1:{settings.PORT}/ping"
+    url = f"{settings.API_BASE_URL.rstrip('/')}/ping"
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.get(url)
-    except Exception:  # noqa: BLE001
-        pass
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(url)
+        if response.status_code != 200:
+            logger.warning("self-ping respondeu HTTP %s", response.status_code)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Falha no self-ping (%s): %s", url, exc)
 
 
 @asynccontextmanager
