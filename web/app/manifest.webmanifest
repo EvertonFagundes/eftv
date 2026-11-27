@@ -1,0 +1,74 @@
+{
+  "id": "./",
+  "name": "EFTV — Canais ao vivo, filmes e séries",
+  "short_name": "EFTV",
+  "description": "Canais ao vivo, filmes e séries por assinatura. Abra no navegador ou instale como app.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#050b16",
+  "theme_color": "#071426",
+  "categories": ["entertainment", "video", "utilities"],
+  "icons": [
+    { "src": "assets/img/icon-72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    {
+      "src": "assets/img/screens/app-ao-vivo.png",
+      "sizes": "824x1830",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Canais ao vivo com busca, categorias e índice A-Z"
+    },
+    {
+      "src": "assets/img/screens/app-player.png",
+      "sizes": "824x1830",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Player com qualidade, áudio e legendas"
+    },
+    {
+      "src": "assets/img/screens/app-desktop.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "EFTV no computador"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ao vivo",
+      "short_name": "Ao vivo",
+      "description": "Ver canais ao vivo agora",
+      "url": "./index.html#ao-vivo",
+      "icons": [{ "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Minha assinatura",
+      "short_name": "Assinatura",
+      "description": "Acessar meus planos e pagamentos",
+      "url": "./index.html#conta",
+      "icons": [{ "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Favoritos",
+      "short_name": "Favoritos",
+      "description": "Ver canais favoritos",
+      "url": "./index.html#favoritos",
+      "icons": [{ "src": "assets/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

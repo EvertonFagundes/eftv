@@ -8,6 +8,8 @@
 |---|---|
 | [`docs/APP-ANDROID.md`](docs/APP-ANDROID.md) | App Android (celular, tablet e TV box): telas, login, catálogo, player, limite de 1 tela, assinatura, atualização, crash reporter, build, keystore e instalação por ADB |
 | [`docs/APP-WEB.md`](docs/APP-WEB.md) | Versão web: páginas estáticas no GitHub Pages (landing, checkout, verificação de e-mail, player) e SPA `frontend/` (Vite / Cloudflare Pages) |
+| [`web/README.md`](web/README.md) | **App web + PWA** (`web/`): landing, app instalável, player, assinatura, prints reais e deploy |
+| [`web/CONTINUAR.md`](web/CONTINUAR.md) | Checklist para retomar o desenvolvimento do app web/PWA |
 | [`docs/API.md`](docs/API.md) | Referência dos endpoints do backend (auth, player, assinaturas, app, admin) |
 | [`docs/TV.md`](docs/TV.md) | Android TV / Fire TV: o que já funciona, login por código, assinatura por QR e plano para Samsung/LG |
 | [`PAGAMENTOS.md`](PAGAMENTOS.md) | Runbook de pagamentos: fluxo do Mercado Pago, conciliação, cancelamento, limite de telas, avisos por e-mail e painel admin |

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#071426">
+  <meta name="description" content="EFTV — Canais ao vivo, filmes e séries. Abra no navegador ou instale como app.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EFTV">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <title>EFTV — Canais ao vivo</title>
+</head>
+<body>
+
+  <!-- ===== Banner de atualização ===== -->
+  <div id="update-banner" class="update-banner hidden">
+    <span>Nova versão do EFTV disponível.</span>
+    <button id="btn-update" class="btn-mini">Atualizar</button>
+    <button id="btn-update-close" class="btn-mini ghost">✕</button>
+  </div>
+
+  <!-- ===== Install prompt (PWA) ===== -->
+  <dialog id="install-dialog" class="modal" data-install-dialog>
+    <div class="modal-card">
+      <button class="modal-close" data-install-close aria-label="Fechar">✕</button>
+      <h3>Instalar o EFTV</h3>
+      <p>Adicione o EFTV à sua tela inicial para usar como um app, sem baixar APK de fontes desconhecidas.</p>
+      <div class="modal-actions">
+        <button id="btn-install-app" data-install-app class="btn btn-primary">Instalar app</button>
+        <button data-install-close class="btn btn-outline">Depois</button>
+      </div>
+      <p class="modal-hint">No iPhone/iPad: toque em Compartilhar → “Adicionar à Tela de Início”.</p>
+    </div>
+  </dialog>
+
+  <!-- ===== Header ===== -->
+  <header class="app-header">
+    <div class="header-left">
+      <button class="btn-menu" id="btn-menu" aria-label="Abrir menu">☰</button>
+      <a class="brand" href="#ao-vivo" aria-label="EFTV — início">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z"/></svg>
+        <span>EF<b>TV</b></span>
+      </a>
+    </div>
+
+    <div class="header-center">
+      <form class="search-bar" id="form-busca" role="search">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="busca" placeholder="Buscar canais, filmes, séries…" autocomplete="off" enterkeyhint="search">
+        <button type="button" id="btn-limpar-busca" class="btn-limpar hidden" aria-label="Limpar busca">✕</button>
+      </form>
+    </div>
+
+    <div class="header-right">
+      <button class="btn-icon" id="btn-instalar" data-install-app aria-label="Instalar app" title="Instalar app" hidden>⬇</button>
+      <button class="btn-icon" id="btn-perfil" aria-label="Conta">👤</button>
+    </div>
+  </header>
+
+  <!-- ===== Sidebar ===== -->
+  <nav class="sidebar" id="sidebar" aria-label="Menu principal">
+    <div class="sidebar-head">
+      <div class="brand-mini">EF<b>TV</b></div>
+      <span class="user-name" id="sidebar-user">Convidado</span>
+    </div>
+
+    <ul class="sidebar-list">
+      <li><a href="#ao-vivo" class="nav-link" data-view="ao-vivo">📺 Ao Vivo</a></li>
+      <li><a href="#filmes" class="nav-link" data-view="filmes">🎬 Filmes</a></li>
+      <li><a href="#series" class="nav-link" data-view="series">📺 Séries</a></li>
+      <li><a href="#categorias" class="nav-link" data-view="categorias">🗂️ Categorias</a></li>
+      <li class="sidebar-divider">Minha biblioteca</li>
+      <li><a href="#favoritos" class="nav-link" data-view="favoritos">⭐ Favoritos</a></li>
+      <li><a href="#continuar" class="nav-link" data-view="continuar">⏯ Continuar assistindo</a></li>
+      <li><a href="#recentes" class="nav-link" data-view="recentes">🕘 Recentes</a></li>
+      <li class="sidebar-divider">Conta</li>
+      <li><a href="#conta" class="nav-link" data-view="conta">💳 Minha assinatura</a></li>
+      <li><a href="#ajustes" class="nav-link" data-view="ajustes">⚙️ Ajustes</a></li>
+      <li><a href="#ajuda" class="nav-link" data-view="ajuda">❓ Ajuda</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <button class="btn-logout" id="btn-logout">Sair</button>
+      <div class="app-version" id="app-version">Web PWA · v1.0.0</div>
+    </div>
+  </nav>
+
+  <div class="app-overlay" id="overlay"></div>
+
+  <!-- ===== Conteúdo ===== -->
+  <main class="app-main" id="app-main">
+
+    <!-- Ao Vivo -->
+    <section class="view" id="view-ao-vivo" data-view="ao-vivo">
+      <div class="toolbar">
+        <h2>Ao Vivo</h2>
+        <div class="toolbar-actions">
+          <span class="chip live">🔴 Ao vivo</span>
+          <button class="btn-mini" id="btn-atualizar-catalogo" title="Atualizar catálogo">↻</button>
+        </div>
+      </div>
+      <div class="chips" id="chips-ao-vivo"></div>
+      <div class="content-with-az">
+        <div class="grid" id="grid-ao-vivo"></div>
+        <div class="az-bar" id="az-bar" aria-label="Índice alfabético"></div>
+      </div>
+      <div class="empty-state hidden" id="empty-ao-vivo">
+        <span class="empty-icon">📺</span>
+        <h3>Nenhum canal encontrado</h3>
+        <p>Ajuste a busca ou tente atualizar o catálogo.</p>
+      </div>
+    </section>
+
+    <!-- Filmes -->
+    <section class="view hidden" id="view-filmes" data-view="filmes">
+      <div class="toolbar"><h2>Filmes</h2></div>
+      <div class="chips" id="chips-filmes"></div>
+      <div class="grid" id="grid-filmes"></div>
+      <div class="empty-state hidden" id="empty-filmes">
+        <span class="empty-icon">🎬</span>
+        <h3>Nenhum filme encontrado</h3>
+        <p>O catálogo de filmes ainda não foi carregado.</p>
+      </div>
+    </section>
+
+    <!-- Séries -->
+    <section class="view hidden" id="view-series" data-view="series">
+      <div class="toolbar"><h2>Séries</h2></div>
+      <div class="chips" id="chips-series"></div>
+      <div class="grid" id="grid-series"></div>
+      <div class="empty-state hidden" id="empty-series">
+        <span class="empty-icon">📺</span>
+        <h3>Nenhuma série encontrada</h3>
+        <p>O catálogo de séries ainda não foi carregado.</p>
+      </div>
+    </section>
+
+    <!-- Categorias -->
+    <section class="view hidden" id="view-categorias" data-view="categorias">
+      <div class="toolbar"><h2>Categorias</h2></div>
+      <div class="grid grid-categorias" id="grid-categorias"></div>
+    </section>
+
+    <!-- Categoria detalhe -->
+    <section class="view hidden" id="view-categoria" data-view="categoria">
+      <div class="toolbar">
+        <h2 id="titulo-categoria">Categoria</h2>
+        <button class="btn-mini" id="btn-voltar-categoria">← Voltar</button>
+      </div>
+      <div class="grid" id="grid-categoria"></div>
+    </section>
+
+    <!-- Favoritos -->
+    <section class="view hidden" id="view-favoritos" data-view="favoritos">
+      <div class="toolbar"><h2>Favoritos</h2></div>
+      <div class="grid" id="grid-favoritos"></div>
+      <div class="empty-state" id="empty-favoritos">
+        <span class="empty-icon">⭐</span>
+        <h3>Sem favoritos ainda</h3>
+        <p>Toque na estrela de um canal para salvar aqui.</p>
+      </div>
+    </section>
+
+    <!-- Continuar assistindo -->
+    <section class="view hidden" id="view-continuar" data-view="continuar">
+      <div class="toolbar"><h2>Continuar assistindo</h2></div>
+      <div class="grid" id="grid-continuar"></div>
+      <div class="empty-state" id="empty-continuar">
+        <span class="empty-icon">⏯</span>
+        <h3>Nada em andamento</h3>
+        <p>Comece um filme ou série para aparecer aqui.</p>
+      </div>
+    </section>
+
+    <!-- Recentes -->
+    <section class="view hidden" id="view-recentes" data-view="recentes">
+      <div class="toolbar"><h2>Recentes</h2></div>
+      <div class="grid" id="grid-recentes"></div>
+      <div class="empty-state" id="empty-recentes">
+        <span class="empty-icon">🕘</span>
+        <h3>Nenhum item recente</h3>
+        <p>Os canais que você abrir aparecem aqui.</p>
+      </div>
+    </section>
+
+    <!-- Busca -->
+    <section class="view hidden" id="view-busca" data-view="busca">
+      <div class="toolbar"><h2 id="titulo-busca">Resultados</h2></div>
+      <div class="grid" id="grid-busca"></div>
+      <div class="empty-state hidden" id="empty-busca">
+        <span class="empty-icon">🔍</span>
+        <h3>Nada encontrado</h3>
+        <p>Tente outro termo de busca.</p>
+      </div>
+    </section>
+
+    <!-- Conta -->
+    <section class="view hidden" id="view-conta" data-view="conta">
+      <div class="toolbar"><h2>Minha assinatura</h2></div>
+      <div class="account-card" id="account-card">
+        <div class="account-loading">Carregando assinatura…</div>
+      </div>
+      <div class="account-actions" id="account-actions" hidden>
+        <button class="btn btn-primary btn-block" id="btn-assinar">Assinar / alterar plano</button>
+        <button class="btn btn-outline btn-block" id="btn-cancelar" hidden>Cancelar assinatura</button>
+        <button class="btn btn-outline btn-block" id="btn-restaurar">Restaurar compras</button>
+        <button class="btn btn-outline btn-block" id="btn-dispositivos">Gerenciar dispositivos</button>
+      </div>
+      <div class="devices-card hidden" id="devices-card">
+        <h3>Dispositivos</h3>
+        <div id="lista-dispositivos"></div>
+        <button class="btn btn-outline btn-block" id="btn-revogar-dispositivos">Desvincular todos</button>
+      </div>
+    </section>
+
+    <!-- Ajustes -->
+    <section class="view hidden" id="view-ajustes" data-view="ajustes">
+      <div class="toolbar"><h2>Ajustes</h2></div>
+      <div class="settings-card">
+        <label class="switch-row">
+          <span><strong>Conteúdo adulto</strong><small>Mostrar categorias e canais adultos no catálogo</small></span>
+          <input type="checkbox" id="set-adulto" class="switch">
+        </label>
+        <label class="switch-row">
+          <span><strong>Modo TV</strong><small>Navegação com foco ampliado para controle remoto</small></span>
+          <input type="checkbox" id="set-tv" class="switch">
+        </label>
+        <label class="switch-row">
+          <span><strong>Economizar dados</strong><small>Preferir qualidade menor em redes móveis</small></span>
+          <input type="checkbox" id="set-economia" class="switch">
+        </label>
+        <label class="switch-row">
+          <span><strong>Reproduzir automaticamente</strong><small>Iniciar o vídeo ao abrir um canal</small></span>
+          <input type="checkbox" id="set-autoplay" class="switch">
+        </label>
+        <div class="settings-actions">
+          <button class="btn btn-outline btn-block" id="btn-limpar-cache">Limpar cache do catálogo</button>
+          <button class="btn btn-outline btn-block" id="btn-tv-code">Entrar na TV com código</button>
+          <button class="btn btn-outline btn-block" id="btn-instalar-ajustes">Instalar app (PWA)</button>
+        </div>
+        <p class="settings-note" id="settings-api"></p>
+      </div>
+    </section>
+
+    <!-- Ajuda -->
+    <section class="view hidden" id="view-ajuda" data-view="ajuda">
+      <div class="toolbar"><h2>Ajuda</h2></div>
+      <div class="help-card">
+        <h3>Como usar o EFTV na web</h3>
+        <ul>
+          <li>Abra <code>eftv.com.br/app</code> no navegador do celular.</li>
+          <li>Toque em <strong>“Instalar app”</strong> para criar um atalho na tela inicial.</li>
+          <li>Não é preciso baixar APK de fontes desconhecidas.</li>
+          <li>O plano permite 2 aparelhos e 1 tela simultânea.</li>
+          <li>Use a busca (sem acento) ou a barra A-Z para achar canais rapidamente.</li>
+        </ul>
+        <h3>Problemas comuns</h3>
+        <ul>
+          <li><strong>“Limite de tela”</strong>: feche o player em outro aparelho ou aguarde 2 minutos.</li>
+          <li><strong>Vídeo não abre</strong>: o provedor pode bloquear CORS; use o app Android nesse caso.</li>
+          <li><strong>Sem som</strong>: toque no ícone de volume no player.</li>
+        </ul>
+        <h3>Suporte</h3>
+        <p>E-mail: <a href="mailto:suporte@eftv.com.br">suporte@eftv.com.br</a></p>
+        <p class="demo-note" id="demo-note" hidden>⚠️ Você está no modo demonstração: os dados são de exemplo e não há cobrança real.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== Player ===== -->
+  <div class="player-wrap hidden" id="player-wrap">
+    <div class="player-header">
+      <button class="btn-icon" id="btn-fechar-player" aria-label="Fechar player">✕</button>
+      <span id="player-titulo">Carregando…</span>
+      <div class="player-header-actions">
+        <button class="btn-icon" id="btn-favorito-player" aria-label="Favoritar">☆</button>
+        <button class="btn-icon" id="btn-pip" aria-label="Picture-in-Picture">⧉</button>
+      </div>
+    </div>
+
+    <div class="player-stage">
+      <video id="video" playsinline preload="metadata" poster="assets/img/placeholder-poster.svg"></video>
+
+      <div class="player-controls" id="player-controls">
+        <div class="controls-top">
+          <span id="player-status" class="player-status">Carregando…</span>
+          <button class="ctrl-btn ghost hidden" id="btn-ao-vivo">🔴 Voltar ao vivo</button>
+        </div>
+
+        <div class="controls-bottom">
+          <button class="ctrl-btn" id="btn-play-pause" aria-label="Play/Pause">▶</button>
+          <button class="ctrl-btn small" id="btn-voltar-10" aria-label="Voltar 10s">↺10</button>
+          <button class="ctrl-btn small" id="btn-avancar-10" aria-label="Avançar 10s">10↻</button>
+
+          <div class="progress-wrap">
+            <span class="time" id="time-current">0:00</span>
+            <div class="progress-bar" id="progress-bar">
+              <div class="progress-filled" id="progress-filled"></div>
+              <div class="progress-handle" id="progress-handle"></div>
+            </div>
+            <span class="time" id="time-duration">0:00</span>
+          </div>
+
+          <button class="ctrl-btn" id="btn-mudo" aria-label="Mudo">🔊</button>
+          <button class="ctrl-btn small" id="btn-qualidade" aria-label="Qualidade">HD</button>
+          <button class="ctrl-btn small" id="btn-audio" aria-label="Áudio">🎧</button>
+          <button class="ctrl-btn small" id="btn-legenda" aria-label="Legenda">CC</button>
+          <button class="ctrl-btn" id="btn-fullscreen" aria-label="Tela cheia">⛶</button>
+        </div>
+      </div>
+
+      <!-- Menus de faixas -->
+      <div class="track-menu hidden" id="menu-qualidade"></div>
+      <div class="track-menu hidden" id="menu-audio"></div>
+      <div class="track-menu hidden" id="menu-legenda"></div>
+
+      <!-- Erro -->
+      <div id="player-error" class="player-error hidden">
+        <div class="error-text" id="player-error-text">Não foi possível iniciar a transmissão.</div>
+        <button class="btn btn-primary" id="btn-retry-player">Tentar novamente</button>
+      </div>
+
+      <!-- Limite de tela -->
+      <div id="stream-limit" class="player-error hidden">
+        <div class="error-text">Sua assinatura permite 1 tela por vez. Feche o player em outro aparelho ou aguarde 2 minutos.</div>
+        <button class="btn btn-primary" id="btn-fechar-limite">Entendi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal de autenticação ===== -->
+  <dialog id="auth-modal" class="modal">
+    <div class="modal-card auth-card">
+      <button class="modal-close" id="auth-close" aria-label="Fechar">✕</button>
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth-tab="login">Entrar</button>
+        <button class="auth-tab" data-auth-tab="register">Criar conta</button>
+      </div>
+
+      <form id="form-login" class="auth-form">
+        <div class="field"><label>E-mail</label><input type="email" name="email" placeholder="seu@email.com" required autocomplete="email"></div>
+        <div class="field"><label>Senha</label><input type="password" name="senha" placeholder="••••••••" required autocomplete="current-password"></div>
+        <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+        <p class="auth-footer"><a href="#" id="link-esqueci">Esqueci minha senha</a></p>
+      </form>
+
+      <form id="form-register" class="auth-form hidden">
+        <div class="field"><label>Nome</label><input type="text" name="nome" placeholder="Seu nome" required autocomplete="name"></div>
+        <div class="field"><label>E-mail</label><input type="email" name="email" placeholder="seu@email.com" required autocomplete="email"></div>
+        <div class="field"><label>Senha</label><input type="password" name="senha" placeholder="Mínimo 8 caracteres" minlength="8" required autocomplete="new-password"></div>
+        <button type="submit" class="btn btn-primary btn-block">Criar conta</button>
+        <p class="auth-footer">Você ganha 7 dias de teste após confirmar o e-mail.</p>
+      </form>
+
+      <form id="form-forgot" class="auth-form hidden">
+        <p class="auth-desc">Informe seu e-mail para receber o código de recuperação.</p>
+        <div class="field"><label>E-mail</label><input type="email" name="email" placeholder="seu@email.com" required></div>
+        <button type="submit" class="btn btn-primary btn-block">Enviar código</button>
+        <div class="field hidden" id="campo-codigo"><label>Código</label><input type="text" name="codigo" placeholder="Código recebido"></div>
+        <div class="field hidden" id="campo-nova-senha"><label>Nova senha</label><input type="password" name="novaSenha" minlength="8" placeholder="Nova senha"></div>
+        <button type="submit" class="btn btn-outline btn-block hidden" id="btn-redefinir">Redefinir senha</button>
+        <p class="auth-footer"><a href="#" id="link-voltar-login">Voltar para o login</a></p>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- ===== Modal login por código (TV) ===== -->
+  <dialog id="tv-modal" class="modal">
+    <div class="modal-card">
+      <button class="modal-close" id="tv-close" aria-label="Fechar">✕</button>
+      <h3>Entrar na TV com código</h3>
+      <p>Gere o código abaixo e informe em <strong>eftv.com.br/tv</strong> no celular para autorizar esta TV.</p>
+      <div class="tv-code" id="tv-code">——————</div>
+      <button class="btn btn-primary btn-block" id="btn-gerar-codigo">Gerar código</button>
+      <p class="modal-hint" id="tv-status"></p>
+    </div>
+  </dialog>
+
+  <!-- ===== Toast ===== -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- ===== Scripts (ordem importa) ===== -->
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/catalog.js"></script>
+  <script src="assets/js/player.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/pwa.js"></script>
+</body>
+</html>

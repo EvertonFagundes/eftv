@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#071426">
+  <meta name="robots" content="noindex">
+  <title>EFTV — Confirmação de pagamento</title>
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh; display: grid; place-items: center; padding: 24px;
+      background: radial-gradient(900px 600px at 50% -10%, #0d2c52, transparent 60%), #050b16;
+      color: #e8eef7; font-family: "Inter", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      text-align: center;
+    }
+    .card {
+      width: min(440px, 100%); background: #071426;
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px;
+      padding: 34px 26px; box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    }
+    .brand { display: flex; align-items: center; justify-content: center; gap: 9px; font-weight: 800; font-size: 1.5rem; margin-bottom: 22px; }
+    .brand svg { width: 26px; height: 26px; fill: #2f9bff; }
+    .brand b { color: #2f9bff; }
+    .icon { font-size: 3.2rem; line-height: 1; margin-bottom: 12px; }
+    h1 { font-size: 1.35rem; margin-bottom: 10px; }
+    p { color: #9fb0c8; font-size: 0.95rem; line-height: 1.6; }
+    .status { font-weight: 700; margin-top: 6px; }
+    .ok { color: #37d67a; }
+    .warn { color: #ffb020; }
+    .err { color: #ff4d6d; }
+    .actions { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 13px 18px; border-radius: 11px; font-weight: 700; font-size: 0.95rem;
+      text-decoration: none; border: 0; cursor: pointer;
+    }
+    .btn-primary { background: linear-gradient(135deg, #35a5ff, #0b5bd3); color: #fff; }
+    .btn-outline { background: transparent; border: 1px solid rgba(255,255,255,0.16); color: #e8eef7; }
+    .hint { font-size: 0.8rem; color: #7f93ae; margin-top: 18px; }
+    .hint a { color: #2f9bff; }
+    .spinner {
+      width: 26px; height: 26px; margin: 6px auto 0;
+      border: 3px solid rgba(255,255,255,0.18); border-top-color: #2f9bff;
+      border-radius: 50%; animation: girar 0.9s linear infinite;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z"/></svg>
+      <span>EF<b>TV</b></span>
+    </div>
+
+    <div class="icon" id="icone">⏳</div>
+    <h1 id="titulo">Verificando pagamento…</h1>
+    <p id="mensagem">Aguarde enquanto confirmamos sua assinatura com o Mercado Pago.</p>
+    <p class="status" id="status"></p>
+    <div class="spinner" id="carregando"></div>
+
+    <div class="actions">
+      <a class="btn btn-primary" id="btn-app" href="index.html#conta">Abrir o EFTV</a>
+      <a class="btn btn-outline" id="btn-deeplink" href="eftv://open">Abrir no aplicativo Android</a>
+    </div>
+
+    <p class="hint" id="dica">
+      Se você instalou o EFTV como app, feche esta aba e abra o atalho na tela inicial.
+      Precisa de ajuda? <a href="mailto:suporte@eftv.com.br">suporte@eftv.com.br</a>
+    </p>
+  </main>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const params = new URLSearchParams(location.search);
+      const status = (params.get("status") || params.get("collection_status") || "").toLowerCase();
+      const pagamentoId = params.get("payment_id") || params.get("collection_id") || "";
+      const externo = params.get("external_reference") || "";
+
+      const icone = document.getElementById("icone");
+      const titulo = document.getElementById("titulo");
+      const mensagem = document.getElementById("mensagem");
+      const statusEl = document.getElementById("status");
+      const carregando = document.getElementById("carregando");
+      const btnApp = document.getElementById("btn-app");
+      const btnDeeplink = document.getElementById("btn-deeplink");
+
+      function pintar(tipo, tituloTexto, texto, statusTexto) {
+        icone.textContent = tipo === "ok" ? "✅" : tipo === "warn" ? "⏳" : tipo === "err" ? "⚠️" : "ℹ️";
+        titulo.textContent = tituloTexto;
+        mensagem.textContent = texto;
+        statusEl.textContent = statusTexto || "";
+        statusEl.className = "status " + (tipo === "ok" ? "ok" : tipo === "warn" ? "warn" : tipo === "err" ? "err" : "");
+        carregando.hidden = true;
+      }
+
+      if (!status) {
+        pintar("info", "Confirmação de pagamento", "Esta página mostra o resultado do checkout do Mercado Pago. Abra o EFTV para ver sua assinatura.", "");
+      } else if (status === "approved" || status === "success" || status === "authorized") {
+        pintar("ok", "Pagamento aprovado!", "Sua assinatura está ativa. Bom filme!", "Pagamento confirmado.");
+      } else if (status === "pending" || status === "in_process") {
+        pintar("warn", "Pagamento em análise", "Assim que o Mercado Pago confirmar, seu acesso será liberado automaticamente.", "Status: pendente.");
+      } else if (status === "rejected" || status === "failure" || status === "cancelled" || status === "canceled") {
+        pintar("err", "Pagamento não concluído", "Nada foi cobrado. Você pode tentar novamente pela tela Minha assinatura.", "Status: " + status + ".");
+      } else {
+        pintar("info", "Pagamento recebido", "Estamos verificando o status com o Mercado Pago.", "Status: " + status + ".");
+      }
+
+      // Sincroniza a assinatura no backend, quando houver sessão salva.
+      const sessao = window.EFTV_STORE && window.EFTV_STORE.getSession();
+      if (sessao && status && status !== "rejected" && status !== "failure") {
+        window.EFTV_API.sincronizarAssinatura()
+          .then((dados) => {
+            const situacao = String((dados && (dados.status || dados.subscription_status)) || "").toLowerCase();
+            if (situacao === "active" || situacao === "trialing") {
+              pintar("ok", "Assinatura ativa!", "Tudo certo: seu acesso já está liberado.", "Status: " + situacao + ".");
+            }
+          })
+          .catch(() => {});
+      }
+
+      // Deep link para o app Android, com fallback para o app web.
+      let tentouDeeplink = false;
+      btnDeeplink.addEventListener("click", (evento) => {
+        evento.preventDefault();
+        if (tentouDeeplink) return;
+        tentouDeeplink = true;
+        const inicio = Date.now();
+        location.href = "eftv://open";
+        setTimeout(() => {
+          if (Date.now() - inicio < 2200 && !document.hidden) {
+            location.href = "index.html#conta";
+          }
+        }, 1200);
+      });
+
+      if (pagamentoId) {
+        statusEl.dataset.pagamento = pagamentoId;
+      }
+      if (externo) {
+        statusEl.dataset.referencia = externo;
+      }
+    })();
+  </script>
+</body>
+</html>

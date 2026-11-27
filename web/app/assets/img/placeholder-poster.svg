@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="EFTV — conteúdo de demonstração">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1c33"/>
+      <stop offset="0.55" stop-color="#071426"/>
+      <stop offset="1" stop-color="#03080f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="42%" r="55%">
+      <stop offset="0" stop-color="#2f9bff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#2f9bff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect width="1280" height="720" fill="url(#glow)"/>
+
+  <circle cx="640" cy="330" r="86" fill="#ffffff" opacity="0.10"/>
+  <circle cx="640" cy="330" r="64" fill="#ffffff" opacity="0.14"/>
+  <path d="M620 296 L620 364 L686 330 Z" fill="#ffffff" opacity="0.96"/>
+
+  <text x="640" y="470" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="54" font-weight="800" fill="#ffffff" letter-spacing="2">EF<tspan fill="#2f9bff">TV</tspan></text>
+  <text x="640" y="516" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#9fb0c8">Conteúdo de demonstração — configure a API para assistir</text>
+
+  <text x="48" y="672" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#2f9bff" letter-spacing="1">EFTV.COM.BR</text>
+</svg>

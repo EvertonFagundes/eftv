@@ -117,3 +117,27 @@ Detalhes, cancelamento e diagnóstico: `PAGAMENTOS.md`.
 - Player web depende do CORS/HLS do provedor; canais que exigem headers
   específicos só tocam pelo app (proxy embutido).
 - GitHub Pages é estático: nenhuma lógica secreta pode morar ali.
+
+---
+
+## 7. App web/PWA (pasta `web/`)
+
+Além da landing/SPA acima, o repositório agora tem uma versão **web + PWA**
+independente em [`web/`](../web/), com paridade com o app Android:
+
+- landing de vendas em `web/landing/`;
+- app instalável em `web/app/` (manifest, service worker, ícones PNG, prints);
+- player HLS/MPEG-TS/DASH/MP4, heartbeat de sessão, limite de 1 tela, 2 dispositivos;
+- login, catálogo paginado, categorias, A-Z, favoritos, continuar assistindo;
+- checkout Mercado Pago com retorno em `web/app/checkout.html`;
+- modo demonstração (`?demo=1`) e vídeo local `web/app/assets/media/demo.mp4`.
+
+Documentação completa: [`web/README.md`](../web/README.md) e
+[`web/CONTINUAR.md`](../web/CONTINUAR.md).
+
+Publicação: GitHub Pages já serve a pasta; acesse `/web/landing/` e `/web/app/`.
+O service worker exige HTTPS (ou localhost). Para testar localmente:
+
+```bash
+node web/tools/servidor.js . 4173
+```
