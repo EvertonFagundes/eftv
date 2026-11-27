@@ -1,18 +1,18 @@
-﻿# Estado atual do EFTV â€” handoff
+# Estado atual do EFTV — handoff
 
-Ãšltima atualizaÃ§Ã£o: 27/11/2026, ~20:00 (America/Sao_Paulo).
+Última atualização: 27/11/2026, ~20:00 (America/Sao_Paulo).
 
-Este arquivo existe para continuar o trabalho em outra mÃ¡quina sem perder
+Este arquivo existe para continuar o trabalho em outra máquina sem perder
 contexto. Leia junto com `TODO.md`.
 
 ---
 
-## 1. VersÃµes
+## 1. Versões
 
 | Item | Valor |
 | --- | --- |
 | App Android instalado no aparelho de teste | **1.5.23 (`versionCode 48`)** |
-| Ãšltima tag/release | `v1.5.23` |
+| Última tag/release | `v1.5.23` |
 | APK de release | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.23/eftv-v1.5.23.apk |
 | Backend | Render, `https://eftv.onrender.com` |
 | Dispositivo ADB usado | `mfuwk78xwcjf7h9t` |
@@ -30,49 +30,49 @@ fd7888d chore(android): bump versionCode 47 / 1.5.22
 
 ---
 
-## 2. O que jÃ¡ estÃ¡ funcionando
+## 2. O que já está funcionando
 
-### CatÃ¡logo local (nÃ£o reimporta a cada abertura)
+### Catálogo local (não reimporta a cada abertura)
 
-- A importaÃ§Ã£o sÃ³ roda na primeira vez ou quando o catÃ¡logo salvo Ã© invÃ¡lido.
-- Abrir o app com o catÃ¡logo salvo mostra a lista na hora, sem "Importando".
-- ImportaÃ§Ã£o interrompida Ã© recuperada por `CatalogStore.recoverInterruptedImport()`.
-- **CorreÃ§Ã£o desta rodada:** `CatalogStore.replace()` sÃ³ apaga o catÃ¡logo quando
-  chega o **primeiro canal**. Se a origem devolver texto vazio (ex.: pÃ¡gina de
+- A importação só roda na primeira vez ou quando o catálogo salvo é inválido.
+- Abrir o app com o catálogo salvo mostra a lista na hora, sem "Importando".
+- Importação interrompida é recuperada por `CatalogStore.recoverInterruptedImport()`.
+- **Correção desta rodada:** `CatalogStore.replace()` só apaga o catálogo quando
+  chega o **primeiro canal**. Se a origem devolver texto vazio (ex.: página de
   erro do provedor), a lista salva permanece intacta.
   - Arquivo: `android/app/src/main/java/com/eftv/android/data/CatalogStore.kt`
   - Commit: `4ab350a`
 
-### ImportaÃ§Ã£o progressiva
+### Importação progressiva
 
 - Lotes de 2.000 itens commitados no SQLite.
-- O primeiro lote libera a lista; os seguintes sÃ³ atualizam contagem e pÃ¡ginas.
-- `series_cards` Ã© alimentado lote a lote com `INSERT OR IGNORE` + `UPDATE`.
+- O primeiro lote libera a lista; os seguintes só atualizam contagem e páginas.
+- `series_cards` é alimentado lote a lote com `INSERT OR IGNORE` + `UPDATE`.
 
-### Fallback de dados mÃ³veis
+### Fallback de dados móveis
 
 Ordem de tentativa em `PlaylistRepository`:
 
 1. Proxy local com DoH (2 tentativas, a segunda com `&doh=1`).
 2. **Backend** `GET /player/playlist-text` (autenticado, HTTPS).
-3. Download direto (Ãºltimo recurso).
+3. Download direto (último recurso).
 
-O endpoint do backend estÃ¡ implementado e deployado:
+O endpoint do backend está implementado e deployado:
 
-- `backend/app/routes/player.py` â†’ `get_playlist_text()`
-- Sem token responde **401** (nÃ£o 404), confirmando que existe em produÃ§Ã£o.
-- Segue atÃ© 5 redirecionamentos, valida SSRF e limita a 32 MB.
+- `backend/app/routes/player.py` → `get_playlist_text()`
+- Sem token responde **401** (não 404), confirmando que existe em produção.
+- Segue até 5 redirecionamentos, valida SSRF e limita a 32 MB.
 
 ### Keepalive do Render
 
 - `.github/workflows/keepalive.yml`: corrente de `workflow_dispatch` a cada
   ~9 min (`inputs.delay=540`); cron `*/5 * * * *` apenas como reserva.
-- ExecuÃ§Ãµes em cadeia confirmadas no GitHub Actions.
-- `backend/app/main.py` tambÃ©m tem `self_ping` a cada 5 min.
+- Execuções em cadeia confirmadas no GitHub Actions.
+- `backend/app/main.py` também tem `self_ping` a cada 5 min.
 
 ---
 
-## 3. ImportaÃ§Ã£o em 4G (resolvida em 27/11)
+## 3. Importação em 4G (resolvida em 27/11)
 
 ### Sintoma
 
@@ -86,26 +86,26 @@ E/EFTV: Falha ao baixar/processar a playlist: java.io.IOException: A playlist na
 ```
 
 - O proxy local falha porque a operadora (Claro) bloqueia o DNS de `rtv30t.com`
-  (em teste anterior: `UnknownHostException`), e o DoH tambÃ©m nÃ£o passa.
-- O fallback pelo backend **autentica e responde 200**, mas o conteÃºdo tem
-  **235 bytes** e Ã© a pÃ¡gina padrÃ£o do nginx:
+  (em teste anterior: `UnknownHostException`), e o DoH também não passa.
+- O fallback pelo backend **autentica e responde 200**, mas o conteúdo tem
+  **235 bytes** e é a página padrão do nginx:
 
 ```html
 <!DOCTYPE html><html><head><title>Welcome to nginx!</title></head>...
 ```
 
-Ou seja: o caminho tÃ©cnico do 4G funciona; **a URL configurada no servidor nÃ£o
+Ou seja: o caminho técnico do 4G funciona; **a URL configurada no servidor não
 aponta para a playlist**.
 
-### O que o usuÃ¡rio fez
+### O que o usuário fez
 
-O usuÃ¡rio informou que trocou `IPTV_PLAYLIST_URL` no painel do Render e que o
-deploy estava em andamento. O reteste apÃ³s o deploy ainda devolveu os mesmos
-235 bytes (pÃ¡gina do nginx) no momento em que este documento foi escrito.
-Uma Ãºltima tentativa de reteste ficou **inconclusiva**: o aparelho foi
+O usuário informou que trocou `IPTV_PLAYLIST_URL` no painel do Render e que o
+deploy estava em andamento. O reteste após o deploy ainda devolveu os mesmos
+235 bytes (página do nginx) no momento em que este documento foi escrito.
+Uma última tentativa de reteste ficou **inconclusiva**: o aparelho foi
 desconectado do PC (PC sendo desligado) e o ADB perdeu o dispositivo.
 
-### HipÃ³tese principal a verificar
+### Hipótese principal a verificar
 
 `backend/app/routes/player.py` usa **duas fontes**, nesta ordem:
 
@@ -114,94 +114,94 @@ url = (_provider_url(subscription) or settings.IPTV_PLAYLIST_URL).strip()
 ```
 
 - `_provider_url()` devolve `subscription.provider_playlist_url` quando existe e
-  nÃ£o foi revogada (linha prÃ³pria do assinante, definida no painel admin).
-- **Se a conta de teste tiver uma linha prÃ³pria cadastrada, ela tem precedÃªncia
-  sobre `IPTV_PLAYLIST_URL`** â€” trocar a env var nÃ£o muda nada para essa conta.
+  não foi revogada (linha própria do assinante, definida no painel admin).
+- **Se a conta de teste tiver uma linha própria cadastrada, ela tem precedência
+  sobre `IPTV_PLAYLIST_URL`** — trocar a env var não muda nada para essa conta.
 - Verificar no painel admin a assinatura da conta usada no aparelho e limpar o
-  campo de linha prÃ³pria, ou corrigir a URL dela.
+  campo de linha própria, ou corrigir a URL dela.
 - Rotas relacionadas em `backend/app/routes/admin.py` (linhas ~604-666).
 
-### CorreÃ§Ã£o aplicada em 27/11 (backend 1.2.2)
+### Correção aplicada em 27/11 (backend 1.2.2)
 
-`GET /player/playlist-text` nÃ£o usa mais uma Ãºnica URL sem validaÃ§Ã£o. Ele tenta,
+`GET /player/playlist-text` não usa mais uma única URL sem validação. Ele tenta,
 nesta ordem:
 
-1. linha prÃ³pria da assinatura;
+1. linha própria da assinatura;
 2. `IPTV_PLAYLIST_URL` (se for diferente).
 
-Para cada uma, sÃ³ aceita resposta cujo conteÃºdo comece com `#EXTM3U` ou
-`#EXTINF`. Uma pÃ¡gina do nginx, login do provedor ou HTTP 200 vazio Ã© descartado
-e a prÃ³xima fonte Ã© tentada. Os logs mostram apenas o rÃ³tulo da fonte e o
-motivo/tamanho, nunca a URL com credenciais. Com isso, uma linha prÃ³pria errada
-nÃ£o bloqueia mais o 4G quando a playlist compartilhada estÃ¡ correta; se as duas
-estiverem erradas, o retorno Ã© 502 com o motivo de cada uma.
+Para cada uma, só aceita resposta cujo conteúdo comece com `#EXTM3U` ou
+`#EXTINF`. Uma página do nginx, login do provedor ou HTTP 200 vazio é descartado
+e a próxima fonte é tentada. Os logs mostram apenas o rótulo da fonte e o
+motivo/tamanho, nunca a URL com credenciais. Com isso, uma linha própria errada
+não bloqueia mais o 4G quando a playlist compartilhada está correta; se as duas
+estiverem erradas, o retorno é 502 com o motivo de cada uma.
 
-### Reteste em 4G: concluÃ­do em 27/11/2026
+### Reteste em 4G: concluído em 27/11/2026
 
-Com o backend **1.2.2** em produÃ§Ã£o, Wi-Fi desligado e **LTE da Claro**:
+Com o backend **1.2.2** em produção, Wi-Fi desligado e **LTE da Claro**:
 
-- "Atualizar lista" mostrou "Importando 0 itens" e evoluiu atÃ© **234.000
+- "Atualizar lista" mostrou "Importando 0 itens" e evoluiu até **234.000
   itens** em cerca de 2 minutos.
-- Status final: **2.264 canais Â· 19:57 Â· online**.
-- Abas: **33.162 filmes** e **9.738 sÃ©ries**.
-- As capas reais de sÃ©rie carregaram em 4G (007, 011ZE, entre outras).
-- PSS ~208 MB durante a importaÃ§Ã£o. No fim, o Wi-Fi foi restaurado e os dados
-  mÃ³veis desligados.
-- O build de release sÃ³ registra WARN+ no logcat (`EftvApplication`), entÃ£o a
-  importaÃ§Ã£o bem-sucedida nÃ£o gera linha de log; a validaÃ§Ã£o foi visual.
+- Status final: **2.264 canais · 19:57 · online**.
+- Abas: **33.162 filmes** e **9.738 séries**.
+- As capas reais de série carregaram em 4G (007, 011ZE, entre outras).
+- PSS ~208 MB durante a importação. No fim, o Wi-Fi foi restaurado e os dados
+  móveis desligados.
+- O build de release só registra WARN+ no logcat (`EftvApplication`), então a
+  importação bem-sucedida não gera linha de log; a validação foi visual.
 
-### DiagnÃ³stico definitivo: bloqueio geogrÃ¡fico do provedor (27/11)
+### Diagnóstico definitivo: bloqueio geográfico do provedor (27/11)
 
 O backend **1.2.5** passou a expor em `/health.playlist_probe` (sem URL nem
 credenciais) o IP resolvido, o servidor e a primeira linha de cada tentativa.
-Com o probe de 27/11 ~23:13 UTC (20:13 em BrasÃ­lia):
+Com o probe de 27/11 ~23:13 UTC (20:13 em Brasília):
 
-- `IPTV_PLAYLIST_URL` Ã© Xtream Codes sobre **HTTP**, porta padrÃ£o, com
+- `IPTV_PLAYLIST_URL` é Xtream Codes sobre **HTTP**, porta padrão, com
   `get.php` e `type` na query (fingerprint seguro da URL: `841cbbca80bd`).
 - O Render resolve para `45.134.142.152`/`138.199.11.65`; os dois respondem
   `HTTP 200`, `server: nginx`, **235 bytes** ("Welcome to nginx!").
 - Pela borda Cloudflare (`172.67.143.94`/`104.21.87.130`), o `cf-ray` termina
-  em `-PDX` (Portland) e a resposta Ã© a mesma pÃ¡gina do nginx. Ou seja, a
-  origem recebe a requisiÃ§Ã£o, mas devolve a pÃ¡gina padrÃ£o.
-- `player_api.php` pela mesma URL tambÃ©m devolve a pÃ¡gina do nginx: o bloqueio
-  atinge o host inteiro, nÃ£o sÃ³ o `get.php`.
+  em `-PDX` (Portland) e a resposta é a mesma página do nginx. Ou seja, a
+  origem recebe a requisição, mas devolve a página padrão.
+- `player_api.php` pela mesma URL também devolve a página do nginx: o bloqueio
+  atinge o host inteiro, não só o `get.php`.
 - Na rede local no Brasil, a mesma URL devolve `#EXTM3U` e ~84,6 MB.
 
-ConclusÃ£o: o provedor (ou a regra de WAF/geolocalizaÃ§Ã£o na frente dele) nÃ£o
-entrega a playlist para IPs de datacenter nos EUA. **NÃ£o Ã© DNS, tamanho,
-HTTPS, User-Agent, credenciais nem cÃ³digo do backend.** O Render nÃ£o tem regiÃ£o
-na AmÃ©rica do Sul (Oregon/Ohio/Virginia/Frankfurt/Singapura) e o IP dedicado
-custaria US$ 100/mÃªs (plano Pro), entÃ£o mudar de regiÃ£o/IP nÃ£o resolve de graÃ§a.
+Conclusão: o provedor (ou a regra de WAF/geolocalização na frente dele) não
+entrega a playlist para IPs de datacenter nos EUA. **Não é DNS, tamanho,
+HTTPS, User-Agent, credenciais nem código do backend.** O Render não tem região
+na América do Sul (Oregon/Ohio/Virginia/Frankfurt/Singapura) e o IP dedicado
+custaria US$ 100/mês (plano Pro), então mudar de região/IP não resolve de graça.
 
-O sucesso do reteste 4G das 19:57 **nÃ£o prova** que o Render entregou a lista:
-o app tenta primeiro o proxy local do celular (IP brasileiro) e sÃ³ depois o
-backend; o log de release nÃ£o registra qual fonte venceu. Ã‰ provÃ¡vel que o
+O sucesso do reteste 4G das 19:57 **não prova** que o Render entregou a lista:
+o app tenta primeiro o proxy local do celular (IP brasileiro) e só depois o
+backend; o log de release não registra qual fonte venceu. É provável que o
 celular tenha baixado direto pelo proxy/DoH.
 
-SaÃ­das possÃ­veis:
+Saídas possíveis:
 
-1. Pedir ao provedor para liberar a regiÃ£o/IPs do Render (melhor correÃ§Ã£o; o IP
-   de saÃ­da do Render gratuito muda a cada restart).
-2. Guardar uma cÃ³pia vÃ¡lida da playlist no backend (Postgres) e servi-la quando
-   o provedor bloquear; atualizar por um script local no Brasil. Funciona jÃ¡,
-   mas a lista fica defasada atÃ© a prÃ³xima atualizaÃ§Ã£o.
-3. Relay em IP residencial/brasileiro (VPS no Brasil ou tÃºnel para a mÃ¡quina
-   local), mantendo a atualizaÃ§Ã£o automÃ¡tica; mais infraestrutura.
+1. Pedir ao provedor para liberar a região/IPs do Render (melhor correção; o IP
+   de saída do Render gratuito muda a cada restart).
+2. Guardar uma cópia válida da playlist no backend (Postgres) e servi-la quando
+   o provedor bloquear; atualizar por um script local no Brasil. Funciona já,
+   mas a lista fica defasada até a próxima atualização.
+3. Relay em IP residencial/brasileiro (VPS no Brasil ou túnel para a máquina
+   local), mantendo a atualização automática; mais infraestrutura.
 
 ### Contorno implementado: cache persistente (backend 1.2.7)
 
-- Tabela `playlist_cache` (linha Ãºnica, conteÃºdo gzip) criada no startup por
+- Tabela `playlist_cache` (linha única, conteúdo gzip) criada no startup por
   `Base.metadata.create_all`.
 - `PUT /admin/playlist/cache` (admin) recebe a M3U comprimida; `GET` mostra
-  tamanho/idade e `DELETE` limpa. O corpo Ã© validado (`#EXTM3U`/`#EXTINF`) e
+  tamanho/idade e `DELETE` limpa. O corpo é validado (`#EXTM3U`/`#EXTINF`) e
   tem limite de 128 MiB descomprimido / 32 MiB comprimido.
 - `GET /player/playlist-text` tenta o provedor e, se falhar ou estiver em
   cooldown, serve o cache com `X-Playlist-Source: cache` e
   `X-Playlist-Cache-Age`. Cache com mais de 72 h leva `Warning: 110`.
-- ApÃ³s uma falha completa, o backend evita repetir a sequÃªncia lenta por 10 min
+- Após uma falha completa, o backend evita repetir a sequência lenta por 10 min
   (`recently_failed`); o probe do `/health` continua testando o provedor a cada
   10 min e limpa o cooldown quando volta a funcionar.
-- Upload local (rede que alcanÃ§a o provedor):
+- Upload local (rede que alcança o provedor):
 
   ```powershell
   cd C:\Users\evert\eftv\backend
@@ -209,38 +209,38 @@ SaÃ­das possÃ­veis:
   .\.venv\Scripts\python.exe scripts\upload_playlist_cache.py
   ```
 
-  O script pede e-mail/senha de admin, baixa a M3U, confere o cabeÃ§alho,
+  O script pede e-mail/senha de admin, baixa a M3U, confere o cabeçalho,
   comprime e envia. Ele mostra o **fingerprint** da URL (nunca a URL); compare
   com `/health.playlist_probe.configured.url_fingerprint`. Se for diferente, a
-  URL configurada no Render estÃ¡ errada e deve ser corrigida antes do upload.
-- O cache contÃ©m as credenciais do provedor nas URLs dos canais: nunca
-  versionar, exportar ou colocar em log. O acesso Ã© sÃ³ de admin no upload e de
+  URL configurada no Render está errada e deve ser corrigida antes do upload.
+- O cache contém as credenciais do provedor nas URLs dos canais: nunca
+  versionar, exportar ou colocar em log. O acesso é só de admin no upload e de
   assinantes ativos na entrega.
 - Enquanto o provedor bloquear o Render, repita o upload periodicamente (ex.:
-  semanal) para o catÃ¡logo nÃ£o ficar defasado.
+  semanal) para o catálogo não ficar defasado.
 
-Estado em 27/11: backend **1.2.7** em produÃ§Ã£o (`/health` = 1.2.7,
+Estado em 27/11: backend **1.2.7** em produção (`/health` = 1.2.7,
 `/admin/playlist/cache` sem token = 401). O primeiro upload ainda depende de
-rodar o script em uma rede que alcance o provedor; atÃ© lÃ¡, o endpoint continua
-tentando o provedor e devolve 502 quando nÃ£o hÃ¡ cache.
+rodar o script em uma rede que alcance o provedor; até lá, o endpoint continua
+tentando o provedor e devolve 502 quando não há cache.
 
-### Outras hipÃ³teses, em ordem
+### Outras hipóteses, em ordem
 
-1. Deploy do Render ainda nÃ£o concluÃ­do quando o teste rodou (retestar depois).
-2. `IPTV_PLAYLIST_URL` salva com caminho incompleto (ex.: sÃ³ o domÃ­nio, sem
-   `/get.php?username=...&password=...`), retornando o site padrÃ£o do nginx.
+1. Deploy do Render ainda não concluído quando o teste rodou (retestar depois).
+2. `IPTV_PLAYLIST_URL` salva com caminho incompleto (ex.: só o domínio, sem
+   `/get.php?username=...&password=...`), retornando o site padrão do nginx.
 3. Provedor exige `IPTV_PLAYLIST_USER_AGENT` / `IPTV_PLAYLIST_REFERER`
-   diferentes dos configurados e responde a pÃ¡gina padrÃ£o.
+   diferentes dos configurados e responde a página padrão.
 
 ---
 
 ## 4. Como retestar (passo a passo)
 
-### PrÃ©-requisitos
+### Pré-requisitos
 
 - Celular conectado e autorizado no ADB (`adb devices` mostra `device`).
 - App 1.5.23 instalado.
-- Wi-Fi desligado e dados mÃ³veis ligados.
+- Wi-Fi desligado e dados móveis ligados.
 
 ### Comandos
 
@@ -278,23 +278,23 @@ Start-Sleep -Seconds 12
 | `Playlist pelo backend: N bytes, formato=m3u` | **Sucesso**: veio M3U do backend |
 | `Playlist pelo backend: 235 bytes, formato=desconhecido` | URL do servidor ainda errada |
 | `Proxy local falhou na tentativa 1/2` | Normal em 4G (DNS bloqueado) |
-| `Catalogo importado` | ImportaÃ§Ã£o concluÃ­da |
+| `Catalogo importado` | Importação concluída |
 | `Falha ao baixar/processar a playlist` | Nenhum canal no texto recebido |
 
-O log mostra apenas tamanho e formato â€” **nÃ£o** imprime o conteÃºdo da playlist
-(que contÃ©m credenciais).
+O log mostra apenas tamanho e formato — **não** imprime o conteúdo da playlist
+(que contém credenciais).
 
-### VerificaÃ§Ã£o na tela
+### Verificação na tela
 
-O status deve mostrar algo como `â—  33.162 filmes â€¢ HH:MM â€¢ online` e a aba
-"Ao Vivo" por volta de `2.264 canais`. Depois de uma importaÃ§Ã£o bem-sucedida o
-horÃ¡rio do status Ã© atualizado.
+O status deve mostrar algo como `●  33.162 filmes • HH:MM • online` e a aba
+"Ao Vivo" por volta de `2.264 canais`. Depois de uma importação bem-sucedida o
+horário do status é atualizado.
 
 ---
 
-## 5. VariÃ¡veis do Render a conferir
+## 5. Variáveis do Render a conferir
 
-Atualizar para a versÃ£o atual (o usuÃ¡rio faz isso manualmente no painel):
+Atualizar para a versão atual (o usuário faz isso manualmente no painel):
 
 ```
 APP_LATEST_VERSION_CODE=48
@@ -302,50 +302,50 @@ APP_LATEST_VERSION_NAME=1.5.23
 APP_APK_URL=https://github.com/EvertonFagundes/eftv/releases/download/v1.5.23/eftv-v1.5.23.apk
 ```
 
-E, para a importaÃ§Ã£o em 4G:
+E, para a importação em 4G:
 
 ```
-IPTV_PLAYLIST_URL=<URL completa da M3U, com usuÃ¡rio e senha>
+IPTV_PLAYLIST_URL=<URL completa da M3U, com usuário e senha>
 IPTV_PLAYLIST_USER_AGENT=<se o provedor exigir>
 IPTV_PLAYLIST_REFERER=<se o provedor exigir>
 ```
 
-`IPTV_PLAYLIST_URL` Ã© `sync: false` no `render.yaml`: **nunca** vai para o
-repositÃ³rio. NÃ£o commitar credenciais.
+`IPTV_PLAYLIST_URL` é `sync: false` no `render.yaml`: **nunca** vai para o
+repositório. Não commitar credenciais.
 
 ---
 
 ## 6. Estado do aparelho de teste
 
-- O aparelho foi **desconectado do PC** no fim da sessÃ£o (o PC foi desligado).
-  Pode ter ficado com **Wi-Fi desligado e dados mÃ³veis ligados**. Ao retomar,
-  restaurar com os comandos da seÃ§Ã£o 4.
-- O catÃ¡logo salvo tem ~33.162 filmes e ~2.264 canais ao vivo; a lista **nÃ£o**
-  Ã© apagada quando a importaÃ§Ã£o falha.
+- O aparelho foi **desconectado do PC** no fim da sessão (o PC foi desligado).
+  Pode ter ficado com **Wi-Fi desligado e dados móveis ligados**. Ao retomar,
+  restaurar com os comandos da seção 4.
+- O catálogo salvo tem ~33.162 filmes e ~2.264 canais ao vivo; a lista **não**
+  é apagada quando a importação falha.
 
 ---
 
-## 7. PendÃªncias
+## 7. Pendências
 
-1. [x] ImportaÃ§Ã£o em 4G validada em 27/11 (~19:57), com o backend 1.2.2:
-   234.000 itens, 2.264 canais, 33.162 filmes, 9.738 sÃ©ries e capas em 4G.
+1. [x] Importação em 4G validada em 27/11 (~19:57), com o backend 1.2.2:
+   234.000 itens, 2.264 canais, 33.162 filmes, 9.738 séries e capas em 4G.
 2. [x] `APP_LATEST_*` confirmado no Render (`/app/version` responde
    1.5.23/48 em 27/11).
-3. [ ] Primeira montagem do Ã­ndice em instalaÃ§Ã£o limpa (v5 â†’ v6): medir em um
-   aparelho sem o Ã­ndice pronto. Se passar de ~20 s, montar em segundo plano.
+3. [ ] Primeira montagem do índice em instalação limpa (v5 → v6): medir em um
+   aparelho sem o índice pronto. Se passar de ~20 s, montar em segundo plano.
 4. [ ] Opcional: investigar o logo trocado de "Round 6 O Desafio" (o provedor
-   entrega uma capa que nÃ£o Ã© a do IMDb).
+   entrega uma capa que não é a do IMDb).
 
 ## 8. Arquivos-chave
 
 | Arquivo | Papel |
 | --- | --- |
-| `backend/app/routes/player.py` | `/player/playlist`, `/player/playlist-text`, precedÃªncia da URL |
-| `backend/app/routes/admin.py` | linha prÃ³pria do assinante (`provider_playlist_url`) |
+| `backend/app/routes/player.py` | `/player/playlist`, `/player/playlist-text`, precedência da URL |
+| `backend/app/routes/admin.py` | linha própria do assinante (`provider_playlist_url`) |
 | `android/.../data/PlaylistRepository.kt` | proxy local, fallback e timeouts |
-| `android/.../data/CatalogStore.kt` | importaÃ§Ã£o atÃ´mica e recuperaÃ§Ã£o de cache |
+| `android/.../data/CatalogStore.kt` | importação atômica e recuperação de cache |
 | `android/.../MainActivity.kt` | `configureRepository`, `refreshCatalog`, log do backend |
 | `android/.../data/LocalServer.kt` | `remotePlaylistUrl(target, forceDoh)` |
-| `android/.../python/server.py` | handler `/api/playlist-remote` (parÃ¢metro `doh=1`) |
+| `android/.../python/server.py` | handler `/api/playlist-remote` (parâmetro `doh=1`) |
 | `.github/workflows/keepalive.yml` | corrente de pings do Render |
-| `docs/RENDER.md` | documentaÃ§Ã£o do keepalive |
+| `docs/RENDER.md` | documentação do keepalive |
