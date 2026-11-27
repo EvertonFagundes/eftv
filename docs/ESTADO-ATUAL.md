@@ -239,11 +239,14 @@ repositório. Não commitar credenciais.
 
 ## 7. Pendências
 
-1. Confirmar a URL correta da playlist no Render e a ausência de linha própria
-   na assinatura (ver seção 3).
-2. Retestar a importação em 4G e confirmar `formato=m3u` no log.
-3. Atualizar as três variáveis `APP_LATEST_*` no Render.
-4. Opcional: registrar no `TODO.md` o resultado final do teste.
+1. Retestar a importação em 4G com o backend 1.2.2: a linha própria quebrada
+   não bloqueia mais a playlist compartilhada. O log do Render mostra
+   `Playlist linha do assinante ...` e `Playlist playlist compartilhada ...`
+   sem expor URLs. Se as duas falharem, aí sim conferir a URL no painel e a
+   linha própria da assinatura.
+2. Atualizar as três variáveis `APP_LATEST_*` no Render — **já confirmado**
+   (`/app/version` responde 1.5.23/48 em 27/11).
+3. Opcional: registrar no `TODO.md` o resultado final do teste.
 
 ## 8. Arquivos-chave
 
