@@ -111,6 +111,7 @@
       this._itemAtual = item;
       this._aoVivo = !!item.aoVivo;
       this._tentativas = 0;
+      this._atualizarMediaSession(item);
 
       if (!url) {
         this._notify("error", new PlayerError("Este canal não possui URL de transmissão configurada.", "sem-url"));
@@ -280,6 +281,7 @@
     stop() {
       this._pararHeartbeat();
       this._pararProgresso();
+      this._limparMediaSession();
       if (this.video) {
         this.video.pause();
         this.video.removeAttribute("src");
@@ -453,6 +455,46 @@
     _pararProgresso() {
       if (this._progressTimer) clearInterval(this._progressTimer);
       this._progressTimer = null;
+    },
+
+    // Controles na tela de bloqueio / central de mídia (Media Session API).
+    _atualizarMediaSession(item) {
+      if (!("mediaSession" in navigator)) return;
+      try {
+        if (typeof MediaMetadata !== "undefined") {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: item.nome || "EFTV",
+            artist: item.grupo || "EFTV",
+            album: "EFTV",
+            artwork: item.logo
+              ? [{ src: item.logo, sizes: "512x512", type: "image/png" }]
+              : [],
+          });
+        }
+        const acoes = {
+          play: () => this.play().catch(() => {}),
+          pause: () => this.pause(),
+          stop: () => this.stop(),
+          seekbackward: (d) => this.seekRelativo(-(d.seekOffset || 10)),
+          seekforward: (d) => this.seekRelativo(d.seekOffset || 10),
+          seekto: (d) => {
+            if (Number.isFinite(d.seekTime)) this.seek(d.seekTime);
+          },
+        };
+        Object.entries(acoes).forEach(([acao, fn]) => {
+          try { navigator.mediaSession.setActionHandler(acao, fn); } catch (_) {}
+        });
+      } catch (_) {}
+    },
+
+    _limparMediaSession() {
+      if (!("mediaSession" in navigator)) return;
+      try {
+        navigator.mediaSession.metadata = null;
+        ["play", "pause", "stop", "seekbackward", "seekforward", "seekto"].forEach((acao) => {
+          try { navigator.mediaSession.setActionHandler(acao, null); } catch (_) {}
+        });
+      } catch (_) {}
     },
 
     _destruirHls() {

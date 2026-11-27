@@ -8,12 +8,17 @@ window.EFTV_CONFIG = {
   API_URL: localStorage.getItem("eftv_api_url") || "https://eftv.onrender.com",
 
   // Versão exibida no app (comparada com /app/version para atualização)
-  APP_VERSION: "1.0.0",
-  APP_VERSION_CODE: 1,
+  APP_VERSION: "1.1.0",
+  APP_VERSION_CODE: 2,
 
   // Quando true, se a API não responder, o app usa dados de demonstração.
-  // Útil para testar a interface sem backend.
-  DEMO_FALLBACK: true,
+  // Em produção fica false: falha de rede mantém o catálogo salvo e mostra
+  // erro, em vez de exibir conteúdo de exemplo para um assinante.
+  DEMO_FALLBACK: false,
+
+  // Libera o modo demonstração explícito (?demo=1), útil para a landing e
+  // para testar a interface sem backend.
+  DEMO_MODE: true,
 
   // Intervalo do heartbeat de sessão de player (o backend expira em 120s).
   HEARTBEAT_MS: 45000,

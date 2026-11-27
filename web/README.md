@@ -2,7 +2,7 @@
 
 Versão web do EFTV (canais ao vivo, filmes e séries) com **landing page** de vendas e **app instalável (PWA)**. O app Android em `android/` não foi alterado.
 
-> **Status:** interface e fluxos completos, com **modo demonstração** quando o backend não responde. A integração com a API real já está implementada, mas ainda precisa ser validada com o backend em produção (ver `CONTINUAR.md`).
+> **Status:** interface e fluxos completos. O catálogo real vem da playlist licenciada entregue pelo backend autenticado (`GET /player/playlist-text`), com cache em **IndexedDB**. O modo demonstração só é ativado explicitamente com `?demo=1`. Falta validar login/player/checkout com uma conta real em produção (ver `CONTINUAR.md`).
 
 ---
 
@@ -21,17 +21,20 @@ web/
 │   └── assets/
 │       ├── css/style.css
 │       ├── js/
-│       │   ├── config.js        # API_URL, versão, intervalos
-│       │   ├── store.js         # localStorage (sessão, favoritos, progresso)
+│       │   ├── config.js        # API_URL, versão, intervalos, modo demo
+│       │   ├── store.js         # IndexedDB (catálogo) + localStorage (sessão etc.)
 │       │   ├── api.js           # Cliente da API FastAPI
+│       │   ├── playlist.js      # Parser M3U, classificação e agrupamento de séries
 │       │   ├── catalog.js       # Catálogo, busca sem acento, categorias, A-Z
 │       │   ├── player.js        # HLS / MPEG-TS / DASH / MP4
-│       │   ├── app.js           # Router, telas, auth, conta, ajustes
+│       │   ├── app.js           # Router, telas, auth, conta, ajustes, séries
 │       │   └── pwa.js           # Instalação + service worker
 │       ├── img/                 # Ícones PNG, poster, prints reais (screens/)
 │       └── media/demo.mp4       # Vídeo de demonstração (12s, ~90 KB)
 └── tools/
     ├── servidor.js              # Servidor estático local (sem dependências)
+    ├── testar-playlist.js       # Testes do parser M3U (Node, sem dependências)
+    ├── testar-app.js            # Smoke test do app via Chrome headless/CDP
     ├── gerar-icones.ps1         # Gera ícones PNG + OG image
     ├── og.html                  # Layout da imagem OG (1200x630)
     └── capturar.js              # Prints reais via Chrome DevTools Protocol
@@ -57,6 +60,18 @@ Abra:
 
 > O service worker só registra em `https://`, `localhost` ou `127.0.0.1`. Em `file://` o app funciona, mas sem instalação/offline.
 
+### Testes automatizados
+
+```bash
+# parser M3U: canais, filmes, séries, temporadas, categorias e casos inválidos
+node web/tools/testar-playlist.js
+
+# app no Chrome headless: demo, playlist, modal de série, player, IndexedDB, SW, manifest e offline
+node web/tools/testar-app.js
+```
+
+O teste do app sobe o servidor estático e o Chrome sozinho; requer Chrome ou Edge instalado (ou `EFTV_CHROME` apontando para o executável).
+
 ---
 
 ## 3. Configuração da API
@@ -66,9 +81,10 @@ Edite `web/app/assets/js/config.js`:
 ```js
 window.EFTV_CONFIG = {
   API_URL: "https://eftv.onrender.com", // troque por https://api.eftv.com.br em produção
-  APP_VERSION: "1.0.0",
-  APP_VERSION_CODE: 1,
-  DEMO_FALLBACK: true,  // ⚠️ deixe false em produção
+  APP_VERSION: "1.1.0",
+  APP_VERSION_CODE: 2,
+  DEMO_FALLBACK: false, // não troca por demo quando a rede falha
+  DEMO_MODE: true,      // mantém ?demo=1 explícito para landing/testes
   HEARTBEAT_MS: 45000,
   PROGRESS_SAVE_MS: 5000,
   PAGE_SIZE: 60,
@@ -81,7 +97,7 @@ Também é possível trocar a URL sem editar o arquivo:
 localStorage.setItem("eftv_api_url", "https://api.eftv.com.br");
 ```
 
-**Antes de publicar:** defina `DEMO_FALLBACK: false`. Com `true`, falhas de rede liberam o app em modo demonstração — ótimo para testar, ruim para produção.
+**Antes de publicar:** mantenha `DEMO_FALLBACK: false`. Com `true`, falhas de rede liberam o app em modo demonstração — ótimo para testar, ruim para produção. O modo demo explícito (`DEMO_MODE: true` + `?demo=1`) continua disponível para a landing e para os testes automatizados.
 
 ---
 
@@ -100,7 +116,8 @@ Implementado em `api.js`, alinhado ao backend em `backend/app/routes/`:
 | Confirmar e-mail | `POST /auth/verify-email` | `{ token }` |
 | Meus dados | `GET /auth/me` | Bearer |
 | Categorias | `GET /categories?include_adult=` | público |
-| Canais | `GET /channels?page=&page_size=&category_id=&search=&is_live=&include_adult=` | paginado, máx. 100/página; o app busca todas as páginas |
+| Canais | `GET /channels?page=&page_size=&category_id=&search=&is_live=&include_adult=` | paginado, máx. 100/página; fallback quando a playlist não está disponível |
+| Texto da playlist | `GET /player/playlist-text` | Bearer + `X-Device-Id`; devolve a M3U do provedor (fonte principal do catálogo) |
 | Planos | `GET /plans` | `{ plans: [...] }` |
 | Assinatura atual | `GET /subscriptions/current` | resumo com `status`, `plan_name`, `days_remaining`, `current_period_end`, `max_devices`, `max_streams` |
 | Checkout | `POST /subscriptions/checkout` | `{ plan_id, back_urls: { success, failure, pending } }` → `init_point` |
@@ -116,13 +133,20 @@ Implementado em `api.js`, alinhado ao backend em `backend/app/routes/`:
 
 **Cabeçalhos enviados:** `Authorization: Bearer <access>` e `X-Device-Id: <id estável>`.
 
-**Campos do catálogo normalizados:** `name`, `slug`, `group_title`, `category_id`, `logo_url`, `is_live`, `is_adult`, `stream_url`, `stream_type`.
+**Campos do catálogo normalizados:** `name`, `slug`, `group_title`, `category_id`, `logo_url`, `is_live`, `is_adult`, `stream_url`, `stream_type`. A playlist é lida no navegador por `playlist.js` e convertida para esses mesmos campos.
 
 ---
 
 ## 5. Funcionalidades (paridade com o Android)
 
 - Login, cadastro, confirmação de e-mail, esqueci/redefinir senha.
+- Catálogo real pela playlist licenciada:
+  - `GET /player/playlist-text` entrega a M3U autenticada (a URL do provedor não vai ao navegador);
+  - `playlist.js` lê `#EXTINF`, `tvg-logo`, `group-title`, classifica canal/filme/série e agrupa episódios (`S01E02`, `1x02`, `Temporada 1 Episódio 2`);
+  - o catálogo fica no **IndexedDB** (dezenas de milhares de itens) com validade de 6 h; falha de rede mantém o cache anterior;
+  - se a playlist não estiver disponível, o app tenta `/channels` (paginado).
+- Aba **Séries** com modal de temporadas e episódios, como no Android.
+- Logos/capas reais nos cards, com fallback para o gradiente e o nome.
 - Catálogo com busca **sem acento**, categorias com contagem, filtro de conteúdo adulto.
 - Índice **A-Z** nos canais ao vivo.
 - Favoritos, recentes e **continuar assistindo** (progresso salvo a cada ~1%).
@@ -158,7 +182,7 @@ Implementado em `api.js`, alinhado ao backend em `backend/app/routes/`:
   - ícones/imagens: cache primeiro;
   - API, vídeo, áudio e range requests: **sem cache**.
 - Instalação: abra o app em HTTPS/localhost e use “Instalar app” (Android/desktop) ou Compartilhar → “Adicionar à Tela de Início” (iOS).
-- Ao publicar uma nova versão, incremente `CACHE` em `sw.js` (`eftv-web-v2` → `v3`) para limpar caches antigos.
+- Ao publicar uma nova versão, incremente `CACHE` em `sw.js` (`eftv-web-v3` → `v4`) para limpar caches antigos. `playlist.js` faz parte do `CORE` do service worker.
 
 ---
 
@@ -220,7 +244,7 @@ Não é necessário build. O `.nojekyll` da raiz já está presente.
 
 ### Backend
 
-O app usa `API_URL` em `config.js`. Garanta CORS liberado para o domínio da landing/app no FastAPI (`ALLOWED_ORIGINS`).
+O app usa `API_URL` em `config.js`. Garanta CORS liberado para o domínio da landing/app no FastAPI (`CORS_ORIGINS`).
 
 ---
 
@@ -238,8 +262,8 @@ O app usa `API_URL` em `config.js`. Garanta CORS liberado para o domínio da lan
 
 Veja `CONTINUAR.md` para o checklist detalhado. Resumo:
 
-1. Validar login/catálogo/player/checkout contra o backend real.
-2. Trocar `demo.mp4` e os canais de exemplo por conteúdo autorizado.
-3. Testar em Android Chrome, iPhone Safari e desktop.
-4. Configurar CORS e `DEMO_FALLBACK: false` em produção.
+1. Validar login/catálogo/player/checkout contra o backend real com uma conta de assinante.
+2. Corrigir a URL da playlist no provedor/Render (hoje o backend recebe uma página de erro do nginx em vez da M3U).
+3. Trocar `demo.mp4` e os canais de exemplo por conteúdo autorizado.
+4. Testar em Android Chrome, iPhone Safari e desktop.
 5. Opcional: empacotar como TWA (Bubblewrap) para publicar na Play Store.

@@ -8,6 +8,7 @@
   "use strict";
 
   const store = window.EFTV_STORE;
+  const playlist = window.EFTV_PLAYLIST;
 
   // Canais abertos reconhecidos pelo nome (mesma ideia do FreeTv.kt)
   const ABERTOS = [
@@ -80,55 +81,141 @@
     carregado: false,
     demo: false,
     erro: null,
+    erroPlaylist: null,
+    fonte: null,
+    _mapa: new Map(),
 
     async carregar(forcar = false) {
-      // Usa cache local por 6h (igual ao app Android)
-      const cache = store.getCatalogCache();
+      // Usa cache local por 6h (igual ao app Android). O catálogo real fica
+      // no IndexedDB porque pode ter dezenas de milhares de itens.
+      const cache = await store.getCatalogCacheAsync();
       const seisHoras = 6 * 60 * 60 * 1000;
-      if (!forcar && cache && cache.salvoEm && Date.now() - cache.salvoEm < seisHoras) {
-        this.canais = cache.canais || [];
-        this.categorias = cache.categorias || [];
-        this.carregado = true;
-        this.demo = !!cache.demo;
+      if (
+        !forcar &&
+        cache &&
+        cache.salvoEm &&
+        !cache.demo &&
+        Date.now() - cache.salvoEm < seisHoras &&
+        Array.isArray(cache.canais) &&
+        cache.canais.length
+      ) {
+        this.aplicar(cache.canais, cache.categorias, !!cache.demo, cache.fonte || "cache");
         return this;
       }
 
+      const cacheAnterior =
+        cache && !cache.demo && Array.isArray(cache.canais) && cache.canais.length ? cache : null;
+      this.erroPlaylist = null;
+      let erro = null;
+
       try {
-        const [categorias, canais] = await Promise.all([
-          window.EFTV_API.categorias(true),
-          window.EFTV_API.canaisTodas({ page_size: 100, include_adult: true }),
-        ]);
-        this.categorias = normalizarCategorias(categorias);
-        this.canais = normalizarCanais(canais);
-        this.demo = false;
-        this.erro = null;
-      } catch (erro) {
+        const dados = await this._buscar();
+        if (!dados || !dados.canais.length) throw new Error("O catálogo veio vazio.");
+        this.aplicar(dados.canais, dados.categorias, false, dados.fonte);
+        await store.setCatalogCacheAsync({
+          version: 2,
+          fonte: dados.fonte,
+          canais: this.canais,
+          categorias: this.categorias,
+          demo: false,
+        });
+        return this;
+      } catch (e) {
+        erro = e;
+      }
+
+      // Falha de rede não apaga o catálogo que já está no aparelho.
+      if (cacheAnterior) {
+        this.aplicar(
+          cacheAnterior.canais,
+          cacheAnterior.categorias,
+          !!cacheAnterior.demo,
+          cacheAnterior.fonte || "cache"
+        );
         this.erro = erro;
-        if (window.EFTV_CONFIG.DEMO_FALLBACK) {
-          this.categorias = DEMO_CATEGORIAS.slice();
-          this.canais = DEMO_CANAIS.slice();
-          this.demo = true;
-        } else {
-          throw erro;
+        return this;
+      }
+
+      this.erro = erro;
+      if (window.EFTV_CONFIG.DEMO_FALLBACK) {
+        this.usarDemo();
+        store.setCatalogCache({
+          canais: this.canais,
+          categorias: this.categorias,
+          demo: true,
+        });
+        return this;
+      }
+      throw erro;
+    },
+
+    /**
+     * Busca o catálogo real. Primeiro tenta a playlist licenciada pelo
+     * backend (mesma fonte do Android); se ela falhar, tenta o catálogo
+     * centralizado de /channels.
+     */
+    async _buscar() {
+      const temSessao = !!store.getSession();
+      if (temSessao && playlist) {
+        try {
+          const texto = await window.EFTV_API.playlistTexto();
+          if (typeof texto === "string" && texto.trim()) {
+            const itens = playlist.parse(texto);
+            if (itens.length) {
+              const dados = playlist.montarCatalogo(itens);
+              if (dados.canais.length) return { ...dados, fonte: "playlist" };
+            }
+          }
+        } catch (e) {
+          this.erroPlaylist = e;
         }
       }
 
+      // Fallback: catálogo centralizado da API (pode estar vazio hoje).
+      const [categorias, canais] = await Promise.all([
+        window.EFTV_API.categorias(true),
+        window.EFTV_API.canaisTodas({ page_size: 100, include_adult: true }),
+      ]);
+      const lista = normalizarCanais(canais);
+      if (!lista.length) {
+        const detalhe = this.erroPlaylist
+          ? ` Playlist: ${this.erroPlaylist.message}`
+          : "";
+        throw new Error("O catálogo está vazio." + detalhe);
+      }
+      return {
+        canais: lista,
+        categorias: normalizarCategorias(categorias),
+        fonte: "api",
+      };
+    },
+
+    aplicar(canais, categorias, demo, fonte) {
+      this.canais = Array.isArray(canais) ? canais : [];
+      this.categorias = Array.isArray(categorias) ? categorias : [];
+      this.demo = !!demo;
+      this.fonte = fonte || null;
       this.carregado = true;
-      store.setCatalogCache({
-        canais: this.canais,
-        categorias: this.categorias,
-        demo: this.demo,
+      this._indexar();
+    },
+
+    _indexar() {
+      this._mapa = new Map();
+      this.canais.forEach((item) => {
+        this._mapa.set(String(item.id), item);
+        (item.episodios || []).forEach((ep) => this._mapa.set(String(ep.id), ep));
       });
-      return this;
     },
 
     // Usa os dados de demonstração imediatamente (sem tentar a API)
     usarDemo() {
-      this.categorias = DEMO_CATEGORIAS.slice();
-      this.canais = DEMO_CANAIS.slice();
-      this.carregado = true;
-      this.demo = true;
+      this.aplicar(DEMO_CANAIS.slice(), DEMO_CATEGORIAS.slice(), true, "demo");
       this.erro = null;
+      return this;
+    },
+
+    limpar() {
+      this.aplicar([], [], false, null);
       return this;
     },
 
@@ -176,7 +263,7 @@
     },
 
     porId(id) {
-      return this.canais.find((c) => String(c.id) === String(id)) || null;
+      return this._mapa.get(String(id)) || null;
     },
 
     porSlug(slug) {

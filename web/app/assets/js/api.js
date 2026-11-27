@@ -83,8 +83,10 @@
     }
 
     if (!resposta.ok) {
+      const detalhe = corpo && (corpo.detail || corpo.error || corpo.message);
       const msg =
-        (corpo && (corpo.detail || corpo.error || corpo.message)) ||
+        (typeof detalhe === "string" && detalhe) ||
+        (detalhe && (detalhe.message || detalhe.code)) ||
         "Erro HTTP " + resposta.status;
       throw new ApiError(String(msg), resposta.status, corpo);
     }
@@ -215,6 +217,12 @@
     },
 
     // ---------- Player ----------
+    // Texto M3U buscado pelo backend (fallback de DNS/CORS no navegador).
+    // Pode demorar: o backend baixa a playlist do provedor.
+    async playlistTexto() {
+      return request("/player/playlist-text", { auth: true, timeout: 130000 });
+    },
+
     async iniciarPlayer(channelUrl, channelName) {
       return request("/player/play", {
         method: "POST",

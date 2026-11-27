@@ -6,7 +6,7 @@
   - Vídeos, áudio, range requests e API: passam direto, sem cache.
   ======================================================================*/
 
-const CACHE = "eftv-web-v2";
+const CACHE = "eftv-web-v3";
 
 const CORE = [
   "./",
@@ -16,6 +16,7 @@ const CORE = [
   "./assets/js/config.js",
   "./assets/js/store.js",
   "./assets/js/api.js",
+  "./assets/js/playlist.js",
   "./assets/js/catalog.js",
   "./assets/js/player.js",
   "./assets/js/app.js",

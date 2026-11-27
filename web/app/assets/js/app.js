@@ -53,10 +53,11 @@
   }
 
   function formatarPreco(plano) {
-    const valor = plano.preco ?? plano.price ?? plano.amount;
+    const centavos = plano.price_cents ?? plano.priceCents ?? plano.amount_cents;
+    const valor = centavos != null ? Number(centavos) / 100 : plano.preco ?? plano.price ?? plano.amount;
     if (valor == null) return "R$ 19,90/mês";
     const numero = Number(valor);
-    const reais = Number.isFinite(numero) ? (numero > 1000 ? numero / 100 : numero) : null;
+    const reais = Number.isFinite(numero) ? (centavos == null && numero > 1000 ? numero / 100 : numero) : null;
     if (reais == null) return String(valor);
     return reais.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) +
       (plano.interval === "year" ? "/ano" : "/mês");
@@ -171,6 +172,20 @@
         <button class="btn-fav-small ${fav ? "active" : ""}" data-fav="${item.id}" aria-label="Favoritar">${fav ? "★" : "☆"}</button>
       </div>
     `;
+
+    // Logo/capa real do provedor; se falhar, fica o gradiente com o nome.
+    if (item.logo) {
+      const thumb = el.querySelector(".item-thumb");
+      const img = document.createElement("img");
+      img.className = "item-logo";
+      img.src = item.logo;
+      img.alt = "";
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.referrerPolicy = "no-referrer";
+      img.addEventListener("error", () => img.remove(), { once: true });
+      thumb.appendChild(img);
+    }
 
     el.addEventListener("click", (e) => {
       if (e.target.closest(".btn-fav-small")) return;
@@ -409,9 +424,93 @@
   }
 
   /* ------------------------------------------------------------------
+     Série — temporadas e episódios
+  ------------------------------------------------------------------ */
+  function abrirSerie(serie) {
+    const modal = $("#serie-modal");
+    if (!modal) return;
+
+    $("#serie-titulo").textContent = serie.nome;
+    const totalTemporadas = serie.temporadas || new Set(serie.episodios.map((e) => e.temporada)).size;
+    $("#serie-meta").textContent =
+      `${totalTemporadas} ${totalTemporadas === 1 ? "temporada" : "temporadas"} · ` +
+      `${serie.episodios.length} ${serie.episodios.length === 1 ? "episódio" : "episódios"}`;
+
+    const poster = $("#serie-poster");
+    poster.innerHTML = serie.logo
+      ? `<img src="${escapeHtml(serie.logo)}" alt="" loading="lazy">`
+      : `<span>${escapeHtml((serie.nome || "?").charAt(0).toUpperCase())}</span>`;
+
+    const container = $("#serie-temporadas");
+    container.innerHTML = "";
+
+    const porTemporada = new Map();
+    serie.episodios.forEach((ep) => {
+      const t = Number(ep.temporada) || 1;
+      if (!porTemporada.has(t)) porTemporada.set(t, []);
+      porTemporada.get(t).push(ep);
+    });
+
+    [...porTemporada.keys()].sort((a, b) => a - b).forEach((temporada, indice) => {
+      const detalhes = document.createElement("details");
+      detalhes.className = "serie-temporada";
+      detalhes.open = indice === 0;
+
+      const resumo = document.createElement("summary");
+      resumo.textContent = `Temporada ${temporada}`;
+      detalhes.appendChild(resumo);
+
+      const lista = document.createElement("div");
+      lista.className = "serie-episodios";
+      porTemporada.get(temporada)
+        .sort((a, b) => a.episodio - b.episodio)
+        .forEach((ep) => {
+          const botao = document.createElement("button");
+          botao.type = "button";
+          botao.className = "serie-episodio";
+          const titulo = ep.episodioTitulo || `Episódio ${ep.episodio}`;
+          botao.innerHTML = `
+            <span class="ep-num">T${ep.temporada} E${ep.episodio}</span>
+            <span class="ep-nome">${escapeHtml(titulo)}</span>
+          `;
+          botao.addEventListener("click", () => {
+            fecharSerie();
+            abrirPlayer(ep);
+          });
+          lista.appendChild(botao);
+        });
+
+      detalhes.appendChild(lista);
+      container.appendChild(detalhes);
+    });
+
+    if (typeof modal.showModal === "function") modal.showModal();
+    else modal.hidden = false;
+  }
+
+  function fecharSerie() {
+    const modal = $("#serie-modal");
+    if (!modal) return;
+    if (typeof modal.close === "function") modal.close();
+    else modal.hidden = true;
+  }
+
+  function configurarSerie() {
+    $("#serie-close").addEventListener("click", fecharSerie);
+    const modal = $("#serie-modal");
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) fecharSerie();
+    });
+  }
+
+  /* ------------------------------------------------------------------
      Player
   ------------------------------------------------------------------ */
   async function abrirPlayer(item) {
+    if (item.tipo === "serie" && Array.isArray(item.episodios) && item.episodios.length) {
+      abrirSerie(item);
+      return;
+    }
     if (!state.usuario && !state.demo) {
       abrirAuth("login");
       mostrarToast("Entre para assistir");
@@ -1023,14 +1122,9 @@
 
   async function iniciarPosLogin() {
     $("#sidebar-user").textContent = state.usuario.email.split("@")[0];
-    // Recarrega catálogo real (se possível)
+    // Recarrega o catálogo real (playlist autenticada).
     state.demo = false;
-    try {
-      await catalog.carregar(true);
-      state.demo = catalog.demo;
-    } catch (_) {
-      state.demo = true;
-    }
+    await carregarCatalogo(true);
     renderAoVivo();
     if (state.view === "conta") carregarConta();
   }
@@ -1038,6 +1132,8 @@
   async function sair() {
     await api.logout();
     store.clearSession();
+    await store.clearCatalogCacheAsync();
+    catalog.usarDemo();
     state.usuario = null;
     state.assinatura = null;
     state.demo = true;
@@ -1080,7 +1176,7 @@
     });
 
     $("#btn-limpar-cache").addEventListener("click", async () => {
-      store.remover("catalog");
+      await store.clearCatalogCacheAsync();
       mostrarToast("Cache limpo. Recarregando catálogo…");
       await carregarCatalogo(true);
       renderAoVivo();
@@ -1157,21 +1253,33 @@
   async function carregarCatalogo(forcar = false) {
     if (state.carregando) return;
     state.carregando = true;
+    const loading = $("#catalog-loading");
+    if (loading) loading.classList.remove("hidden");
 
-    if (!store.getSession()) {
+    if (!store.getSession() || state.demo || (store.getSession() && store.getSession().access === "demo-access")) {
       catalog.usarDemo();
       state.demo = true;
     } else {
       try {
         await catalog.carregar(forcar);
         state.demo = catalog.demo;
-      } catch (_) {
-        catalog.usarDemo();
-        state.demo = true;
+        if (catalog.erro) {
+          mostrarToast("Não foi possível atualizar; usando o catálogo salvo.");
+        }
+      } catch (erro) {
+        state.demo = false;
+        if (cfg.DEMO_FALLBACK) {
+          catalog.usarDemo();
+          state.demo = true;
+        } else if (!catalog.canais.length || catalog.demo) {
+          catalog.limpar();
+        }
+        mostrarToast(erro.message || "Falha ao carregar o catálogo");
       }
     }
 
     state.carregando = false;
+    if (loading) loading.classList.add("hidden");
     const badge = $("#demo-note");
     if (badge) badge.hidden = !state.demo;
   }
@@ -1251,7 +1359,7 @@
     const params = new URLSearchParams(location.search);
 
     // Modo demonstração explícito (útil para testar a interface sem backend).
-    if (params.get("demo") === "1" && cfg.DEMO_FALLBACK && !store.getSession()) {
+    if (params.get("demo") === "1" && cfg.DEMO_MODE && !store.getSession()) {
       store.setSession(sessaoLocal("cliente@eftv.com.br"));
     }
 
@@ -1273,6 +1381,7 @@
     configurarAuth();
     configurarAjustes();
     configurarTV();
+    configurarSerie();
     configurarErros();
 
     $("#btn-update-close").addEventListener("click", () => {

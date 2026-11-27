@@ -92,6 +92,12 @@
 
   <div class="app-overlay" id="overlay"></div>
 
+  <!-- ===== Importação do catálogo ===== -->
+  <div id="catalog-loading" class="catalog-loading hidden" role="status" aria-live="polite">
+    <span class="spinner" aria-hidden="true"></span>
+    <span>Importando catálogo… isso pode levar até 2 minutos.</span>
+  </div>
+
   <!-- ===== Conteúdo ===== -->
   <main class="app-main" id="app-main">
 
@@ -370,6 +376,21 @@
     </div>
   </dialog>
 
+  <!-- ===== Modal de série (temporadas e episódios) ===== -->
+  <dialog id="serie-modal" class="modal serie-modal">
+    <div class="modal-card serie-card">
+      <button class="modal-close" id="serie-close" aria-label="Fechar">✕</button>
+      <div class="serie-head">
+        <div class="serie-poster" id="serie-poster"></div>
+        <div class="serie-info">
+          <h3 id="serie-titulo">Série</h3>
+          <p id="serie-meta"></p>
+        </div>
+      </div>
+      <div class="serie-temporadas" id="serie-temporadas"></div>
+    </div>
+  </dialog>
+
   <!-- ===== Modal login por código (TV) ===== -->
   <dialog id="tv-modal" class="modal">
     <div class="modal-card">
@@ -389,6 +410,7 @@
   <script src="assets/js/config.js"></script>
   <script src="assets/js/store.js"></script>
   <script src="assets/js/api.js"></script>
+  <script src="assets/js/playlist.js"></script>
   <script src="assets/js/catalog.js"></script>
   <script src="assets/js/player.js"></script>
   <script src="assets/js/app.js"></script>
