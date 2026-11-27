@@ -20,7 +20,12 @@
   e o timeout de leitura subiu para 120 s. Redirecionamentos mantêm cookies e
   não permitem `https -> http`.
 
-Estado: 1.5.17 (`versionCode 42`), 230 testes do backend e 6 do servidor local
+- [x] **Importação repetida ao abrir o app.** O catálogo agora só é importado
+  na primeira vez (ou quando o usuário toca em "Atualizar lista"). Se o app
+  for fechado no meio de uma importação, `recoverInterruptedImport()` valida os
+  lotes já commitados como cache, em vez de apagar tudo e recomeçar.
+
+Estado: 1.5.18 (`versionCode 43`), 230 testes do backend e 6 do servidor local
 passando, compilação Android OK.
 
 ## Correção de 27/11/2026 — capas de série pela API
