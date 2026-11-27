@@ -102,6 +102,8 @@ aponta para a playlist**.
 O usuário informou que trocou `IPTV_PLAYLIST_URL` no painel do Render e que o
 deploy estava em andamento. O reteste após o deploy ainda devolveu os mesmos
 235 bytes (página do nginx) no momento em que este documento foi escrito.
+Uma última tentativa de reteste ficou **inconclusiva**: o aparelho foi
+desconectado do PC (PC sendo desligado) e o ADB perdeu o dispositivo.
 
 ### Hipótese principal a verificar
 
@@ -212,8 +214,9 @@ repositório. Não commitar credenciais.
 
 ## 6. Estado do aparelho de teste
 
-- O aparelho pode ter ficado com **Wi-Fi desligado e dados móveis ligados**
-  após o último teste. Restaurar com os comandos da seção 4.
+- O aparelho foi **desconectado do PC** no fim da sessão (o PC foi desligado).
+  Pode ter ficado com **Wi-Fi desligado e dados móveis ligados**. Ao retomar,
+  restaurar com os comandos da seção 4.
 - O catálogo salvo tem ~33.162 filmes e ~2.264 canais ao vivo; a lista **não**
   é apagada quando a importação falha.
 
