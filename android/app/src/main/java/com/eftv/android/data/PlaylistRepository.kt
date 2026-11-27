@@ -37,8 +37,12 @@ class PlaylistRepository(
         val error: Throwable? = null,
     )
 
-    fun cached(): CatalogStore.Metadata? =
-        catalogStore.metadata()?.takeIf { it.sourceId == sourceId }
+    fun cached(): CatalogStore.Metadata? {
+        // Fecha qualquer importacao interrompida em uma sessao anterior: os
+        // lotes ja gravados continuam valendo, sem baixar a lista de novo.
+        catalogStore.recoverInterruptedImport()
+        return catalogStore.metadata()?.takeIf { it.sourceId == sourceId }
+    }
 
     /** Metadado do lote ja commitado, mesmo com a importacao em andamento. */
     fun partial(): CatalogStore.Metadata? =

@@ -990,11 +990,10 @@ class MainActivity : AppCompatActivity() {
             showLoading()
             val cached = withContext(Dispatchers.IO) { repository.cached() }
             if (cached != null) {
+                // O catalogo fica salvo no aparelho. Nao importa de novo ao abrir
+                // o app: a atualizacao so acontece quando o usuario pede
+                // "Atualizar lista" (pull-to-refresh ou menu).
                 applyCatalog(cached)
-                // Cache antigo: atualiza em segundo plano sem esconder a lista.
-                if (System.currentTimeMillis() - cached.updatedAt > CACHE_TTL_MS) {
-                    refreshCatalog()
-                }
             } else {
                 refreshCatalog()
             }
@@ -1782,9 +1781,6 @@ class MainActivity : AppCompatActivity() {
         private const val TRIAL_NUDGE_DAYS = 3
         private const val NUDGE_PREFS = "eftv_nudge"
         private const val NUDGE_LAST_DAY = "last_day"
-
-        /** Depois disso, o app tenta atualizar a lista em segundo plano. */
-        private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
 
         /** Abaixo disso a barra A-Z so atrapalha (a lista ja cabe na tela). */
         private const val ALPHABET_MIN_ITEMS = 80

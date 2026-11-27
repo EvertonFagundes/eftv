@@ -26,6 +26,9 @@ class CatalogStore private constructor(context: Context) {
     @Volatile
     private var seriesIndexReady = false
 
+    @Volatile
+    private var importRecovered = false
+
     data class Metadata(
         val sourceId: String,
         val updatedAt: Long,
@@ -33,24 +36,64 @@ class CatalogStore private constructor(context: Context) {
     )
 
     fun metadata(allowImporting: Boolean = false): Metadata? {
+        val values = readMeta()
+        // Importacao interrompida (app fechado no meio) nao vale como cache
+        // ate [recoverInterruptedImport] validar os lotes ja gravados.
+        if (!allowImporting && values["importing"] == "1") return null
+        val sourceId = values["source_id"] ?: return null
+        val total = values["total"]?.toIntOrNull() ?: return null
+        if (total <= 0) return null
+        return Metadata(
+            sourceId = sourceId,
+            updatedAt = values["updated_at"]?.toLongOrNull() ?: 0L,
+            total = total,
+        )
+    }
+
+    private fun readMeta(): Map<String, String> {
+        val values = HashMap<String, String>()
         db.rawQuery("SELECT key, value FROM meta", null).use { cursor ->
-            val values = HashMap<String, String>()
             while (cursor.moveToNext()) {
                 values[cursor.getString(0)] = cursor.getString(1)
             }
-            // Importacao interrompida (app fechado no meio) nao vale como
-            // cache: o proximo start baixa a lista de novo. A UI, porem, precisa
-            // do metadado parcial para liberar os lotes ja commitados.
-            if (!allowImporting && values["importing"] == "1") return null
-            val sourceId = values["source_id"] ?: return null
-            val total = values["total"]?.toIntOrNull() ?: return null
-            if (total <= 0) return null
-            return Metadata(
-                sourceId = sourceId,
-                updatedAt = values["updated_at"]?.toLongOrNull() ?: 0L,
-                total = total,
-            )
         }
+        return values
+    }
+
+    /**
+     * Recupera uma importacao que foi interrompida (app fechado no meio).
+     *
+     * Antes o flag `importing=1` invalidade todo o catalogo e o proximo start
+     * baixava tudo de novo — mesmo com milhares de itens ja salvos. Aqui os
+     * lotes commitados passam a valer como cache e so uma atualizacao manual
+     * traz o restante.
+     */
+    fun recoverInterruptedImport() {
+        if (importRecovered) return
+        importRecovered = true
+        val values = readMeta()
+        if (values["importing"] != "1") return
+
+        val total = countRows("channels")
+        if (total <= 0) {
+            // Nada foi commitado: limpa o meta para uma importacao nova.
+            db.beginTransaction()
+            try {
+                db.execSQL("DELETE FROM meta")
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+            return
+        }
+        writePartialMeta(
+            sourceId = values["source_id"].orEmpty(),
+            updatedAt = values["updated_at"]?.toLongOrNull() ?: 0L,
+            total = total,
+            importing = false,
+        )
+        runCatching { refreshSeriesIndex() }
+            .onFailure { seriesIndexReady = false }
     }
 
     /** Grupos que possuem canais do tipo informado (ao vivo, filme ou serie). */
