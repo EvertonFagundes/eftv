@@ -1,5 +1,8 @@
 # Pendências — correções de 25/11/2026
 
+> **Retomada em outra máquina:** leia `docs/ESTADO-ATUAL.md`. Ele tem versões,
+> comandos de teste em 4G, hipóteses e o que falta para concluir.
+
 ## Correção de 27/11/2026 — keepalive e importação em dados móveis
 
 - [x] **Backend dormindo.** O cron do GitHub agendava 5 min, mas entregava só
@@ -43,6 +46,12 @@ passando, compilação Android OK.
   backend completa a importação em dados móveis.
 - `CatalogStore.replace()` agora só limpa o catálogo quando chega o primeiro
   canal: uma playlist vazia não apaga mais a lista salva no aparelho.
+- **Reteste após o usuário trocar `IPTV_PLAYLIST_URL` no Render:** ainda retornou
+  235 bytes de página padrão do nginx. O fallback autentica (HTTP 200), então o
+  problema é a URL/conteúdo, não o caminho em 4G. Suspeita principal: a
+  assinatura da conta de teste tem `provider_playlist_url` (linha própria)
+  cadastrada, que tem precedência sobre a env var em `player.py`. Detalhes em
+  `docs/ESTADO-ATUAL.md`.
 
 ## Correção de 27/11/2026 — capas de série pela API
 
