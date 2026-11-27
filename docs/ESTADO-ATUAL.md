@@ -150,6 +150,44 @@ Com o backend **1.2.2** em produção, Wi-Fi desligado e **LTE da Claro**:
 - O build de release só registra WARN+ no logcat (`EftvApplication`), então a
   importação bem-sucedida não gera linha de log; a validação foi visual.
 
+### Diagnóstico definitivo: bloqueio geográfico do provedor (27/11)
+
+O backend **1.2.5** passou a expor em `/health.playlist_probe` (sem URL nem
+credenciais) o IP resolvido, o servidor e a primeira linha de cada tentativa.
+Com o probe de 27/11 ~23:13 UTC (20:13 em Brasília):
+
+- `IPTV_PLAYLIST_URL` é Xtream Codes sobre **HTTP**, porta padrão, com
+  `get.php` e `type` na query (fingerprint seguro da URL: `841cbbca80bd`).
+- O Render resolve para `45.134.142.152`/`138.199.11.65`; os dois respondem
+  `HTTP 200`, `server: nginx`, **235 bytes** ("Welcome to nginx!").
+- Pela borda Cloudflare (`172.67.143.94`/`104.21.87.130`), o `cf-ray` termina
+  em `-PDX` (Portland) e a resposta é a mesma página do nginx. Ou seja, a
+  origem recebe a requisição, mas devolve a página padrão.
+- `player_api.php` pela mesma URL também devolve a página do nginx: o bloqueio
+  atinge o host inteiro, não só o `get.php`.
+- Na rede local no Brasil, a mesma URL devolve `#EXTM3U` e ~84,6 MB.
+
+Conclusão: o provedor (ou a regra de WAF/geolocalização na frente dele) não
+entrega a playlist para IPs de datacenter nos EUA. **Não é DNS, tamanho,
+HTTPS, User-Agent, credenciais nem código do backend.** O Render não tem região
+na América do Sul (Oregon/Ohio/Virginia/Frankfurt/Singapura) e o IP dedicado
+custaria US$ 100/mês (plano Pro), então mudar de região/IP não resolve de graça.
+
+O sucesso do reteste 4G das 19:57 **não prova** que o Render entregou a lista:
+o app tenta primeiro o proxy local do celular (IP brasileiro) e só depois o
+backend; o log de release não registra qual fonte venceu. É provável que o
+celular tenha baixado direto pelo proxy/DoH.
+
+Saídas possíveis:
+
+1. Pedir ao provedor para liberar a região/IPs do Render (melhor correção; o IP
+   de saída do Render gratuito muda a cada restart).
+2. Guardar uma cópia válida da playlist no backend (Postgres) e servi-la quando
+   o provedor bloquear; atualizar por um script local no Brasil. Funciona já,
+   mas a lista fica defasada até a próxima atualização.
+3. Relay em IP residencial/brasileiro (VPS no Brasil ou túnel para a máquina
+   local), mantendo a atualização automática; mais infraestrutura.
+
 ### Outras hipóteses, em ordem
 
 1. Deploy do Render ainda não concluído quando o teste rodou (retestar depois).

@@ -62,6 +62,18 @@ passando, compilação Android OK.
   - O build de release só registra WARN+ no logcat (`EftvApplication`), então
     a importação bem-sucedida não aparece no log; a validação foi visual.
 
+- [ ] **Playlist bloqueada para o Render (geobloqueio).** O backend 1.2.5
+  confirmou: o Render sai por Portland (`cf-ray -PDX`) e o provedor devolve a
+  página padrão do nginx (235 bytes), inclusive para `player_api.php`; a mesma
+  URL no Brasil entrega `#EXTM3U` com ~84,6 MB. Não é DNS, tamanho nem
+  credenciais. Opções: pedir liberação ao provedor, cache da playlist no
+  Postgres com upload local, ou relay em IP brasileiro. Detalhes em
+  `docs/ESTADO-ATUAL.md`.
+  - O sucesso do reteste 4G das 19:57 pode ter vindo do proxy local do celular
+    (IP brasileiro), não do Render; o log de release não registra a fonte.
+  - Depois de resolver, restringir os detalhes de `/health.playlist_probe`
+    (IPs/tentativas) a admin ou remover; hoje ficam públicos para diagnóstico.
+
 - [x] **Fallback do backend robusto (1.2.2).**
   `/player/playlist-text` agora tenta a linha própria e, se ela devolver
   HTML/erro, tenta a `IPTV_PLAYLIST_URL`. Só aceita resposta que comece com
