@@ -76,6 +76,8 @@ passando, compilação Android OK.
   - [x] **Contorno implementado (1.2.6):** cache persistente em
     `playlist_cache`, upload admin em `PUT /admin/playlist/cache` e fallback em
     `/player/playlist-text`. Script: `backend/scripts/upload_playlist_cache.py`.
+  - [x] **Backend 1.2.6 em produção** em 27/11; `/admin/playlist/cache` sem
+    token responde 401 e o `/health` confirma a versão.
   - [ ] **Rodar o upload local** em uma rede que alcance o provedor e validar
     `/player/playlist-text` com o app/web. Comparar o fingerprint da URL do
     script com `/health.playlist_probe.configured.url_fingerprint`.

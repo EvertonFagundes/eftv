@@ -219,6 +219,11 @@ Saídas possíveis:
 - Enquanto o provedor bloquear o Render, repita o upload periodicamente (ex.:
   semanal) para o catálogo não ficar defasado.
 
+Estado em 27/11: backend **1.2.6** em produção (`/health` = 1.2.6,
+`/admin/playlist/cache` sem token = 401). O primeiro upload ainda depende de
+rodar o script em uma rede que alcance o provedor; até lá, o endpoint continua
+tentando o provedor e devolve 502 quando não há cache.
+
 ### Outras hipóteses, em ordem
 
 1. Deploy do Render ainda não concluído quando o teste rodou (retestar depois).
