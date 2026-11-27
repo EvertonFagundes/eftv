@@ -26,7 +26,9 @@ object SeriesCoverFetcher {
 
     private data class Candidate(val score: Int, val image: String)
 
-    private const val PREFS_NAME = "series_cover_urls"
+    // v2 descarta URLs antigas obtidas com o casamento frouxo e com o logo do
+    // provedor; a proxima abertura da aba refaz apenas as buscas pendentes.
+    private const val PREFS_NAME = "series_cover_urls_v2"
     private const val MEMORY_CACHE_ENTRIES = 2_048
 
     private val cache = LruCache<String, String>(MEMORY_CACHE_ENTRIES)
@@ -110,11 +112,11 @@ object SeriesCoverFetcher {
 
         val best = candidates.maxByOrNull { it.score } ?: return null
         // Titulos do provedor costumam vir com prefixo/sufixo ("[L]", "S01",
-        // "Nova Geracao"). Um unico resultado do IMDb para a consulta quase
-        // sempre e o casamento certo. Nota zero acontece com titulos
-        // traduzidos ("Wandinha" -> "Wednesday", "Round 6" -> "Squid Game"):
-        // nesse caso vale a ordem de relevancia do proprio IMDb.
-        val accept = best.score >= 25 || candidates.size == 1 || best.score == 0
+        // "Nova Geracao"). Nota 20 bate quando so o primeiro token combina
+        // ("011ZE" -> "O11CE"); menos que isso so vale para um unico
+        // resultado, ou para titulos traduzidos ("Wandinha" -> "Wednesday",
+        // "Round 6" -> "Squid Game"), onde vale a relevancia do proprio IMDb.
+        val accept = best.score >= 20 || candidates.size == 1 || best.score == 0
         return if (accept) best.image else null
     }
 
@@ -190,20 +192,33 @@ object SeriesCoverFetcher {
             null
         }
         conn.disconnect()
-        body?.let { parsePoster(it) }
+        body?.let { parsePoster(it, name) }
     } catch (e: Exception) {
         Timber.w(e, "Falha ao buscar capa no TVMaze: %s", name)
         null
     }
 
-    private fun parsePoster(body: String): String? {
+    private fun parsePoster(body: String, name: String): String? {
         return try {
             val arr = JSONArray(body)
-            if (arr.length() == 0) return null
-            val show = arr.getJSONObject(0).optJSONObject("show") ?: return null
-            val image = show.optJSONObject("image") ?: return null
-            image.optString("original").takeIf { it.isNotBlank() }
-                ?: image.optString("medium").takeIf { it.isNotBlank() }
+            val query = normalize(name)
+            if (query.isBlank()) return null
+
+            // O TVMaze devolve titulos parecidos, nao necessariamente a serie
+            // certa ("Round 6" ja devolveu um programa holandes). Mesmo na
+            // reserva, so aceitamos o melhor casamento com o titulo.
+            val candidates = ArrayList<Candidate>()
+            for (i in 0 until arr.length()) {
+                val show = arr.optJSONObject(i)?.optJSONObject("show") ?: continue
+                val image = show.optJSONObject("image") ?: continue
+                val url = image.optString("original").takeIf { it.isNotBlank() }
+                    ?: image.optString("medium").takeIf { it.isNotBlank() }
+                    ?: continue
+                candidates.add(Candidate(score(query, normalize(show.optString("name"))), url))
+            }
+            if (candidates.isEmpty()) return null
+            val best = candidates.maxByOrNull { it.score } ?: return null
+            if (best.score >= 20 || candidates.size == 1) best.image else null
         } catch (e: Exception) {
             Timber.w(e, "Falha ao parsear resposta do TVMaze")
             null

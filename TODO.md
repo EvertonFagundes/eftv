@@ -1,5 +1,16 @@
 # Pendências — correções de 25/11/2026
 
+## Correção de 27/11/2026 — capas de série pela API
+
+- [x] **Imagens aleatórias na aba Séries.** O logo da playlist era priorizado
+  sobre a capa da API e costuma apontar para arte de outro título. Agora as
+  séries ignoram esse logo: cards da aba, itens em "Continuar assistindo" e a
+  tela de detalhes buscam a capa pelo título limpo (IMDb → TVMaze). Canais e
+  filmes continuam usando o logo original do provedor.
+- [x] **Casamento com a API.** O TVMaze não pega mais o primeiro resultado da
+  lista; escolhe o melhor casamento com o título. O cache de URLs migrou para
+  `series_cover_urls_v2`, descartando capas antigas erradas.
+
 Estado: 1.5.15 (`versionCode 40`) compilada, testada e instalada no aparelho.
 Capas reais validadas na aba Séries (007, 011ZE, 100 Code, 100 Coisas..., 100
 Days Wild), na busca por "Wandinha" (pôster de *Wednesday*) e na abertura da

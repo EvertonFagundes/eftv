@@ -6,11 +6,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import coil.load
 import com.eftv.android.data.CatalogStore
 import com.eftv.android.data.Channel
 import com.eftv.android.databinding.ActivitySeriesBinding
 import com.eftv.android.ui.EpisodeAdapter
+import com.eftv.android.ui.loadSeriesCover
 import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -51,12 +51,9 @@ class SeriesActivity : AppCompatActivity() {
         binding.toolbar.setNavigationOnClickListener { finish() }
 
         binding.seriesTitle.text = seriesTitle
-        binding.seriesPoster.load(seriesLogo.ifBlank { null }) {
-            placeholder(R.drawable.ic_series)
-            error(R.drawable.ic_series)
-            fallback(R.drawable.ic_series)
-            crossfade(true)
-        }
+        // Capa pela API, pelo titulo da serie: o logo da playlist costuma ser
+        // uma imagem aleatoria. Sem resultado, fica a arte gerada localmente.
+        binding.seriesPoster.loadSeriesCover(seriesTitle, R.drawable.ic_series)
 
         binding.episodeList.layoutManager = LinearLayoutManager(this)
         binding.episodeList.adapter = adapter
