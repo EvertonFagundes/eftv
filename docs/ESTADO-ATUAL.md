@@ -1,6 +1,6 @@
 # Estado atual do EFTV — handoff
 
-Última atualização: 27/11/2026, ~18:40 (America/Sao_Paulo).
+Última atualização: 27/11/2026, ~20:00 (America/Sao_Paulo).
 
 Este arquivo existe para continuar o trabalho em outra máquina sem perder
 contexto. Leia junto com `TODO.md`.
@@ -72,7 +72,7 @@ O endpoint do backend está implementado e deployado:
 
 ---
 
-## 3. Onde travou: importação em 4G
+## 3. Importação em 4G (resolvida em 27/11)
 
 ### Sintoma
 
@@ -135,6 +135,20 @@ e a próxima fonte é tentada. Os logs mostram apenas o rótulo da fonte e o
 motivo/tamanho, nunca a URL com credenciais. Com isso, uma linha própria errada
 não bloqueia mais o 4G quando a playlist compartilhada está correta; se as duas
 estiverem erradas, o retorno é 502 com o motivo de cada uma.
+
+### Reteste em 4G: concluído em 27/11/2026
+
+Com o backend **1.2.2** em produção, Wi-Fi desligado e **LTE da Claro**:
+
+- "Atualizar lista" mostrou "Importando 0 itens" e evoluiu até **234.000
+  itens** em cerca de 2 minutos.
+- Status final: **2.264 canais · 19:57 · online**.
+- Abas: **33.162 filmes** e **9.738 séries**.
+- As capas reais de série carregaram em 4G (007, 011ZE, entre outras).
+- PSS ~208 MB durante a importação. No fim, o Wi-Fi foi restaurado e os dados
+  móveis desligados.
+- O build de release só registra WARN+ no logcat (`EftvApplication`), então a
+  importação bem-sucedida não gera linha de log; a validação foi visual.
 
 ### Outras hipóteses, em ordem
 
@@ -239,14 +253,14 @@ repositório. Não commitar credenciais.
 
 ## 7. Pendências
 
-1. Retestar a importação em 4G com o backend 1.2.2: a linha própria quebrada
-   não bloqueia mais a playlist compartilhada. O log do Render mostra
-   `Playlist linha do assinante ...` e `Playlist playlist compartilhada ...`
-   sem expor URLs. Se as duas falharem, aí sim conferir a URL no painel e a
-   linha própria da assinatura.
-2. Atualizar as três variáveis `APP_LATEST_*` no Render — **já confirmado**
-   (`/app/version` responde 1.5.23/48 em 27/11).
-3. Opcional: registrar no `TODO.md` o resultado final do teste.
+1. [x] Importação em 4G validada em 27/11 (~19:57), com o backend 1.2.2:
+   234.000 itens, 2.264 canais, 33.162 filmes, 9.738 séries e capas em 4G.
+2. [x] `APP_LATEST_*` confirmado no Render (`/app/version` responde
+   1.5.23/48 em 27/11).
+3. [ ] Primeira montagem do índice em instalação limpa (v5 → v6): medir em um
+   aparelho sem o índice pronto. Se passar de ~20 s, montar em segundo plano.
+4. [ ] Opcional: investigar o logo trocado de "Round 6 O Desafio" (o provedor
+   entrega uma capa que não é a do IMDb).
 
 ## 8. Arquivos-chave
 

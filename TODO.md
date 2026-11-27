@@ -53,6 +53,15 @@ passando, compilação Android OK.
   cadastrada, que tem precedência sobre a env var em `player.py`. Detalhes em
   `docs/ESTADO-ATUAL.md`.
 
+- [x] **Reteste em 4G concluído (27/11, ~19:57).** Com o backend 1.2.2, Wi-Fi
+  desligado e LTE da Claro, "Atualizar lista" importou **234.000 itens** em
+  cerca de 2 minutos. O catálogo final ficou com **2.264 canais**,
+  **33.162 filmes** e **9.738 séries**, horário **19:57** e status `online`.
+  As capas de série carregaram em 4G (007, 011ZE etc.). PSS ~208 MB. Wi-Fi
+  restaurado e dados móveis desligados no fim.
+  - O build de release só registra WARN+ no logcat (`EftvApplication`), então
+    a importação bem-sucedida não aparece no log; a validação foi visual.
+
 - [x] **Fallback do backend robusto (1.2.2).**
   `/player/playlist-text` agora tenta a linha própria e, se ela devolver
   HTML/erro, tenta a `IPTV_PLAYLIST_URL`. Só aceita resposta que comece com
@@ -138,8 +147,10 @@ série (temporadas, episódios e botões de reprodução).
     The Challenge*); como o provedor entrega logo própria, ela tem prioridade.
     Vale investigar se o logo do provedor está trocado.
 
-- [ ] **Próxima importação completa.** Conferir o ganho real dos lotes de 2.000
-  e se o horário final do catálogo aparece correto.
+- [x] **Importação completa (27/11, ~19:57).** 234.000 itens importados em
+  ~2 min; catálogo final com 2.264 canais, 33.162 filmes e 9.738 séries. O
+  horário do status foi atualizado para 19:57 e a lista apareceu
+  progressivamente durante os lotes. PSS ~208 MB.
 
 - [ ] **Primeira montagem do índice em instalação limpa (v5 → v6).**
   Medir em um aparelho sem o índice pronto; se passar de ~20 s, montar em
@@ -152,7 +163,8 @@ série (temporadas, episódios e botões de reprodução).
 - [x] **Backend 1.2.2 no ar:** `/health` responde `version=1.2.2`, e o
   `/player/playlist-text` sem token continua retornando 401.
 
-- [ ] **Reteste da importação em 4G:** conectar o celular ao ADB, desligar o
-  Wi-Fi, ligar os dados móveis e tocar em "Atualizar lista". O backend 1.2.2
-  agora tenta a linha própria e a playlist compartilhada, aceitando só M3U.
-  Procurar no log `Playlist ... OK` ou o motivo das duas fontes.
+- [x] **Reteste da importação em 4G:** concluído em 27/11 (~19:57), com LTE
+  da Claro e o backend 1.2.2. A playlist compartilhada foi entregue e o
+  catálogo importou 234.000 itens. Detalhes em "Validação em 4G" acima.
+  - O build de release só loga WARN+, então não há linha `Playlist ... OK`
+    no logcat; a confirmação foi pelo status e pelas contagens na tela.
