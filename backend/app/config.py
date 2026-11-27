@@ -59,7 +59,7 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "EFTV API"
-    APP_VERSION: str = "1.2.2"
+    APP_VERSION: str = "1.2.3"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"  # development, staging, production
     # URL publica da API. O webhook de Assinaturas e configurado no proprio
@@ -132,6 +132,19 @@ class Settings(BaseSettings):
     IPTV_PLAYLIST_URL: str = ""
     IPTV_PLAYLIST_USER_AGENT: str = "VLC/3.0.20 LibVLC/3.0.20"
     IPTV_PLAYLIST_REFERER: str | None = None
+    # A lista completa tem ~84 MB. O limite antigo de 32 MiB rejeitava a
+    # playlist real mesmo quando o download funcionava.
+    IPTV_PLAYLIST_MAX_BYTES: int = 128 * 1024 * 1024
+    IPTV_PLAYLIST_CONNECT_TIMEOUT_SECONDS: float = 20.0
+    IPTV_PLAYLIST_READ_TIMEOUT_SECONDS: float = 180.0
+    IPTV_PLAYLIST_TOTAL_TIMEOUT_SECONDS: float = 240.0
+    # IPs extras (separados por virgula) para o ultimo fallback quando o DNS
+    # do Render receber uma resposta errada do provedor. Ex.: IPs do CDN.
+    IPTV_PLAYLIST_FALLBACK_IPS: str = ""
+    # Diagnostico seguro no /health: baixa so o cabecalho + 2 MiB e nunca
+    # devolve a URL nem o conteudo da playlist.
+    IPTV_PLAYLIST_PROBE_ENABLED: bool = True
+    IPTV_PLAYLIST_PROBE_BYTES: int = 2 * 1024 * 1024
     # De quanto em quanto tempo o app deve revalidar o acesso
     IPTV_PLAYLIST_REFRESH_SECONDS: int = 300
     # Consulta do vencimento da playlist no provedor (painel admin). Restrita

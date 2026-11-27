@@ -1,6 +1,7 @@
 # main.py - FastAPI app, middleware, lifespan, routers
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -24,6 +25,7 @@ from app.routes import (
 from app.routes.app_client import apk_download
 from app.security.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.services.mercadopago import sync_pending_subscriptions
+from app.services.playlist_fetch import probe_playlist
 from app.tasks.lifecycle_emails import send_lifecycle_emails
 from app.tasks.subscription_checker import (
     check_expired_subscriptions,
@@ -53,10 +55,42 @@ async def self_ping() -> None:
         logger.warning("Falha no self-ping (%s): %s", url, exc)
 
 
+async def _run_playlist_probe(app: FastAPI) -> None:
+    """Diagnostico seguro da playlist, sem bloquear o startup.
+
+    Baixa apenas o cabecalho + 2 MiB e guarda o resultado no /health. Nunca
+    registra a URL, o usuario ou a senha do provedor.
+    """
+    await asyncio.sleep(5)
+    try:
+        result = await probe_playlist()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Probe da playlist falhou: %s", exc.__class__.__name__)
+        result = {
+            "state": "error",
+            "error": exc.__class__.__name__,
+        }
+    app.state.playlist_probe = result
+    logger.info(
+        "Probe da playlist: estado=%s fonte=%s bytes=%s total=%s",
+        result.get("state"),
+        result.get("source"),
+        result.get("bytes_read"),
+        result.get("content_length"),
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
+
+    probe_task = None
+    if settings.IPTV_PLAYLIST_PROBE_ENABLED and (settings.IPTV_PLAYLIST_URL or "").strip():
+        app.state.playlist_probe = {"state": "pending"}
+        probe_task = asyncio.create_task(_run_playlist_probe(app))
+    else:
+        app.state.playlist_probe = {"state": "not_configured"}
 
     # Agenda tasks periódicas
     scheduler.add_job(check_expired_subscriptions, "interval", minutes=30, id="check_expired")
@@ -73,6 +107,10 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    if probe_task is not None:
+        probe_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await probe_task
     scheduler.shutdown()
     await close_db()
 
@@ -174,6 +212,11 @@ async def health_check(request: Request):
         "app_version_code": settings.APP_LATEST_VERSION_CODE,
         "app_version_name": settings.APP_LATEST_VERSION_NAME,
         "app_update_configured": bool(settings.APP_APK_URL),
+        # Diagnostico seguro da playlist: estado, tamanho, IPs e tentativas.
+        # Nunca inclui a URL nem credenciais do provedor.
+        "playlist_probe": getattr(
+            request.app.state, "playlist_probe", {"state": "pending"}
+        ),
     }
 
 

@@ -1,11 +1,8 @@
 # routes/player.py - Acesso do app nativo ao catalogo e a playlist
 import hashlib
-import ipaddress
 import logging
-import socket
 import uuid
 from datetime import UTC, datetime
-from urllib.parse import urljoin, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -26,6 +23,13 @@ from app.services.devices import (
     revoke_all_devices,
     revoke_device,
 )
+from app.services.playlist_fetch import (
+    PlaylistFetchError,
+    fetch_playlist,
+    looks_like_m3u,
+    playlist_headers,
+    url_publica,
+)
 from app.services.streams import (
     StreamLimitError,
     active_sessions,
@@ -39,9 +43,11 @@ router = APIRouter(prefix="/player", tags=["Player"])
 
 logger = logging.getLogger(__name__)
 
-# Limite do texto da playlist e tamanho usado para reconhecer o cabecalho M3U.
-PLAYLIST_MAX_BYTES = 32 * 1024 * 1024
+# Mantidos como aliases para compatibilidade com testes/chamadas antigas.
+PLAYLIST_MAX_BYTES = settings.IPTV_PLAYLIST_MAX_BYTES
 PLAYLIST_HEAD_BYTES = 8 * 1024
+_parece_playlist_m3u = looks_like_m3u
+_url_publica = url_publica
 
 
 class SubscriptionInfo(BaseModel):
@@ -111,22 +117,6 @@ def _playlist_sources(subscription: Subscription | None) -> list[tuple[str, str]
     return fontes
 
 
-def _parece_playlist_m3u(conteudo: bytes) -> bool:
-    """Reconhece M3U pelo cabecalho, sem confiar no Content-Type do provedor.
-
-    O caso que motivou isso: o Render recebia 200 com a pagina padrao do nginx
-    e o app tratava como playlist, resultando em "nenhum canal".
-    """
-    inicio = conteudo[:PLAYLIST_HEAD_BYTES]
-    if inicio.startswith(b"\xef\xbb\xbf"):
-        inicio = inicio[3:]
-    inicio = inicio.lstrip()
-    if not inicio:
-        return False
-    primeira = inicio.splitlines()[0].strip().upper()
-    return primeira.startswith(b"#EXTM3U") or primeira.startswith(b"#EXTINF")
-
-
 def _descricao_erro(exc: Exception) -> str:
     """Motivo seguro para log/resposta: nunca inclui a URL com credenciais."""
     if isinstance(exc, httpx.TimeoutException):
@@ -137,28 +127,26 @@ def _descricao_erro(exc: Exception) -> str:
 
 
 async def _baixar_playlist(url: str, headers: dict[str, str]) -> bytes:
-    if not url.startswith(("http://", "https://")):
-        raise ValueError("URL invalida")
-    if not _url_publica(url):
-        raise ValueError("destino nao permitido")
-
-    async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
-        response = await client.get(url, headers=headers)
-        for _ in range(5):
-            if response.status_code not in range(300, 400):
-                break
-            location = response.headers.get("location")
-            if not location:
-                raise ValueError("redirecionamento sem Location")
-            proxima = urljoin(str(response.url), location)
-            if not proxima.startswith(("http://", "https://")) or not _url_publica(proxima):
-                raise ValueError("redirecionamento inseguro")
-            response = await client.get(proxima, headers=headers)
-        if not 200 <= response.status_code < 300:
-            raise ValueError(f"provedor respondeu HTTP {response.status_code}")
-        if len(response.content) > PLAYLIST_MAX_BYTES:
-            raise ValueError("playlist muito grande")
-        return response.content
+    """Baixa a M3U usando o servico de fallbacks (HTTPS/IP/API/DoH)."""
+    result = await fetch_playlist(
+        url,
+        headers,
+        max_bytes=PLAYLIST_MAX_BYTES,
+    )
+    for attempt in result.attempts:
+        if attempt.error:
+            logger.warning("Playlist %s: %s", attempt.label, attempt.error)
+        else:
+            logger.info(
+                "Playlist %s: HTTP %s, %s bytes, m3u=%s",
+                attempt.label,
+                attempt.status_code,
+                attempt.bytes_read,
+                attempt.looks_m3u,
+            )
+    if not result.ok:
+        raise PlaylistFetchError(result.error_summary())
+    return result.content
 
 
 @router.get("/playlist", response_model=PlaylistAccessResponse)
@@ -225,10 +213,17 @@ async def get_playlist_access(
         period_end = period_end.replace(tzinfo=UTC)
     days_remaining = max((period_end - now).days, 0)
 
+    playlist_url = (_provider_url(subscription) or settings.IPTV_PLAYLIST_URL or "").strip()
+    if not playlist_url:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Playlist ainda nao configurada no servidor",
+        )
+
     return PlaylistAccessResponse(
-        playlist_url=_provider_url(subscription) or settings.IPTV_PLAYLIST_URL,
+        playlist_url=playlist_url,
         user_agent=settings.IPTV_PLAYLIST_USER_AGENT,
-        referer=settings.IPTV_PLAYLIST_REFERER,
+        referer=(settings.IPTV_PLAYLIST_REFERER or "").strip() or None,
         refresh_in=settings.IPTV_PLAYLIST_REFRESH_SECONDS,
         offline_grace_seconds=settings.OFFLINE_GRACE_MINUTES * 60,
         server_time=now,
@@ -238,32 +233,6 @@ async def get_playlist_access(
             days_remaining=days_remaining,
         ),
     )
-
-
-def _url_publica(url: str) -> bool:
-    """Bloqueia SSRF: so aceta hosts publicos (o destino vem do painel)."""
-    host = (urlsplit(url).hostname or "").strip().lower()
-    if not host or host in ("localhost",) or host.endswith((".local", ".internal")):
-        return False
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except OSError:
-        return False
-    for info in infos:
-        try:
-            ip = ipaddress.ip_address(info[4][0])
-        except ValueError:
-            return False
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
-            return False
-    return True
 
 
 @router.get("/playlist-text", response_class=Response)
@@ -283,13 +252,7 @@ async def get_playlist_text(
     if not fontes:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Playlist nao configurada.")
 
-    headers = {
-        "User-Agent": settings.IPTV_PLAYLIST_USER_AGENT,
-        "Accept": "*/*",
-        "Accept-Encoding": "identity",
-    }
-    if settings.IPTV_PLAYLIST_REFERER:
-        headers["Referer"] = settings.IPTV_PLAYLIST_REFERER
+    headers = playlist_headers()
 
     falhas: list[str] = []
     for rotulo, url in fontes:
