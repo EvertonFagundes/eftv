@@ -80,6 +80,9 @@ class Attempt:
     looks_m3u: bool = False
     error: str | None = None
     first_line: str = ""
+    server: str | None = None
+    cf_ray: str | None = None
+    via: str | None = None
     duration_ms: int = 0
 
     def to_dict(self) -> dict[str, object]:
@@ -94,6 +97,9 @@ class Attempt:
             "looks_m3u": self.looks_m3u,
             "error": self.error,
             "first_line": self.first_line,
+            "server": self.server,
+            "cf_ray": self.cf_ray,
+            "via": self.via,
             "duration_ms": self.duration_ms,
         }
 
@@ -421,6 +427,9 @@ async def _alternate_api_hosts(
 
     attempt.status_code = response.status_code
     attempt.content_type = response.headers.get("content-type")
+    attempt.server = response.headers.get("server")
+    attempt.cf_ray = response.headers.get("cf-ray")
+    attempt.via = response.headers.get("via")
     attempt.duration_ms = int((time.monotonic() - started) * 1000)
 
     server = payload.get("server_info") if isinstance(payload, dict) else None
@@ -520,6 +529,9 @@ async def _read_candidate(
 
         attempt.status_code = response.status_code
         attempt.content_type = response.headers.get("content-type")
+        attempt.server = response.headers.get("server")
+        attempt.cf_ray = response.headers.get("cf-ray")
+        attempt.via = response.headers.get("via")
         raw_length = response.headers.get("content-length")
         if raw_length and raw_length.isdigit():
             attempt.content_length = int(raw_length)
@@ -732,6 +744,131 @@ def playlist_headers() -> dict[str, str]:
     return headers
 
 
+def _as_int(value: object) -> int | None:
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _configured_meta(url: str) -> dict[str, object]:
+    """Fingerprint seguro da URL configurada, sem host/usuario/senha."""
+    parsed = urlsplit(url)
+    query_keys = sorted({key.lower() for key, _ in parse_qsl(parsed.query, keep_blank_values=True)})
+    return {
+        "scheme": parsed.scheme,
+        "port": parsed.port,
+        "xtream_get": "get.php" in (parsed.path or "").lower(),
+        "query_keys": query_keys,
+        "host_fingerprint": hashlib.sha256((parsed.hostname or "").encode()).hexdigest()[:12],
+        "url_fingerprint": _hash_url(url)[:12],
+    }
+
+
+async def probe_account(
+    url: str,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> dict[str, object]:
+    """Consulta ``player_api.php`` por rotas alternativas, sem expor a conta.
+
+    Serve para separar conta vencida/recusada de bloqueio de rede: devolve
+    apenas ``auth``, ``status``, limites e os cabecalhos do servidor.
+    """
+    api_url = build_player_api_url(url)
+    if not api_url:
+        return {"state": "not_xtream"}
+
+    parsed = urlsplit(api_url)
+    host = parsed.hostname or ""
+    attempts: list[Attempt] = []
+    candidates = _direct_candidates(api_url)
+    system_ips = await _system_ips(host, parsed.port)
+    candidates.extend(_ip_candidates(api_url, system_ips, label="DNS do Render"))
+    doh_ips = await _doh_ips(host)
+    candidates.extend(_ip_candidates(api_url, doh_ips, label="DoH"))
+    fallback_ips = [
+        item.strip()
+        for item in (settings.IPTV_PLAYLIST_FALLBACK_IPS or "").split(",")
+        if item.strip()
+    ]
+    if not fallback_ips:
+        fallback_ips = list(_DEFAULT_FALLBACK_IPS)
+    candidates.extend(_ip_candidates(api_url, fallback_ips, label="IP extra"))
+    candidates = _dedupe(candidates)
+
+    headers = {
+        "User-Agent": settings.IPTV_PLAYLIST_USER_AGENT,
+        "Accept": "application/json",
+        "Accept-Encoding": "identity",
+    }
+    if settings.IPTV_PLAYLIST_REFERER:
+        headers["Referer"] = settings.IPTV_PLAYLIST_REFERER
+
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=15.0, read=30.0, write=15.0, pool=15.0),
+        follow_redirects=True,
+        transport=transport,
+    ) as client:
+        for candidate in candidates:
+            started = time.monotonic()
+            attempt = Attempt(
+                label=candidate.label,
+                scheme=candidate.scheme,
+                ip=candidate.ip,
+            )
+            request_headers, extensions = _headers_with_host(headers, candidate)
+            try:
+                response = await client.get(
+                    candidate.url,
+                    headers=request_headers,
+                    extensions=extensions,
+                )
+            except Exception as exc:  # noqa: BLE001
+                attempt.error = _safe_error(exc)
+                attempt.duration_ms = int((time.monotonic() - started) * 1000)
+                attempts.append(attempt)
+                continue
+
+            attempt.status_code = response.status_code
+            attempt.content_type = response.headers.get("content-type")
+            attempt.server = response.headers.get("server")
+            attempt.cf_ray = response.headers.get("cf-ray")
+            attempt.via = response.headers.get("via")
+            attempt.duration_ms = int((time.monotonic() - started) * 1000)
+            attempts.append(attempt)
+
+            if not 200 <= response.status_code < 300:
+                attempt.error = f"HTTP {response.status_code}"
+                continue
+            try:
+                payload = response.json()
+            except ValueError:
+                attempt.error = "resposta nao e JSON"
+                continue
+            info = payload.get("user_info") if isinstance(payload, dict) else None
+            if not isinstance(info, dict):
+                attempt.error = "JSON sem user_info"
+                continue
+
+            return {
+                "state": "ok",
+                "auth": info.get("auth"),
+                "status": info.get("status"),
+                "max_connections": _as_int(info.get("max_connections")),
+                "active_cons": _as_int(info.get("active_cons")),
+                "is_trial": info.get("is_trial"),
+                "server": attempt.server,
+                "cf_ray": attempt.cf_ray,
+                "attempts": [item.to_dict() for item in attempts],
+            }
+
+    return {
+        "state": "error",
+        "attempts": [item.to_dict() for item in attempts],
+    }
+
+
 async def probe_playlist(
     url: str | None = None,
     *,
@@ -756,10 +893,15 @@ async def probe_playlist(
         first_line = safe_first_line(result.content)
     elif result.attempts:
         first_line = result.attempts[0].first_line
+    try:
+        account = await probe_account(source, transport=transport)
+    except Exception as exc:  # noqa: BLE001
+        account = {"state": "error", "error": _safe_error(exc)}
     return {
         "state": "ok" if result.ok else "error",
         "checked_at": checked_at,
         "ok": result.ok,
+        "configured": _configured_meta(source),
         "source": result.strategy,
         "status_code": result.status_code,
         "content_type": result.content_type,
@@ -769,5 +911,6 @@ async def probe_playlist(
         "first_line": first_line,
         "resolved_ips": result.resolved_ips,
         "attempts": [attempt.to_dict() for attempt in result.attempts],
+        "account": account,
         "duration_ms": result.duration_ms,
     }

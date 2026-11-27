@@ -126,6 +126,75 @@ async def test_playlist_over_size_limit_is_rejected():
 
 
 @pytest.mark.asyncio
+async def test_attempt_reports_server_headers(monkeypatch):
+    def handler(request):
+        return httpx.Response(
+            200,
+            content=M3U,
+            headers={
+                "content-type": "audio/x-mpegurl",
+                "server": "nginx",
+                "cf-ray": "8f00-test",
+            },
+        )
+
+    result = await playlist_fetch.fetch_playlist(
+        "http://provider.example/get.php?username=user&password=secret",
+        {},
+        transport=_transport(handler),
+        allow_helpers=False,
+    )
+
+    attempt = result.attempts[0]
+    assert attempt.server == "nginx"
+    assert attempt.cf_ray == "8f00-test"
+    assert "username" not in json.dumps(attempt.to_dict())
+
+
+@pytest.mark.asyncio
+async def test_probe_account_reports_only_safe_fields(monkeypatch):
+    async def fake_system_ips(host, port):
+        return []
+
+    async def fake_doh_ips(host):
+        return []
+
+    monkeypatch.setattr(playlist_fetch, "_system_ips", fake_system_ips)
+    monkeypatch.setattr(playlist_fetch, "_doh_ips", fake_doh_ips)
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "user_info": {
+                    "auth": 1,
+                    "status": "Active",
+                    "max_connections": "2",
+                    "active_cons": "1",
+                    "is_trial": "0",
+                }
+            },
+            headers={"server": "nginx", "cf-ray": "8f00-test"},
+        )
+
+    result = await playlist_fetch.probe_account(
+        "http://provider.example/get.php?username=user&password=secret",
+        transport=_transport(handler),
+    )
+
+    assert result["state"] == "ok"
+    assert result["auth"] == 1
+    assert result["status"] == "Active"
+    assert result["max_connections"] == 2
+    assert result["active_cons"] == 1
+    assert result["server"] == "nginx"
+    payload = json.dumps(result)
+    assert "username" not in payload
+    assert "password" not in payload
+    assert "provider.example" not in payload
+
+
+@pytest.mark.asyncio
 async def test_probe_reports_safe_diagnostics(monkeypatch):
     async def fake_system_ips(host, port):
         return []
@@ -144,13 +213,14 @@ async def test_probe_reports_safe_diagnostics(monkeypatch):
         return httpx.Response(200, content=NGINX, headers={"content-type": "text/html"})
 
     result = await playlist_fetch.probe_playlist(
-        "http://provider.example/get.php?username=user&password=secret",
+        "http://provider.example/get.php?username=alice-cred&password=s3cr3t-value",
         transport=_transport(handler),
     )
 
     payload = json.dumps(result)
     assert result["state"] == "error"
     assert "Welcome to nginx" in result["first_line"]
-    assert "username" not in payload
-    assert "password" not in payload
+    assert "alice-cred" not in payload
+    assert "s3cr3t-value" not in payload
     assert "provider.example" not in payload
+    assert result["configured"]["query_keys"] == ["password", "username"]

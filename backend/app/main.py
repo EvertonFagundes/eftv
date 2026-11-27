@@ -55,13 +55,8 @@ async def self_ping() -> None:
         logger.warning("Falha no self-ping (%s): %s", url, exc)
 
 
-async def _run_playlist_probe(app: FastAPI) -> None:
-    """Diagnostico seguro da playlist, sem bloquear o startup.
-
-    Baixa apenas o cabecalho + 2 MiB e guarda o resultado no /health. Nunca
-    registra a URL, o usuario ou a senha do provedor.
-    """
-    await asyncio.sleep(5)
+async def _probe_playlist_once(app: FastAPI) -> None:
+    """Atualiza o diagnostico seguro da playlist no /health."""
     try:
         result = await probe_playlist()
     except Exception as exc:  # noqa: BLE001
@@ -80,13 +75,26 @@ async def _run_playlist_probe(app: FastAPI) -> None:
     )
 
 
+async def _run_playlist_probe(app: FastAPI) -> None:
+    """Diagnostico seguro da playlist, sem bloquear o startup.
+
+    Baixa apenas o cabecalho + 2 MiB; o resultado fica no /health e e
+    atualizado a cada 10 min. Nunca registra URL, usuario ou senha.
+    """
+    await asyncio.sleep(5)
+    await _probe_playlist_once(app)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
 
+    probe_enabled = settings.IPTV_PLAYLIST_PROBE_ENABLED and bool(
+        (settings.IPTV_PLAYLIST_URL or "").strip()
+    )
     probe_task = None
-    if settings.IPTV_PLAYLIST_PROBE_ENABLED and (settings.IPTV_PLAYLIST_URL or "").strip():
+    if probe_enabled:
         app.state.playlist_probe = {"state": "pending"}
         probe_task = asyncio.create_task(_run_playlist_probe(app))
     else:
@@ -102,6 +110,16 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(send_lifecycle_emails, "interval", hours=6, id="lifecycle_emails")
     # Self-ping: mantem a instancia acordada (backup do keepalive externo).
     scheduler.add_job(self_ping, "interval", minutes=5, id="self_ping")
+    # O provedor alterna entre playlist e pagina do nginx; o diagnostico
+    # precisa refletir o estado atual sem exigir um novo deploy.
+    if probe_enabled:
+        scheduler.add_job(
+            _probe_playlist_once,
+            "interval",
+            minutes=10,
+            args=[app],
+            id="playlist_probe",
+        )
     scheduler.start()
 
     yield
