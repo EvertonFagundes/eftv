@@ -32,15 +32,16 @@ class CatalogStore private constructor(context: Context) {
         val total: Int,
     )
 
-    fun metadata(): Metadata? {
+    fun metadata(allowImporting: Boolean = false): Metadata? {
         db.rawQuery("SELECT key, value FROM meta", null).use { cursor ->
             val values = HashMap<String, String>()
             while (cursor.moveToNext()) {
                 values[cursor.getString(0)] = cursor.getString(1)
             }
             // Importacao interrompida (app fechado no meio) nao vale como
-            // cache: o proximo start baixa a lista de novo.
-            if (values["importing"] == "1") return null
+            // cache: o proximo start baixa a lista de novo. A UI, porem, precisa
+            // do metadado parcial para liberar os lotes ja commitados.
+            if (!allowImporting && values["importing"] == "1") return null
             val sourceId = values["source_id"] ?: return null
             val total = values["total"]?.toIntOrNull() ?: return null
             if (total <= 0) return null
@@ -564,13 +565,16 @@ class CatalogStore private constructor(context: Context) {
         try {
             db.execSQL("DELETE FROM channels")
             db.execSQL("DELETE FROM channel_groups")
+            db.execSQL("DELETE FROM series_cards")
             db.execSQL("DELETE FROM meta")
             // Enquanto a importacao roda, o catalogo nao conta como cache
-            // valido e a aba Series nao tenta remontar o indice no meio.
+            // valido. O indice da aba Series e mantido lote a lote abaixo, por
+            // isso nao precisa ser remontado no meio da importacao.
             db.execSQL("INSERT INTO meta(key, value) VALUES('importing', '1')")
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
+            seriesIndexReady = true
         }
 
         // Insere em lotes commitados, para que o que ja foi importado fique
@@ -581,6 +585,8 @@ class CatalogStore private constructor(context: Context) {
         var batchCount = 0
         var committedTotal = 0
         var insertChannel = db.compileStatement(INSERT_CHANNEL)
+        var insertSeriesCard = db.compileStatement(INSERT_SERIES_CARD)
+        var updateSeriesCard = db.compileStatement(UPDATE_SERIES_CARD)
         var failure: Throwable? = null
         db.beginTransaction()
         try {
@@ -608,35 +614,72 @@ class CatalogStore private constructor(context: Context) {
                 insertChannel.bindLong(13, (info?.season ?: 0).toLong())
                 insertChannel.bindLong(14, (info?.episode ?: 0).toLong())
 
-                if (insertChannel.executeInsert() != -1L) {
+                val rowId = insertChannel.executeInsert()
+                if (rowId != -1L) {
                     total++
                     groupCounts[channel.group] = (groupCounts[channel.group] ?: 0) + 1
+
+                    // Mantem o indice das series crescente junto com o lote.
+                    // Sem isso a aba Series so aparecia no fim da importacao.
+                    if (info != null) {
+                        val grouped = info.key.isNotEmpty()
+                        val gkey = if (grouped) info.key else "u$rowId"
+                        val sortkey = if (grouped) info.key else channel.searchKey
+                        insertSeriesCard.clearBindings()
+                        insertSeriesCard.bindString(1, gkey)
+                        insertSeriesCard.bindString(2, if (grouped) info.key else "")
+                        insertSeriesCard.bindString(3, sortkey)
+                        insertSeriesCard.bindString(4, info.title)
+                        insertSeriesCard.bindString(5, channel.name)
+                        insertSeriesCard.bindString(6, channel.searchKey)
+                        insertSeriesCard.bindString(7, channel.group)
+                        insertSeriesCard.bindString(8, channel.group.normalizedForSearch())
+                        insertSeriesCard.bindString(9, channel.logo)
+                        insertSeriesCard.bindString(10, channel.url)
+                        bindNullable(insertSeriesCard, 11, channel.userAgent)
+                        bindNullable(insertSeriesCard, 12, channel.referer)
+                        insertSeriesCard.bindString(13, channel.tvgId)
+                        insertSeriesCard.bindLong(14, info.season.toLong())
+                        insertSeriesCard.executeInsert()
+
+                        updateSeriesCard.clearBindings()
+                        updateSeriesCard.bindLong(1, info.season.toLong())
+                        updateSeriesCard.bindString(2, channel.logo)
+                        updateSeriesCard.bindString(3, channel.logo)
+                        updateSeriesCard.bindString(4, gkey)
+                        updateSeriesCard.executeUpdateDelete()
+                    }
+
                     batchCount++
                     if (batchCount >= batchSize) {
                         // Commita o lote e reabre a transacao para o proximo.
-                        insertChannel.close()
+                        closeImportStatements(insertChannel, insertSeriesCard, updateSeriesCard)
                         db.setTransactionSuccessful()
                         db.endTransaction()
                         committedTotal = total
                         // Atualiza meta parcial para a UI enxergar o progresso.
                         writePartialMeta(sourceId, updatedAt, committedTotal)
+                        // Avisa a cada lote commitado: o que chegou ja pode ser usado.
+                        onProgress?.invoke(committedTotal)
                         db.beginTransaction()
                         insertChannel = db.compileStatement(INSERT_CHANNEL)
+                        insertSeriesCard = db.compileStatement(INSERT_SERIES_CARD)
+                        updateSeriesCard = db.compileStatement(UPDATE_SERIES_CARD)
                         batchCount = 0
                     }
-                    if (total % PROGRESS_STEP == 0) onProgress?.invoke(total)
                 }
             }
 
             if (total == 0) {
                 throw IOException("A playlist nao retornou nenhum canal.")
             }
+            if (batchCount > 0) onProgress?.invoke(total)
             // Commita o lote final (pode ter menos de batchSize canais).
             db.setTransactionSuccessful()
         } catch (t: Throwable) {
             failure = t
         } finally {
-            runCatching { insertChannel.close() }
+            closeImportStatements(insertChannel, insertSeriesCard, updateSeriesCard)
             // Fecha a transacao corrente: commit se deu certo, rollback se nao.
             if (db.inTransaction()) db.endTransaction()
         }
@@ -700,6 +743,10 @@ class CatalogStore private constructor(context: Context) {
         }
 
         return Metadata(sourceId = sourceId, updatedAt = finishedAt, total = total)
+    }
+
+    private fun closeImportStatements(vararg statements: SQLiteStatement) {
+        statements.forEach { runCatching { it.close() } }
     }
 
     private fun writePartialMeta(
@@ -1013,6 +1060,28 @@ class CatalogStore private constructor(context: Context) {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
+        /**
+         * Card de serie gravado junto com o episodio (INSERT OR IGNORE para
+         * funcionar em SQLite antigo, onde nao ha UPSERT). A primeira linha
+         * define titulo/capa/URL; [UPDATE_SERIES_CARD] acrescenta episodios,
+         * temporadas e uma capa quando o provedor a entrega depois.
+         */
+        private const val INSERT_SERIES_CARD = """
+            INSERT OR IGNORE INTO series_cards
+                (gkey, series_key, sortkey, series_title, name, name_key,
+                 group_title, group_key, logo, url, user_agent, referer, tvg_id,
+                 episodes, seasons, kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'SERIES')
+        """
+
+        private const val UPDATE_SERIES_CARD = """
+            UPDATE series_cards SET
+                episodes = episodes + 1,
+                seasons = MAX(seasons, ?),
+                logo = CASE WHEN logo = '' AND ? <> '' THEN ? ELSE logo END
+            WHERE gkey = ?
+        """
+
         /** Uma linha por serie; item sem marcador de episodio fica solto (chave propria). */
         private val BUILD_SERIES_CARDS = """
             INSERT INTO series_cards
@@ -1049,7 +1118,6 @@ class CatalogStore private constructor(context: Context) {
             WHERE r.rn = 1
         """.trimIndent()
 
-        private const val PROGRESS_STEP = 5_000
         private const val MAX_RECENTS = 100
     }
 }

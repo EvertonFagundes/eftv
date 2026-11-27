@@ -70,7 +70,11 @@ class MainActivity : AppCompatActivity() {
     }
     private lateinit var repository: PlaylistRepository
     private var source: PlaylistSource = PlaylistSource.local()
-    private val channelAdapter = ChannelAdapter(::openPlayer, ::requestPage, ::toggleFavorite)
+    private val channelAdapter = ChannelAdapter(
+        ::openPlayer,
+        { page -> requestPage(page) },
+        ::toggleFavorite,
+    )
     private val continueAdapter = ContinueAdapter(::openPlayer)
 
     private var selectedKind = ChannelKind.LIVE
@@ -117,6 +121,8 @@ class MainActivity : AppCompatActivity() {
     private var refreshJob: Job? = null
     private var importingCatalog = false
     private var importedCount = 0
+    private var partialCatalogApplied = false
+    private var lastProgressiveRefreshAt = 0L
     private var lastCatalogReportAt = 0L
     private var filterJob: Job? = null
     private val pageJobs = HashMap<Int, Job>()
@@ -1018,6 +1024,17 @@ class MainActivity : AppCompatActivity() {
 
                 importingCatalog = true
                 importedCount = 0
+                partialCatalogApplied = false
+                lastProgressiveRefreshAt = 0L
+                if (!hasContent && !isFinishing) {
+                    binding.stateText.text = getString(R.string.importing_channels, "0")
+                } else {
+                    Toast.makeText(
+                        this@MainActivity,
+                        R.string.import_started,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
                 binding.toolbar.subtitle = buildSubtitle()
 
                 val result = repository.refresh { count ->
@@ -1030,11 +1047,18 @@ class MainActivity : AppCompatActivity() {
                                 NumberFormat.getIntegerInstance().format(count),
                             )
                         }
-                        // Atualiza apenas o contador. Reaplicar o catalogo a
-                        // cada lote reiniciava a consulta da aba Series e a
-                        // lista nunca carregava durante a importacao.
                         if (!isFinishing) {
                             binding.toolbar.subtitle = buildSubtitle()
+                            // Na primeira leva, abre a lista com o que ja
+                            // chegou. Depois so atualiza as paginas carregadas:
+                            // reaplicar o catalogo inteiro reiniciava a consulta
+                            // da aba Series e deixava a tela em "Carregando...".
+                            if (!partialCatalogApplied) {
+                                partialCatalogApplied = true
+                                revealImportedBatch()
+                            } else {
+                                refreshImportedBatch()
+                            }
                         }
                     }
                 }
@@ -1096,13 +1120,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun applyCatalog(metadata: CatalogStore.Metadata) {
+    private suspend fun applyCatalog(
+        metadata: CatalogStore.Metadata,
+        keepSelection: Boolean = false,
+    ) {
         hasCatalog = metadata.total > 0
         catalogMetadata = metadata
         deviceBlocked = false
         subscriptionBlocked = false
 
-        resetCategorySelection()
+        if (!keepSelection) resetCategorySelection()
 
         binding.categoryButton.text = selectedCategory.label
 
@@ -1113,6 +1140,55 @@ class MainActivity : AppCompatActivity() {
         binding.swipeRefresh.visibility = View.VISIBLE
         filterChannels(debounce = 0)
         refreshContinueWatching()
+    }
+
+    /**
+     * Libera o primeiro lote commitado: o usuario entra na lista antes do fim
+     * da importacao e ja pode assistir ao que chegou.
+     */
+    private fun revealImportedBatch() {
+        lifecycleScope.launch {
+            val partial = withContext(Dispatchers.IO) { repository.partial() }
+            if (!isActive || partial == null || partial.total <= 0) return@launch
+            applyCatalog(partial, keepSelection = true)
+            lastProgressiveRefreshAt = System.currentTimeMillis()
+        }
+    }
+
+    /**
+     * Faz os lotes seguintes aparecerem sem perder a posicao da lista.
+     * so consulta a contagem e as paginas ja carregadas; nunca chama
+     * [filterChannels], que reiniciaria a paginacao e a aba Series.
+     */
+    private fun refreshImportedBatch() {
+        if (!hasCatalog || !::repository.isInitialized || isFinishing) return
+        val now = System.currentTimeMillis()
+        if (now - lastProgressiveRefreshAt < 1_000L) return
+        lastProgressiveRefreshAt = now
+
+        lifecycleScope.launch {
+            val store = repository.catalogStore
+            val group = selectedGroup
+            val query = searchQuery.normalizedForSearch()
+            val mode = selectedMode
+            val kind = selectedKind
+            val excludeAdults = shouldExcludeAdults()
+            val total = withContext(Dispatchers.IO) {
+                if (excludeAdults) {
+                    store.countExcludingAdults(group, query, mode, kind)
+                } else {
+                    store.count(group, query, mode, kind)
+                }
+            }
+            if (!isActive) return@launch
+
+            channelAdapter.updateTotal(total)
+            binding.toolbar.subtitle = buildSubtitle(total)
+            // Atualiza somente o que esta na tela. As paginas ainda nao vistas
+            // continuam com o placeholder e sao carregadas ao rolar.
+            channelAdapter.loadedPages().forEach { page -> requestPage(page, force = true) }
+            refreshContinueWatching()
+        }
     }
 
     /**
@@ -1270,12 +1346,16 @@ class MainActivity : AppCompatActivity() {
         else -> R.drawable.ic_tv
     }
 
-    private fun requestPage(page: Int) {
+    private fun requestPage(page: Int, force: Boolean = false) {
         if (page < 0) return
         if (!::repository.isInitialized) return
         if (page * ChannelAdapter.PAGE_SIZE >= channelAdapter.itemCount) return
-        if (channelAdapter.isPageLoaded(page)) return
-        if (!loadingPages.add(page)) return
+        if (!force && channelAdapter.isPageLoaded(page)) return
+        if (loadingPages.contains(page)) {
+            if (!force) return
+            pageJobs[page]?.cancel()
+        }
+        loadingPages.add(page)
 
         val generation = queryGeneration
         val group = selectedGroup

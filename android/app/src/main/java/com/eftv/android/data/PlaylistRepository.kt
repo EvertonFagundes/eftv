@@ -40,6 +40,10 @@ class PlaylistRepository(
     fun cached(): CatalogStore.Metadata? =
         catalogStore.metadata()?.takeIf { it.sourceId == sourceId }
 
+    /** Metadado do lote ja commitado, mesmo com a importacao em andamento. */
+    fun partial(): CatalogStore.Metadata? =
+        catalogStore.metadata(allowImporting = true)?.takeIf { it.sourceId == sourceId }
+
     suspend fun refresh(onProgress: ((Int) -> Unit)? = null): Result = withContext(Dispatchers.IO) {
         var input: InputStream? = null
         try {

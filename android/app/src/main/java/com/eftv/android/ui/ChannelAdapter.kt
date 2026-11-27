@@ -67,7 +67,25 @@ class ChannelAdapter(
         if (count > 0) notifyItemRangeChanged(start, count)
     }
 
+    /**
+     * Cresce a lista sem descartar as paginas ja carregadas: e o que permite
+     * mostrar novos itens durante a importacao sem reiniciar a rolagem.
+     */
+    fun updateTotal(newTotal: Int) {
+        if (newTotal == total) return
+        val previous = total
+        total = newTotal
+        if (newTotal > previous) {
+            notifyItemRangeInserted(previous, newTotal - previous)
+        } else {
+            pages.keys.toList().filter { it * PAGE_SIZE >= newTotal }.forEach(pages::remove)
+            notifyItemRangeRemoved(newTotal, previous - newTotal)
+        }
+    }
+
     fun isPageLoaded(page: Int): Boolean = pages.containsKey(page)
+
+    fun loadedPages(): List<Int> = pages.keys.toList()
 
     /** URLs das paginas atualmente carregadas (para consultar progresso). */
     fun loadedUrls(): List<String> = pages.values.flatten().map { it.url }

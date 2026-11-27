@@ -4,7 +4,8 @@
     <string name="search_hint">Buscar canal</string>
     <string name="loading_channels">Carregando canais...</string>
     <string name="loading_channel">Carregando…</string>
-    <string name="importing_channels">Importando canais… %1$s</string>
+    <string name="importing_channels">Importando canais… %1$s itens\nIsso pode levar alguns minutos. O que já chegou pode ser assistido agora; o restante aparece aos poucos.</string>
+    <string name="import_started">Atualizando a lista. Pode levar alguns minutos — os itens já importados ficam disponíveis na hora.</string>
     <string name="importing_catalog">Importando %1$s itens</string>
     <string name="empty_catalog">A lista não retornou canais.</string>
     <string name="empty_search">Nenhum item encontrado para essa busca.</string>
