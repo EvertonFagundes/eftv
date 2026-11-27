@@ -841,7 +841,7 @@ class MainActivity : AppCompatActivity() {
             Timber.w(
                 "Playlist pelo backend: %d bytes, inicio=%s",
                 texto.length,
-                texto.lineSequence().firstOrNull()?.take(24).orEmpty(),
+                texto.take(400),
             )
             texto.byteInputStream(Charsets.UTF_8)
         }
