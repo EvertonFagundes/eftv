@@ -21,11 +21,11 @@ contexto. Leia junto com `TODO.md`.
 Commits recentes:
 
 ```
+6020873 feat(android): atualizacao do APK pelo proprio app (1.5.25)
 0873209 Documenta importacao de playlist no PWA
 6048d1b Permite importar a playlist do provedor no PWA
 b74d0e6 docs: atualiza handoff para a release 1.5.24
 bfd4d85 docs: registra release Android 1.5.24 e validacao pendente
-c768dc6 chore: aponta Render para o APK 1.5.24
 ```
 
 ---

@@ -5,6 +5,21 @@ procurar e baixar um APK novo a cada correção, o app consulta a versão
 publicada, baixa o arquivo e abre o instalador do Android — tudo dentro do
 EFTV.
 
+## Estado atual
+
+| Item | Valor |
+| --- | --- |
+| Versão | `1.5.25` (`versionCode 50`) |
+| Release | <https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.25> |
+| APK | <https://github.com/EvertonFagundes/eftv/releases/download/v1.5.25/eftv-v1.5.25.apk> |
+| SHA-256 | `513e2a8b2a288ef8e343da0a36607d55de366ad365e3a6a00b6d943cf2f9188b` |
+| Tamanho | 40.022.407 bytes |
+| Assinatura | SHA-256 `b23096e6e33c21231d3006bcbee45f468b481dfc697606c2d75547f02be4ee8d` |
+
+O APK publicado foi baixado de volta do GitHub, verificado com `apksigner` e
+conferido contra o SHA-256 acima. O DEX contém `UpdateActivity` e
+`UpdateInstaller`; `minSdk 24`, `targetSdk 34`.
+
 ## Como o cliente usa
 
 - Menu ⋮ → **Atualizar app**.
@@ -28,7 +43,21 @@ concedida, o download continua sozinho.
 ## Como funciona por dentro
 
 1. `GET /app/version` (sem login) devolve `version_code`, `version_name`,
-   `apk_url`, `notes`, `mandatory` e `update_available_from`.
+   `apk_url`, `notes`, `mandatory` e `update_available_from`:
+
+   ```json
+   {
+     "version_code": 50,
+     "version_name": "1.5.25",
+     "apk_url": "https://github.com/.../eftv-v1.5.25.apk",
+     "notes": "novidades desta versao",
+     "mandatory": false,
+     "update_available_from": true
+   }
+   ```
+
+   `update_available_from=false` (APK ainda não publicado) faz o app tratar
+   como "sem atualização", sem mostrar erro ao cliente.
 2. `UpdateActivity` compara `version_code` com `BuildConfig.VERSION_CODE`.
    Versão igual ou menor não gera aviso.
 3. A URL só é aceita se for HTTPS em host público

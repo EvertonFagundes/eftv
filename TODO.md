@@ -105,6 +105,9 @@ Android e APK de release assinado OK.
   rede não esconde mais a atualização por 24 h.
 - [x] **Release 1.5.25 (50)** assinada e publicada:
   https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.25
+  - SHA-256 `513e2a8b2a288ef8e343da0a36607d55de366ad365e3a6a00b6d943cf2f9188b`
+    (40.022.407 bytes), conferido no asset baixado do GitHub.
+  - Documentação do fluxo e checklist: `docs/ATUALIZACAO-APP.md`.
 - [ ] **Atualizar o Render** para `APP_LATEST_VERSION_CODE=50`,
   `APP_LATEST_VERSION_NAME=1.5.25` e a URL da release (`render.yaml` já
   atualizado; falta o sync das env vars).
