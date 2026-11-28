@@ -194,14 +194,20 @@ function verificar(condicao, mensagem) {
         demo: !!(window.EFTV_CATALOG && window.EFTV_CATALOG.demo),
         canais: window.EFTV_CATALOG ? window.EFTV_CATALOG.canais.length : -1,
         bannerAtualizacao: !document.querySelector('#update-banner').classList.contains('hidden'),
-        versao: document.querySelector('#app-version').textContent
+        versao: document.querySelector('#app-version').textContent,
+        alertaCatalogo: document.querySelector('#catalog-alert')?.textContent.trim() || "",
+        alertaCatalogoVisivel: !document.querySelector('#catalog-alert')?.classList.contains('hidden')
       }))()`
     );
     verificar(inicial.pronto === "complete", "página carregou");
     verificar(inicial.cards > 0, "modo demonstração renderizou cards");
     verificar(inicial.demo === true, "catálogo está em modo demonstração");
     verificar(inicial.bannerAtualizacao === false, "PWA não oferece APK como atualização");
-    verificar(inicial.versao.includes("1.1.1"), "versão web exibida");
+    verificar(inicial.versao.includes("1.1.2"), "versão web exibida");
+    verificar(
+      inicial.alertaCatalogoVisivel && inicial.alertaCatalogo.includes("Modo demonstração"),
+      "aviso de modo demonstração visível"
+    );
 
     const injetado = await avaliar(
       cdp,

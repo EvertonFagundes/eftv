@@ -361,6 +361,20 @@ input { font-family: inherit; }
   color: var(--warn); font-size: 0.86rem;
 }
 
+/* Aviso do catálogo: demo ou falha ao carregar a playlist real */
+.catalog-alert {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin-bottom: 14px; padding: 12px 14px; border-radius: 10px;
+  background: rgba(255,176,32,0.1); border: 1px solid rgba(255,176,32,0.28);
+  color: var(--text); font-size: 0.88rem; line-height: 1.4;
+}
+.catalog-alert strong { color: var(--warn); }
+.catalog-alert.erro {
+  background: rgba(255,77,109,0.1); border-color: rgba(255,77,109,0.28);
+}
+.catalog-alert.erro strong { color: var(--danger); }
+.catalog-alert .btn-mini { margin-left: auto; flex: 0 0 auto; }
+
 /* ===== Botões ===== */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

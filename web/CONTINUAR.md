@@ -102,7 +102,7 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 1. Commit e push da pasta `web/`.
 2. GitHub Pages já serve a raiz; acesse `/web/landing/` e `/web/app/`.
 3. Abra o app em HTTPS, instale o PWA e teste o login real.
-4. Se mudar arquivos do app, incremente o cache do service worker (atualmente `eftv-web-v4`).
+4. Se mudar arquivos do app, incremente o cache do service worker (atualmente `eftv-web-v5`).
 
 ## Comandos úteis
 

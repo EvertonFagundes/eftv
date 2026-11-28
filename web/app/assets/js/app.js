@@ -23,6 +23,7 @@
     termo: "",
     categoriaAtual: "todos",
     demo: false,
+    catalogError: null,
     carregando: false,
     playerItem: null,
     playerSessao: null,
@@ -265,9 +266,50 @@
     let itens = canaisFiltrados().filter((c) => c.aoVivo || c.tipo === "canal");
     itens.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
     preencherGrid(grid, itens);
-    vazio.classList.toggle("hidden", itens.length > 0);
+    renderCatalogoAviso(itens);
+    vazio.classList.toggle("hidden", itens.length > 0 || !!state.catalogError);
 
     renderAZ(itens);
+  }
+
+  function renderCatalogoAviso(itens) {
+    const alerta = $("#catalog-alert");
+    if (!alerta) return;
+
+    alerta.classList.remove("erro");
+    alerta.innerHTML = "";
+
+    if (state.demo) {
+      alerta.innerHTML = `
+        <span><strong>Modo demonstração.</strong> Os canais exibidos são exemplos. Entre com sua conta para carregar os canais reais.</span>
+        <button type="button" class="btn-mini" id="btn-demo-entrar">Entrar</button>
+      `;
+      alerta.classList.remove("hidden");
+      const entrar = $("#btn-demo-entrar");
+      if (entrar) entrar.addEventListener("click", () => abrirAuth("login"));
+      return;
+    }
+
+    if (!itens.length && state.catalogError) {
+      alerta.classList.add("erro");
+      alerta.innerHTML = `
+        <span><strong>Não foi possível carregar os canais reais.</strong> ${escapeHtml(state.catalogError)}</span>
+        <button type="button" class="btn-mini" id="btn-catalog-retry">Tentar novamente</button>
+      `;
+      alerta.classList.remove("hidden");
+      const tentar = $("#btn-catalog-retry");
+      if (tentar) {
+        tentar.addEventListener("click", async () => {
+          tentar.disabled = true;
+          tentar.textContent = "Tentando...";
+          await carregarCatalogo(true);
+          renderAoVivo();
+        });
+      }
+      return;
+    }
+
+    alerta.classList.add("hidden");
   }
 
   function renderAZ(itens) {
@@ -551,9 +593,9 @@
           $("#stream-limit").classList.remove("hidden");
           return;
         }
-        // Sem backend: cai no modo demo
-        state.demo = true;
-        mostrarToast("Backend indisponível — usando modo demonstração");
+        // Não troca o catálogo inteiro para demo por causa de uma falha
+        // isolada ao registrar a sessão do player.
+        mostrarToast("Não foi possível registrar a sessão; tentando reproduzir direto.");
       }
     }
 
@@ -1137,6 +1179,7 @@
     state.usuario = null;
     state.assinatura = null;
     state.demo = true;
+    state.catalogError = null;
     $("#sidebar-user").textContent = "Convidado";
     mostrarToast("Você saiu da conta");
     navegar("ao-vivo");
@@ -1151,7 +1194,10 @@
     $("#set-economia").checked = !!state.settings.economizarDados;
     $("#set-autoplay").checked = !!state.settings.autoplay;
     document.body.classList.toggle("modo-tv", !!state.settings.modoTV);
-    $("#settings-api").textContent = `API: ${cfg.API_URL} · Versão: ${cfg.APP_VERSION}`;
+    const fonte = catalog.fonte || (state.demo ? "demo" : "—");
+    const erro = state.catalogError ? ` · Erro: ${state.catalogError}` : "";
+    $("#settings-api").textContent =
+      `API: ${cfg.API_URL} · Versão: ${cfg.APP_VERSION} · Catálogo: ${fonte} (${catalog.canais.length} itens)${erro}`;
   }
 
   function configurarAjustes() {
@@ -1259,22 +1305,25 @@
     if (!store.getSession() || state.demo || (store.getSession() && store.getSession().access === "demo-access")) {
       catalog.usarDemo();
       state.demo = true;
+      state.catalogError = null;
     } else {
       try {
         await catalog.carregar(forcar);
         state.demo = catalog.demo;
+        state.catalogError = null;
         if (catalog.erro) {
           mostrarToast("Não foi possível atualizar; usando o catálogo salvo.");
         }
       } catch (erro) {
         state.demo = false;
+        state.catalogError = erro.message || "Falha ao carregar o catálogo";
         if (cfg.DEMO_FALLBACK) {
           catalog.usarDemo();
           state.demo = true;
         } else if (!catalog.canais.length || catalog.demo) {
           catalog.limpar();
         }
-        mostrarToast(erro.message || "Falha ao carregar o catálogo");
+        mostrarToast(state.catalogError);
       }
     }
 
@@ -1282,6 +1331,7 @@
     if (loading) loading.classList.add("hidden");
     const badge = $("#demo-note");
     if (badge) badge.hidden = !state.demo;
+    if (state.view === "ajustes") renderAjustes();
   }
 
   /* ------------------------------------------------------------------

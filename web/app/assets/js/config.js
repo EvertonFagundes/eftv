@@ -8,7 +8,7 @@ window.EFTV_CONFIG = {
   API_URL: localStorage.getItem("eftv_api_url") || "https://eftv.onrender.com",
 
   // Versão exibida no app. Atualizações do PWA são tratadas pelo service worker.
-  APP_VERSION: "1.1.1",
+  APP_VERSION: "1.1.2",
 
   // Quando true, se a API não responder, o app usa dados de demonstração.
   // Em produção fica false: falha de rede mantém o catálogo salvo e mostra
