@@ -52,6 +52,9 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 ## O que falta / validar
 
 - [ ] **Testar com o backend real (Render)**: login, `/player/playlist-text`, catálogo real, player, heartbeat, limite de tela, checkout. O teste automatizado usa playlist sintética; falta a conta real.
+  - O `/health` de produção mostra o provedor devolvendo uma página nginx (235 bytes), não a M3U. O Render não alcança o provedor; o catálogo real depende do cache da playlist.
+  - Para popular o cache, rode `backend/scripts/upload_playlist_cache.py` em uma rede que alcance o provedor (a URL e o login admin não devem ser colados no chat). Depois o app usa o cache mesmo com o provedor bloqueado.
+  - O app agora mostra na tela o motivo da falha e um botão **Tentar novamente**; o aviso de modo demonstração também aparece no topo do Ao Vivo.
 - [x] Conferir CORS do FastAPI para o domínio da landing/app (`CORS_ORIGINS` inclui `https://evertonfagundes.github.io`; resposta 401 de `/player/playlist-text` veio com `Access-Control-Allow-Origin`).
 - [ ] Trocar `API_URL` em `web/app/assets/js/config.js` para o domínio final (`https://api.eftv.com.br`), se for usado.
 - [x] `DEMO_FALLBACK: false` em produção; `DEMO_MODE: true` mantém `?demo=1` para a landing/testes.
