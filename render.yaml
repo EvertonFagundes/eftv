@@ -62,11 +62,11 @@ services:
       - key: FREE_TRIAL_DAYS
         value: "7"
       - key: APP_LATEST_VERSION_CODE
-        value: "40"
+        value: "49"
       - key: APP_LATEST_VERSION_NAME
-        value: "1.5.15"
+        value: "1.5.24"
       - key: APP_APK_URL
-        value: https://github.com/EvertonFagundes/eftv/releases/download/v1.5.15/eftv-v1.5.15.apk
+        value: https://github.com/EvertonFagundes/eftv/releases/download/v1.5.24/eftv-v1.5.24.apk
       - key: CORS_ORIGINS
         value: https://evertonfagundes.github.io
       - key: FRONTEND_URL
