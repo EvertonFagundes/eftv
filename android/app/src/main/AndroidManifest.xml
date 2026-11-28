@@ -21,6 +21,30 @@
     <!-- Captura de som da reproducao: TV box sem microfone continua compativel -->
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
+    <!--
+      Android 11+ esconde outros apps por padrao. Sem estas consultas o botao
+      "Abrir com outro player" nao encontra o VLC/mpv para formatos que o
+      player interno nao decodifica (AVI, WMV, HEVC sem suporte etc.).
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/x-mpegURL" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.apple.mpegurl" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/x-rtsp" />
+        </intent>
+    </queries>
+
     <application
         android:name=".EftvApplication"
         android:allowBackup="true"

@@ -305,6 +305,17 @@
                 android:textColor="@color/primary"
                 app:strokeColor="@color/primary" />
         </LinearLayout>
+
+        <!-- Alternativa para codecs/containers que o player interno nao abre -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExternal"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/player_open_external"
+            android:textColor="@color/primary"
+            android:visibility="gone" />
     </LinearLayout>
 
 </FrameLayout>

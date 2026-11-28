@@ -1,5 +1,6 @@
 package com.eftv.android
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
@@ -20,6 +21,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -27,6 +29,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
@@ -38,6 +41,7 @@ import com.eftv.android.data.LocalServer
 import com.eftv.android.data.LogUtils
 import com.eftv.android.data.NetworkInfo
 import com.eftv.android.data.AppScope
+import com.eftv.android.data.PlaybackSupport
 import com.eftv.android.data.SessionStore
 import com.eftv.android.data.api.EftvApi
 import com.eftv.android.databinding.ActivityPlayerBinding
@@ -107,6 +111,23 @@ class PlayerActivity : AppCompatActivity() {
     private var stopped = false
     private var softRecoveryAttempts = 0
 
+    /**
+     * Fonte da tentativa atual: true usa o proxy local (DoH), false vai
+     * direto ao provedor. O fallback alterna uma vez quando a fonte falha.
+     */
+    private var useProxy = false
+    private var sourceFallbackTried = false
+
+    /** MIME forcado quando o container real nao bate com a extensao da URL. */
+    private var mimeOverride: String? = null
+    private var containerFallbackTried = false
+
+    /** Codec sem suporte no aparelho: nao adianta ficar reconectando. */
+    private var fatalPlaybackError = false
+
+    /** Evita repetir o aviso de formato ao voltar do player externo. */
+    private var unsupportedDialogShown = false
+
     /** Job/Callback para atualizar o progresso do VOD periodicamente. */
     private var vodProgressCallback: Runnable? = null
 
@@ -145,6 +166,7 @@ class PlayerActivity : AppCompatActivity() {
         binding.closeButton.setOnClickListener { finish() }
         binding.retryButton.setOnClickListener { startPlayback() }
         binding.backButton.setOnClickListener { finish() }
+        binding.btnExternal.setOnClickListener { openExternalPlayer() }
 
         // Inicialmente o progresso VOD fica escondido
         binding.vodProgressText.visibility = View.GONE
@@ -232,6 +254,10 @@ class PlayerActivity : AppCompatActivity() {
         lastErrorDetail = null
         isLive = channelKind == ChannelKind.LIVE
         lastProgressSaveAt = 0L
+        sourceFallbackTried = false
+        containerFallbackTried = false
+        mimeOverride = null
+        fatalPlaybackError = false
         hideError()
         hideReconnecting()
         cancelVodProgress()
@@ -247,9 +273,28 @@ class PlayerActivity : AppCompatActivity() {
                 Timber.w("Servidor local nao respondeu; abrindo stream direto")
             }
             if (isFinishing || isDestroyed) return@launch
-            preparePlayer()
+
+            val network = NetworkInfo.label(this@PlayerActivity)
+            val proxyDisponivel = LocalServer.isServerReady() &&
+                LocalServer.playbackUrl(streamUrl) != streamUrl
+            // No Wi-Fi o acesso direto e mais rapido; no celular o proxy
+            // resolve o DNS bloqueado. Se a fonte escolhida falhar, o erro
+            // alterna para a outra automaticamente.
+            useProxy = proxyDisponivel && PlaybackSupport.preferProxy(network)
+
+            if (!unsupportedDialogShown && formatoProvavelmenteIncompativel()) {
+                unsupportedDialogShown = true
+                showUnsupportedFormatDialog()
+            } else {
+                preparePlayer()
+            }
         }
     }
+
+    /** Formatos que o player interno nao abre ou protocolos sem suporte. */
+    private fun formatoProvavelmenteIncompativel(): Boolean =
+        PlaybackSupport.isUnsupportedContainer(streamUrl) ||
+            PlaybackSupport.isUnsupportedProtocol(streamUrl)
 
     @androidx.annotation.OptIn(UnstableApi::class)
     private fun preparePlayer() {
@@ -287,7 +332,13 @@ class PlayerActivity : AppCompatActivity() {
             // Mais tentativas internas antes de reportar erro ao player.
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(MAX_LOAD_RETRIES))
 
-        val exoPlayer = ExoPlayer.Builder(this)
+        // Se o decoder de hardware do aparelho falhar (comum em TV boxes e
+        // celulares antigos), o ExoPlayer tenta um decoder de software antes
+        // de desistir. Sem isso a tela ficava preta sem explicacao.
+        val renderersFactory = DefaultRenderersFactory(this)
+            .setEnableDecoderFallback(true)
+
+        val exoPlayer = ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
             .build()
@@ -316,34 +367,63 @@ class PlayerActivity : AppCompatActivity() {
 
         // Em dados móveis a operadora pode não resolver o DNS do provedor (ou
         // devolver um IP de bloqueio). O proxy local resolve via DNS over HTTPS
-        // e repassa o stream, então o canal abre em qualquer rede.
-        val mediaUrl = LocalServer.playbackUrl(streamUrl)
-        val viaProxy = mediaUrl != streamUrl
-        if (viaProxy) {
-            Timber.i("Reproduzindo via proxy local: %s", LogUtils.redactUrl(streamUrl))
+        // e repassa o stream, então o canal abre em qualquer rede. No Wi-Fi o
+        // acesso direto e mais rapido; se a fonte escolhida falhar, o erro
+        // alterna para a outra.
+        val proxyUrl = LocalServer.playbackUrl(streamUrl)
+        val proxyDisponivel = proxyUrl != streamUrl
+        if (useProxy && !proxyDisponivel) {
+            Timber.w("Proxy local indisponivel no momento; usando a URL direta")
+            useProxy = false
         }
+        val mediaUrl = if (useProxy) proxyUrl else streamUrl
+        val viaProxy = mediaUrl != streamUrl
+
+        // O proxy entrega uma URL sem extensao. Sem MIME explicito o ExoPlayer
+        // trata HLS como arquivo progressivo e a tela fica preta.
+        val mime = mimeOverride ?: PlaybackSupport.mimeType(streamUrl)
+        val rede = NetworkInfo.label(this)
+        Timber.i(
+            "Player: rede=%s proxy=%s mime=%s url=%s",
+            rede,
+            viaProxy,
+            mime ?: "auto",
+            LogUtils.redactUrl(streamUrl),
+        )
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                if (stopped || isFinishing || isDestroyed) return
                 Timber.e(
                     "Erro ao reproduzir %s: %s",
                     LogUtils.redactUrl(streamUrl),
                     LogUtils.redactThrowable(error),
                 )
-                lastErrorDetail = buildString {
-                    append(error.errorCodeName)
-                    error.cause?.message?.let { append(": ").append(it) }
+                lastErrorDetail = describePlaybackError(error)
+                reportPlaybackFailure(error, viaProxy, mime)
+
+                // Codec/decoder do aparelho nao melhora com reconexao: mostra
+                // o motivo e oferece um player externo.
+                if (PlaybackSupport.isDecoderError(error.errorCode)) {
+                    fatalPlaybackError = true
+                    showError(lastErrorDetail ?: getString(R.string.player_error_title))
+                    return
                 }
-                reportPlaybackFailure(error, viaProxy)
-                // Falha de rede costuma ser passageira: tenta religar no mesmo
-                // player antes de recriar tudo (evita o "pisca" de recarga).
+
+                // Falha de rede depois de o canal ja estar tocando costuma ser
+                // passageira: religa no mesmo player sem piscar a tela.
                 if (shouldRecoverInPlace(error)) {
                     softRecoveryAttempts++
                     Timber.i("Recuperacao suave (%d)", softRecoveryAttempts)
                     resumeFromDefaultPosition()
-                } else {
-                    scheduleReconnect()
+                    return
                 }
+
+                // Container/manifesto ou rede: antes de insistir no mesmo
+                // caminho, tenta HLS e depois a outra fonte (proxy <-> direto).
+                if (tryPlaybackFallback(error)) return
+
+                scheduleReconnect()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -432,17 +512,17 @@ class PlayerActivity : AppCompatActivity() {
         })
 
         binding.playerView.player = exoPlayer
-        exoPlayer.setMediaItem(
-            MediaItem.Builder()
-                .setUri(mediaUrl)
-                .setMediaMetadata(metadata)
-                .setLiveConfiguration(
-                    MediaItem.LiveConfiguration.Builder()
-                        .setTargetOffsetMs(LIVE_TARGET_OFFSET_MS)
-                        .build()
-                )
-                .build()
-        )
+        val mediaItem = MediaItem.Builder()
+            .setUri(mediaUrl)
+            .setMediaMetadata(metadata)
+            .setLiveConfiguration(
+                MediaItem.LiveConfiguration.Builder()
+                    .setTargetOffsetMs(LIVE_TARGET_OFFSET_MS)
+                    .build()
+            )
+            .apply { mime?.let { setMimeType(it) } }
+            .build()
+        exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
         player = exoPlayer
@@ -797,6 +877,48 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /**
+     * Tenta corrigir o motivo da falha antes de reconectar as cegas.
+     *
+     * 1. Container/manifesto diferente da extensao: forca HLS (o caso do
+     *    provedor que entrega um .m3u8 numa URL .ts ou sem extensao).
+     * 2. A fonte atual pode estar bloqueada: alterna entre direto e proxy.
+     */
+    private fun tryPlaybackFallback(error: PlaybackException): Boolean {
+        val code = error.errorCode
+
+        if (!containerFallbackTried &&
+            PlaybackSupport.containerFallbackWorthy(code) &&
+            PlaybackSupport.mimeType(streamUrl) != MimeTypes.APPLICATION_M3U8
+        ) {
+            containerFallbackTried = true
+            mimeOverride = MimeTypes.APPLICATION_M3U8
+            Timber.i("Fallback: conteudo parece HLS; forcando o manifesto")
+            retryNow()
+            return true
+        }
+
+        if (!sourceFallbackTried && PlaybackSupport.sourceFallbackWorthy(code)) {
+            sourceFallbackTried = true
+            useProxy = !useProxy
+            Timber.i("Fallback: alternando fonte (proxy=%s)", useProxy)
+            retryNow()
+            return true
+        }
+
+        return false
+    }
+
+    /** Recria o player logo apos o listener retornar, sem esperar o backoff. */
+    private fun retryNow() {
+        if (reconnectPending || stopped || isFinishing || isDestroyed) return
+        reconnectPending = true
+        handler.postDelayed({
+            reconnectPending = false
+            if (!stopped && !isFinishing && !isDestroyed) preparePlayer()
+        }, FALLBACK_RETRY_DELAY_MS)
+    }
+
+    /**
      * Erros de rede/IO depois de o canal ja estar tocando costumam ser
      * passageiros: religar no mesmo player e mais rapido e nao pisca a tela.
      */
@@ -819,7 +941,7 @@ class PlayerActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
 
     private fun scheduleReconnect() {
-        if (stopped || isFinishing || isDestroyed || reconnectPending) return
+        if (stopped || isFinishing || isDestroyed || reconnectPending || fatalPlaybackError) return
 
         reconnectPending = true
         reconnectAttempt++
@@ -850,6 +972,9 @@ class PlayerActivity : AppCompatActivity() {
         if (lastReadyAt > 0L && SystemClock.elapsedRealtime() - lastReadyAt >= STABLE_PLAYBACK_MS) {
             reconnectAttempt = 0
             softRecoveryAttempts = 0
+            // Uma queda depois de meia hora pode ser de rede: permite tentar
+            // a outra fonte de novo.
+            sourceFallbackTried = false
         }
     }
 
@@ -873,10 +998,135 @@ class PlayerActivity : AppCompatActivity() {
             LogUtils.redactUrl(streamUrl),
             detail,
         )
+        binding.btnExternal.visibility =
+            if (externalPlayerIntent() != null) View.VISIBLE else View.GONE
     }
 
     private fun hideError() {
         binding.errorContainer.visibility = View.GONE
+        binding.btnExternal.visibility = View.GONE
+    }
+
+    /**
+     * Mensagem de erro util para o assinante e para o suporte: codigo do
+     * ExoPlayer, codec/faixas selecionadas e um texto amigavel quando o
+     * aparelho nao suporta o video. Nunca inclui a URL completa.
+     */
+    private fun describePlaybackError(error: PlaybackException): String {
+        val amigavel = when (error.errorCode) {
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+            -> getString(R.string.player_error_codec_unsupported)
+
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+            -> getString(R.string.player_error_decoder)
+
+            else -> null
+        }
+        val detalhe = LogUtils.redactText(error.cause?.message.orEmpty()).take(220)
+        return buildString {
+            amigavel?.let { append(it).append('\n') }
+            append(error.errorCode).append(' ').append(error.errorCodeName)
+            if (detalhe.isNotBlank()) append(": ").append(detalhe)
+            trackSummary()?.let { append('\n').append(it) }
+        }
+    }
+
+    /** Codec/resolucao das faixas selecionadas, sem expor a origem do stream. */
+    private fun trackSummary(): String? {
+        val tracks = player?.currentTracks ?: return null
+
+        fun selected(type: Int): String? {
+            val group = tracks.groups.firstOrNull { it.type == type && it.isSelected } ?: return null
+            for (index in 0 until group.length) {
+                if (!group.isTrackSelected(index)) continue
+                val format = group.getTrackFormat(index)
+                val partes = listOfNotNull(
+                    format.sampleMimeType,
+                    format.codecs,
+                    if (format.width > 0 && format.height > 0) {
+                        "${format.width}x${format.height}"
+                    } else {
+                        null
+                    },
+                )
+                return partes.joinToString(" ").ifBlank { null }
+            }
+            return null
+        }
+
+        val video = selected(C.TRACK_TYPE_VIDEO)
+        val audio = selected(C.TRACK_TYPE_AUDIO)
+        if (video == null && audio == null) return null
+        return listOfNotNull(
+            video?.let { getString(R.string.player_track_video, it) },
+            audio?.let { getString(R.string.player_track_audio, it) },
+        ).joinToString(" · ")
+    }
+
+    /**
+     * Intencao para abrir a URL original num player externo (VLC, mpv...).
+     * Serve para codecs/containers que o Media3 nao decodifica, como AVI,
+     * WMV e HEVC sem decoder no aparelho.
+     */
+    private fun externalPlayerIntent(): Intent? {
+        val uri = Uri.parse(streamUrl)
+        // Muitos players registram "video/*" mas nao o MIME exato do TS/HLS.
+        val mimes = listOfNotNull(PlaybackSupport.mimeType(streamUrl), "video/*").distinct()
+        for (mime in mimes) {
+            val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+            val encontrados = packageManager.queryIntentActivities(view, 0)
+                .filter { it.activityInfo.packageName != packageName }
+            if (encontrados.isNotEmpty()) {
+                return Intent.createChooser(view, getString(R.string.player_open_external))
+            }
+        }
+        return null
+    }
+
+    /** Abre o player externo; devolve false quando nao ha app compativel. */
+    private fun openExternalPlayer(): Boolean {
+        val intent = externalPlayerIntent()
+        if (intent == null) {
+            Toast.makeText(this, R.string.player_no_external, Toast.LENGTH_LONG).show()
+            return false
+        }
+        return try {
+            startActivity(intent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.player_external_failed, Toast.LENGTH_LONG).show()
+            false
+        }
+    }
+
+    /**
+     * AVI/WMV/RMVB e protocolos como RTMP/UDP nao tem suporte no Media3.
+     * Em vez de deixar a tela preta, explica e oferece o player externo.
+     */
+    private fun showUnsupportedFormatDialog() {
+        if (isFinishing || isDestroyed) return
+        val rotulo = PlaybackSupport.extension(streamUrl)
+            .ifBlank { PlaybackSupport.scheme(streamUrl) }
+            .uppercase()
+            .ifBlank { getString(R.string.player_unknown_format) }
+
+        val temExterno = externalPlayerIntent() != null
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.player_unsupported_title)
+            .setMessage(getString(R.string.player_unsupported_message, rotulo))
+            .setCancelable(false)
+            .setPositiveButton(R.string.player_try_anyway) { _, _ -> preparePlayer() }
+            .setNegativeButton(R.string.close) { _, _ -> finish() }
+        if (temExterno) {
+            builder.setNeutralButton(R.string.player_open_external) { _, _ ->
+                if (openExternalPlayer()) finish()
+            }
+        }
+        builder.show()
     }
 
     private fun releasePlayer() {
@@ -1123,16 +1373,23 @@ class PlayerActivity : AppCompatActivity() {
      * provedor": sem ele o erro chegava só como "não abre nos dados móveis".
      * Limitado a um relato por meia hora para não inundar o backend.
      */
-    private fun reportPlaybackFailure(error: PlaybackException, viaProxy: Boolean) {
+    private fun reportPlaybackFailure(
+        error: PlaybackException,
+        viaProxy: Boolean,
+        mime: String?,
+    ) {
         val agora = System.currentTimeMillis()
         if (agora - lastPlaybackReportAt < PLAYBACK_REPORT_INTERVAL_MS) return
         lastPlaybackReportAt = agora
         val rede = NetworkInfo.label(this)
+        val faixas = trackSummary().orEmpty()
         AppScope.io.launch {
             runCatching {
                 api.reportCrash(
-                    message = "player [$rede] proxy=$viaProxy ${error.errorCodeName}: " +
-                        LogUtils.redactText(error.message.orEmpty()),
+                    message = "player [$rede] proxy=$viaProxy mime=${mime ?: "auto"} " +
+                        "code=${error.errorCode} ${error.errorCodeName}: " +
+                        LogUtils.redactText(error.message.orEmpty()).take(180) +
+                        faixas.takeIf { it.isNotBlank() }?.let { " | $it" }.orEmpty(),
                     stacktrace = LogUtils.redactThrowable(error),
                     appVersion = BuildConfig.VERSION_NAME,
                     device = android.os.Build.MODEL.orEmpty(),
@@ -1164,6 +1421,9 @@ class PlayerActivity : AppCompatActivity() {
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 3_000
         private const val MAX_LOAD_RETRIES = 6
         private const val MAX_SOFT_RECOVERIES = 2
+
+        /** Espera curta antes de recriar o player com outra fonte/container. */
+        private const val FALLBACK_RETRY_DELAY_MS = 300L
 
         /** No máximo um relato de falha de reprodução por meia hora. */
         private const val PLAYBACK_REPORT_INTERVAL_MS = 30 * 60 * 1000L

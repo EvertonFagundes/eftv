@@ -134,6 +134,17 @@
     <string name="subscription_qr_activated">Pagamento aprovado! Bom filme.</string>
     <string name="player_error_title">Não foi possível reproduzir</string>
     <string name="player_error_detail">%1$s\n\n%2$s</string>
+    <string name="player_error_codec_unsupported">Este aparelho não tem suporte ao codec deste vídeo (pode ser HEVC/H.265 ou áudio AC-3). Tente outro player.</string>
+    <string name="player_error_decoder">O decoder do aparelho falhou ao abrir este vídeo. Tente novamente ou use outro player.</string>
+    <string name="player_track_video">Vídeo: %1$s</string>
+    <string name="player_track_audio">Áudio: %1$s</string>
+    <string name="player_open_external">Abrir com outro player</string>
+    <string name="player_no_external">Nenhum player externo encontrado. Instale o VLC ou outro player compatível.</string>
+    <string name="player_external_failed">Não foi possível abrir outro player.</string>
+    <string name="player_unsupported_title">Formato não compatível</string>
+    <string name="player_unsupported_message">O player interno não abre arquivos %1$s. Você pode tentar mesmo assim ou abrir com um player externo (VLC, por exemplo).</string>
+    <string name="player_try_anyway">Tentar mesmo assim</string>
+    <string name="player_unknown_format">desconhecido</string>
     <string name="reconnecting_attempt">Reconectando… (tentativa %1$d)</string>
     <string name="stream_ended_by_server">O servidor encerrou a transmissão.</string>
     <string name="live_badge">● AO VIVO</string>
