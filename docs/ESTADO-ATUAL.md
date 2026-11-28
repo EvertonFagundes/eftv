@@ -1,6 +1,6 @@
 # Estado atual do EFTV — handoff
 
-Última atualização: 27/11/2026, ~20:00 (America/Sao_Paulo).
+Última atualização: 27/11/2026, ~22:10 (America/Sao_Paulo).
 
 Este arquivo existe para continuar o trabalho em outra máquina sem perder
 contexto. Leia junto com `TODO.md`.
@@ -11,21 +11,21 @@ contexto. Leia junto com `TODO.md`.
 
 | Item | Valor |
 | --- | --- |
-| App Android instalado no aparelho de teste | **1.5.23 (`versionCode 48`)** |
-| Última tag/release | `v1.5.23` |
-| APK de release | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.23/eftv-v1.5.23.apk |
+| App Android instalado no aparelho de teste | **1.5.23 (`versionCode 48`)** — 1.5.24 (49) publicada, falta instalar |
+| Última tag/release | `v1.5.24` |
+| APK de release | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.24/eftv-v1.5.24.apk |
 | Backend | Render, `https://eftv.onrender.com` |
 | Dispositivo ADB usado | `mfuwk78xwcjf7h9t` |
 
 Commits recentes:
 
 ```
+bfd4d85 docs: registra release Android 1.5.24 e validacao pendente
+c768dc6 chore: aponta Render para o APK 1.5.24
+00c27c9 fix(android): MIME explicito no proxy, fallback de fonte e player externo (1.5.24)
 385022c docs: atualiza versao instalada para 1.5.23
 a5dfc2d chore(android): 1.5.23 (versionCode 48) sem log de conteudo da playlist
 6dcfef1 docs: registra validacao em 4G e URL da playlist no Render
-fd7888d chore(android): bump versionCode 47 / 1.5.22
-6135db7 debug: registra corpo da playlist devolvida pelo backend
-4ab350a fix(android): preserva catalogo se playlist vier vazia e registra fallback do backend
 ```
 
 ---
@@ -239,7 +239,7 @@ tentando o provedor e devolve 502 quando não há cache.
 ### Pré-requisitos
 
 - Celular conectado e autorizado no ADB (`adb devices` mostra `device`).
-- App 1.5.23 instalado.
+- App 1.5.24 (`versionCode 49`) instalado.
 - Wi-Fi desligado e dados móveis ligados.
 
 ### Comandos
@@ -297,9 +297,9 @@ horário do status é atualizado.
 Atualizar para a versão atual (o usuário faz isso manualmente no painel):
 
 ```
-APP_LATEST_VERSION_CODE=48
-APP_LATEST_VERSION_NAME=1.5.23
-APP_APK_URL=https://github.com/EvertonFagundes/eftv/releases/download/v1.5.23/eftv-v1.5.23.apk
+APP_LATEST_VERSION_CODE=49
+APP_LATEST_VERSION_NAME=1.5.24
+APP_APK_URL=https://github.com/EvertonFagundes/eftv/releases/download/v1.5.24/eftv-v1.5.24.apk
 ```
 
 E, para a importação em 4G:
@@ -329,11 +329,14 @@ repositório. Não commitar credenciais.
 
 1. [x] Importação em 4G validada em 27/11 (~19:57), com o backend 1.2.2:
    234.000 itens, 2.264 canais, 33.162 filmes, 9.738 séries e capas em 4G.
-2. [x] `APP_LATEST_*` confirmado no Render (`/app/version` responde
-   1.5.23/48 em 27/11).
-3. [ ] Primeira montagem do índice em instalação limpa (v5 → v6): medir em um
+2. [ ] `APP_LATEST_*` do Render ainda responde 1.5.23/48; atualizar para
+   1.5.24/49 e a URL da release `v1.5.24`.
+3. [ ] Instalar a 1.5.24 no aparelho que ficava com tela preta e validar série,
+   filme e canal ao vivo em Wi-Fi e 4G. Se persistir, anotar modelo/Android e o
+   texto de diagnóstico exibido (código do erro e codec).
+4. [ ] Primeira montagem do índice em instalação limpa (v5 → v6): medir em um
    aparelho sem o índice pronto. Se passar de ~20 s, montar em segundo plano.
-4. [ ] Opcional: investigar o logo trocado de "Round 6 O Desafio" (o provedor
+5. [ ] Opcional: investigar o logo trocado de "Round 6 O Desafio" (o provedor
    entrega uma capa que não é a do IMDb).
 
 ## 8. Arquivos-chave
