@@ -271,7 +271,7 @@ tentando o provedor e devolve 502 quando não há cache.
 ### Pré-requisitos
 
 - Celular conectado e autorizado no ADB (`adb devices` mostra `device`).
-- App 1.5.24 (`versionCode 49`) instalado.
+- App 1.5.25 (`versionCode 50`) instalado.
 - Wi-Fi desligado e dados móveis ligados.
 
 ### Comandos

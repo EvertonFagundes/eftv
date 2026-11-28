@@ -131,9 +131,8 @@ Android e APK de release assinado OK.
   https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.24
 - [ ] **Validar no aparelho que falhava:** série, filme e canal ao vivo em
   Wi-Fi e 4G; anotar modelo/Android e o texto de erro/diagnóstico se persistir.
-- [ ] **Refletir a versão no Render:** `APP_LATEST_VERSION_CODE=49`,
-  `APP_LATEST_VERSION_NAME=1.5.24` e `APP_APK_URL` da release `v1.5.24`
-  (`render.yaml` já atualizado; falta o sync das env vars).
+- [x] ~~Refletir a versão no Render em 49/1.5.24~~ — substituído pela 1.5.25
+  (item na seção acima).
 
 ## Correção de 27/11/2026 — capas de série pela API
 
