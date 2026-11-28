@@ -1,6 +1,6 @@
 # Estado atual do EFTV — handoff
 
-Última atualização: 27/11/2026 (America/Sao_Paulo).
+Última atualização: 27/11/2026, ~22:50 (America/Sao_Paulo).
 
 Este arquivo existe para continuar o trabalho em outra máquina sem perder
 contexto. Leia junto com `TODO.md`.
@@ -11,9 +11,9 @@ contexto. Leia junto com `TODO.md`.
 
 | Item | Valor |
 | --- | --- |
-| App Android instalado no aparelho de teste | **1.5.23 (`versionCode 48`)** — 1.5.24 (49) publicada, falta instalar |
-| Última tag/release | `v1.5.24` |
-| APK de release | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.24/eftv-v1.5.24.apk |
+| App Android instalado no aparelho de teste | **1.5.23 (`versionCode 48`)** — 1.5.24 (49) e 1.5.25 (50) publicadas, falta instalar |
+| Última tag/release | `v1.5.25` |
+| APK de release | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.25/eftv-v1.5.25.apk |
 | Backend | Render, `https://eftv.onrender.com` |
 | PWA web | **1.1.4** — SW `eftv-web-v7` (<https://evertonfagundes.github.io/eftv/web/app/>) |
 | Dispositivo ADB usado | `mfuwk78xwcjf7h9t` |
@@ -62,6 +62,19 @@ O endpoint do backend está implementado e deployado:
 - `backend/app/routes/player.py` → `get_playlist_text()`
 - Sem token responde **401** (não 404), confirmando que existe em produção.
 - Segue até 5 redirecionamentos, valida SSRF e limita a 32 MB.
+
+### Atualização do APK pelo app (1.5.25)
+
+- O cliente atualiza sem sair do app: menu ⋮ → **Atualizar app**, Configurações
+  → Sobre → **Atualizar app**, ou pelo aviso automático diário.
+- A tela mostra versão instalada, versão nova, novidades e progresso; se o
+  Android exigir "Instalar apps desconhecidos", o download continua sozinho ao
+  voltar da permissão.
+- O download só aceita HTTPS, confere `Content-Length`, pacote
+  `com.eftv.android` e `versionCode` antes de abrir o instalador.
+- A versão publicada vem de `GET /app/version` (`APP_LATEST_*` e
+  `APP_UPDATE_*` no Render).
+- Documentação completa: `docs/ATUALIZACAO-APP.md`.
 
 ### Keepalive do Render
 
@@ -316,9 +329,9 @@ horário do status é atualizado.
 Atualizar para a versão atual (o usuário faz isso manualmente no painel):
 
 ```
-APP_LATEST_VERSION_CODE=49
-APP_LATEST_VERSION_NAME=1.5.24
-APP_APK_URL=https://github.com/EvertonFagundes/eftv/releases/download/v1.5.24/eftv-v1.5.24.apk
+APP_LATEST_VERSION_CODE=50
+APP_LATEST_VERSION_NAME=1.5.25
+APP_APK_URL=https://github.com/EvertonFagundes/eftv/releases/download/v1.5.25/eftv-v1.5.25.apk
 ```
 
 E, para a importação em 4G:
@@ -349,13 +362,16 @@ repositório. Não commitar credenciais.
 1. [x] Importação em 4G validada em 27/11 (~19:57), com o backend 1.2.2:
    234.000 itens, 2.264 canais, 33.162 filmes, 9.738 séries e capas em 4G.
 2. [ ] `APP_LATEST_*` do Render ainda responde 1.5.23/48; atualizar para
-   1.5.24/49 e a URL da release `v1.5.24`.
-3. [ ] Instalar a 1.5.24 no aparelho que ficava com tela preta e validar série,
-   filme e canal ao vivo em Wi-Fi e 4G. Se persistir, anotar modelo/Android e o
-   texto de diagnóstico exibido (código do erro e codec).
-4. [ ] Primeira montagem do índice em instalação limpa (v5 → v6): medir em um
+   1.5.25/50 e a URL da release `v1.5.25`.
+3. [ ] Instalar a 1.5.25 no aparelho e testar o ciclo de atualização pelo
+   próprio app (menu → Atualizar app → download → autorizar → instalar por
+   cima). Login, assinatura e dispositivos devem permanecer.
+4. [ ] No aparelho que ficava com tela preta, validar série, filme e canal ao
+   vivo em Wi-Fi e 4G. Se persistir, anotar modelo/Android e o texto de
+   diagnóstico exibido (código do erro e codec).
+5. [ ] Primeira montagem do índice em instalação limpa (v5 → v6): medir em um
    aparelho sem o índice pronto. Se passar de ~20 s, montar em segundo plano.
-5. [ ] Opcional: investigar o logo trocado de "Round 6 O Desafio" (o provedor
+6. [ ] Opcional: investigar o logo trocado de "Round 6 O Desafio" (o provedor
    entrega uma capa que não é a do IMDb).
 
 ## 8. Arquivos-chave
@@ -367,6 +383,9 @@ repositório. Não commitar credenciais.
 | `android/.../data/PlaylistRepository.kt` | proxy local, fallback e timeouts |
 | `android/.../data/CatalogStore.kt` | importação atômica e recuperação de cache |
 | `android/.../MainActivity.kt` | `configureRepository`, `refreshCatalog`, log do backend |
+| `android/.../UpdateActivity.kt` | tela de atualização e retomada após permissão |
+| `android/.../UpdateInstaller.kt` | download validado e instalação do APK |
+| `docs/ATUALIZACAO-APP.md` | fluxo de atualização e checklist de release |
 | `android/.../data/LocalServer.kt` | `remotePlaylistUrl(target, forceDoh)` |
 | `android/.../python/server.py` | handler `/api/playlist-remote` (parâmetro `doh=1`) |
 | `.github/workflows/keepalive.yml` | corrente de pings do Render |

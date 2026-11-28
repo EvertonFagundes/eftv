@@ -56,6 +56,23 @@
     <string name="update_downloading">Aguarde enquanto o APK é baixado…</string>
     <string name="update_download_failed">Não foi possível baixar a atualização. Verifique a conexão e tente de novo.</string>
     <string name="update_allow_install">Autorize o EFTV a instalar apps nesta tela e toque em Atualizar novamente.</string>
+    <string name="update_title">Atualização do app</string>
+    <string name="update_current_version">Versão instalada: %1$s</string>
+    <string name="update_check_button">Verificar atualização</string>
+    <string name="update_check_again">Verificar novamente</string>
+    <string name="update_checking">Verificando atualização…</string>
+    <string name="update_up_to_date">Você já está na última versão do EFTV.</string>
+    <string name="update_available_new">Nova versão %1$s disponível.</string>
+    <string name="update_check_failed">Não foi possível verificar agora. Confira sua conexão e tente de novo.</string>
+    <string name="update_invalid_source">O servidor informou um endereço de atualização inválido. Tente mais tarde.</string>
+    <string name="update_downloading_percent">Baixando atualização… %1$d%%</string>
+    <string name="update_downloading_unknown">Baixando atualização…</string>
+    <string name="update_download_done">Download concluído. Abrindo o instalador…</string>
+    <string name="update_install_opened">Instalador aberto. Confirme a instalação para concluir.</string>
+    <string name="update_install_again">Abrir instalador</string>
+    <string name="update_permission_explain">Para instalar, autorize o EFTV em \"Instalar apps desconhecidos\" e volte. A atualização continua sozinha.</string>
+    <string name="update_permission_manual">Abra as configurações do Android e autorize o EFTV a instalar apps desconhecidos.</string>
+    <string name="update_open_permissions">Autorizar instalação</string>
     <string name="categories_title">Categorias</string>
     <string name="categories_search_hint">Buscar categoria</string>
     <string name="categories_empty">Nenhuma categoria com esse nome.</string>
@@ -274,6 +291,8 @@
     <string name="adult_no_channels">Sua playlist não tem canais adultos no momento.</string>
     <string name="settings_category_about">Sobre</string>
     <string name="settings_about_version">Versão do app</string>
+    <string name="settings_check_updates">Atualizar app</string>
+    <string name="settings_check_updates_summary">Verifica e instala a versão mais recente sem sair do app.</string>
     <string name="settings_terms">Termos de uso</string>
     <string name="settings_privacy">Política de privacidade</string>
 

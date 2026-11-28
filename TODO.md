@@ -28,7 +28,7 @@
   for fechado no meio de uma importação, `recoverInterruptedImport()` valida os
   lotes já commitados como cache, em vez de apagar tudo e recomeçar.
 
-Estado: 1.5.24 (`versionCode 49`), 251 testes do backend, 62 testes JVM do
+Estado: 1.5.25 (`versionCode 50`), 251 testes do backend, 62 testes JVM do
 Android e APK de release assinado OK.
 
 ### Validação em 4G (aparelho conectado)
@@ -88,6 +88,30 @@ Android e APK de release assinado OK.
   `#EXTM3U`/`#EXTINF`; a mensagem de erro não expõe URL nem credenciais.
   Assim, uma linha própria quebrada não bloqueia mais o 4G quando a playlist
   compartilhada está correta.
+
+## Correção de 27/11/2026 — atualização pelo próprio app (1.5.25)
+
+- [x] **Tela "Atualizar app"** acessível pelo menu ⋮ e por Configurações → Sobre.
+  Mostra versão instalada, versão nova, novidades, progresso do download e
+  permite reabrir o instalador se o cliente voltar sem concluir.
+- [x] **Permissão de instalação contínua:** se o Android exigir "Instalar apps
+  desconhecidos", ao voltar da tela de permissão o download continua sozinho.
+- [x] **Download verificado:** só HTTPS, no máximo 5 redirecionamentos,
+  conferência do `Content-Length`, do pacote `com.eftv.android` e do
+  `versionCode` anunciado antes de abrir o instalador.
+- [x] **Aviso automático diário** passou a abrir a tela nova e, quando o cliente
+  toca em "Atualizar", já inicia o download.
+- [x] **Consulta diária só é marcada após resposta** do servidor; uma falha de
+  rede não esconde mais a atualização por 24 h.
+- [x] **Release 1.5.25 (50)** assinada e publicada:
+  https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.25
+- [ ] **Atualizar o Render** para `APP_LATEST_VERSION_CODE=50`,
+  `APP_LATEST_VERSION_NAME=1.5.25` e a URL da release (`render.yaml` já
+  atualizado; falta o sync das env vars).
+- [ ] **Testar o ciclo completo no aparelho:** menu → Atualizar app → download →
+  autorizar instalação → instalar por cima, mantendo login e dispositivos.
+- [ ] **Validar no aparelho que falhava** (herdado da 1.5.24): série, filme e
+  canal ao vivo em Wi-Fi e 4G.
 
 ## Correção de 27/11/2026 — reprodução em aparelho secundário (1.5.24)
 
@@ -198,8 +222,8 @@ série (temporadas, episódios e botões de reprodução).
 ## Operação
 
 - [ ] **Render / versão do APK:** env vars ainda respondem `1.5.23`
-  (`versionCode 48`); atualizar para `1.5.24`/`49` e a URL da release
-  `v1.5.24`.
+  (`versionCode 48`); atualizar para `1.5.25`/`50` e a URL da release
+  `v1.5.25`.
 - [x] **Backend 1.2.2 no ar:** `/health` responde `version=1.2.2`, e o
   `/player/playlist-text` sem token continua retornando 401.
 

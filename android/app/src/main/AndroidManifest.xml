@@ -125,6 +125,11 @@
 
         <!-- Configuracoes escondidas (acessivel por toque longo no titulo da tela principal) -->
         <activity
+            android:name=".UpdateActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.EFTV.NoActionBar" />

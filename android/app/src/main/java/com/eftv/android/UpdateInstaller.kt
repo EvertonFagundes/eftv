@@ -1,6 +1,7 @@
 package com.eftv.android
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -96,10 +97,37 @@ object UpdateInstaller {
                 target.delete()
                 error("O arquivo baixado esta vazio.")
             }
+            // Conexao interrompida pode gerar APK truncado sem erro no stream.
+            // O tamanho anunciado pelo servidor precisa bater com o arquivo.
+            if (total > 0 && target.length() != total) {
+                target.delete()
+                error("Download incompleto: ${target.length()} de $total bytes.")
+            }
             target
         } finally {
             conn.disconnect()
         }
+    }
+
+    /**
+     * Confere se o arquivo baixado e mesmo um APK do EFTV na versao esperada.
+     *
+     * Protege contra link adulterado, pagina HTML salva com extensao .apk ou
+     * download truncado. A assinatura continua sendo validada pelo Android na
+     * instalacao; aqui evitamos abrir o instalador para o app errado.
+     */
+    fun isExpectedApk(context: Context, file: File, expectedVersionCode: Int): Boolean {
+        if (!file.isFile || file.length() <= 0L) return false
+        val archive = context.packageManager
+            .getPackageArchiveInfo(file.absolutePath, 0) ?: return false
+        if (archive.packageName != context.packageName) return false
+        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            archive.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            archive.versionCode.toLong()
+        }
+        return code == expectedVersionCode.toLong()
     }
 
     fun install(activity: Activity, file: File) {

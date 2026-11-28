@@ -198,10 +198,12 @@ class MainActivity : AppCompatActivity() {
         val lastCheck = prefs.getLong(UPDATE_LAST_CHECK, 0L)
         val now = System.currentTimeMillis()
         if (now - lastCheck < UPDATE_CHECK_INTERVAL_MS) return
-        prefs.edit().putLong(UPDATE_LAST_CHECK, now).apply()
 
         lifecycleScope.launch {
             val info = runCatching { api.appVersion() }.getOrNull() ?: return@launch
+            // Só marca como consultado quando o servidor respondeu; uma falha
+            // passageira de rede nao deve esconder a atualizacao por 24 h.
+            prefs.edit().putLong(UPDATE_LAST_CHECK, now).apply()
             if (!info.configured || info.apkUrl.isBlank()) return@launch
             if (info.versionCode <= BuildConfig.VERSION_CODE) return@launch
             // O link vem do backend: só abre HTTPS em host público. Sem isso,
@@ -232,84 +234,15 @@ class MainActivity : AppCompatActivity() {
             .setMessage(message)
             .setCancelable(!info.mandatory)
             .setPositiveButton(R.string.update_now) { _, _ ->
-                startApkUpdate(info)
+                startActivity(
+                    Intent(this@MainActivity, UpdateActivity::class.java)
+                        .putExtra(UpdateActivity.EXTRA_START_DOWNLOAD, true),
+                )
             }
         if (!info.mandatory) {
             dialog.setNegativeButton(R.string.update_later, null)
         }
         dialog.show()
-    }
-
-    /**
-     * Baixa o APK dentro do app e abre o instalador do Android.
-     *
-     * Antes o botao mandava para o navegador; o cliente muitas vezes nao
-     * encontrava o arquivo baixado. Aqui a barra de progresso fica na propria
-     * tela e o instalador abre apontando para o APK recem-baixado.
-     */
-    private fun startApkUpdate(info: EftvApi.AppVersionInfo) {
-        if (!UpdateInstaller.canInstall(this)) {
-            Toast.makeText(this, R.string.update_allow_install, Toast.LENGTH_LONG).show()
-            UpdateInstaller.requestInstallPermission(this)
-            return
-        }
-
-        val density = resources.displayMetrics.density
-        val padding = (24 * density).toInt()
-        val label = TextView(this).apply {
-            text = getString(R.string.update_downloading)
-        }
-        val bar = android.widget.ProgressBar(
-            this,
-            null,
-            android.R.attr.progressBarStyleHorizontal,
-        ).apply {
-            max = 100
-            progress = 0
-        }
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(padding, padding / 2, padding, 0)
-            addView(label)
-            addView(
-                bar,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = padding / 2 },
-            )
-        }
-
-        val progressDialog = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.update_downloading_title)
-            .setView(content)
-            .setCancelable(false)
-            .create()
-        progressDialog.show()
-
-        lifecycleScope.launch {
-            try {
-                val file = UpdateInstaller.download(this@MainActivity, info.apkUrl) { percent ->
-                    runOnUiThread {
-                        if (percent < 0) {
-                            bar.isIndeterminate = true
-                        } else {
-                            bar.progress = percent
-                        }
-                    }
-                }
-                progressDialog.dismiss()
-                UpdateInstaller.install(this@MainActivity, file)
-            } catch (e: Exception) {
-                progressDialog.dismiss()
-                Timber.w(e, "Falha ao baixar a atualizacao")
-                Toast.makeText(
-                    this@MainActivity,
-                    R.string.update_download_failed,
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
     }
 
     override fun onResume() {
@@ -391,6 +324,11 @@ class MainActivity : AppCompatActivity() {
 
                 R.id.action_open_web -> {
                     openLocalWeb()
+                    true
+                }
+
+                R.id.action_update -> {
+                    startActivity(Intent(this@MainActivity, UpdateActivity::class.java))
                     true
                 }
 

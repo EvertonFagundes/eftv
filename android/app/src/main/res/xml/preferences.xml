@@ -51,6 +51,12 @@
         app:iconSpaceReserved="false">
 
         <Preference
+            android:key="pref_check_updates"
+            android:summary="@string/settings_check_updates_summary"
+            android:title="@string/settings_check_updates"
+            app:iconSpaceReserved="false" />
+
+        <Preference
             android:key="pref_terms"
             android:title="@string/settings_terms"
             app:iconSpaceReserved="false" />

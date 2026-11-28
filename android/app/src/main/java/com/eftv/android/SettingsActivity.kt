@@ -111,6 +111,13 @@ class SettingsActivity : AppCompatActivity() {
 
             findPreference<Preference>("pref_version")?.summary = BuildConfig.VERSION_NAME
 
+            // Atualizacao do APK sem sair do app: o cliente pode pedir a
+            // verificacao a qualquer momento, sem esperar o aviso diario.
+            findPreference<Preference>("pref_check_updates")?.setOnPreferenceClickListener {
+                startActivity(Intent(requireContext(), UpdateActivity::class.java))
+                true
+            }
+
             // Exclusao de conta (Play Store / LGPD).
             findPreference<Preference>("pref_delete_account")?.setOnPreferenceClickListener {
                 (activity as? SettingsActivity)?.confirmDeleteAccount()
