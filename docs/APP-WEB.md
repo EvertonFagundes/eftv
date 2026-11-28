@@ -129,8 +129,19 @@ independente em [`web/`](../web/), com paridade com o app Android:
 - app instalável em `web/app/` (manifest, service worker, ícones PNG, prints);
 - player HLS/MPEG-TS/DASH/MP4, heartbeat de sessão, limite de 1 tela, 2 dispositivos;
 - login, catálogo paginado, categorias, A-Z, favoritos, continuar assistindo;
+- **Minha playlist**: importa `.m3u`/`.m3u8` por arquivo (sempre) ou link (se o
+  CORS permitir), salva no IndexedDB `eftv-web`/`local-playlist`, tem prioridade
+  sobre backend/demo, limita a 50.000 itens e mostra 240 cards por vez com
+  **Mostrar mais**;
 - checkout Mercado Pago com retorno em `web/app/checkout.html`;
 - modo demonstração (`?demo=1`) e vídeo local `web/app/assets/media/demo.mp4`.
+
+Os canais **não são embutidos** no APK nem no repositório: o Android é um WebView
+e o backend está sem catálogo real (o Render recebe uma página do nginx). A forma
+garantida de ver os canais reais hoje é importar a M3U do provedor em
+**Minha playlist**. A lista fica só no aparelho e não é apagada no logout; use
+**Minha playlist → Remover** para excluir. Versão publicada: **1.1.3**, service
+worker **`eftv-web-v6`**.
 
 Documentação completa: [`web/README.md`](../web/README.md) e
 [`web/CONTINUAR.md`](../web/CONTINUAR.md).

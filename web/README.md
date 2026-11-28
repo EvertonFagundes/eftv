@@ -2,7 +2,7 @@
 
 Versão web do EFTV (canais ao vivo, filmes e séries) com **landing page** de vendas e **app instalável (PWA)**. O app Android em `android/` não foi alterado.
 
-> **Status:** interface e fluxos completos. O catálogo real vem da playlist licenciada entregue pelo backend autenticado (`GET /player/playlist-text`), com cache em **IndexedDB**. O modo demonstração só é ativado explicitamente com `?demo=1`. Falta validar login/player/checkout com uma conta real em produção (ver `CONTINUAR.md`).
+> **Status:** interface e fluxos completos. O catálogo real pode vir da **playlist M3U importada pelo usuário** (tela **Minha playlist**, salva no IndexedDB) ou da playlist licenciada entregue pelo backend autenticado (`GET /player/playlist-text`). O modo demonstração aparece com `?demo=1` ou quando não há sessão nem playlist local. Os canais **não são embutidos** no repositório/APK: vêm da M3U do provedor. Falta validar login/player/checkout com uma conta real em produção e testar a M3U real de ~84 MB (ver `CONTINUAR.md`).
 
 ---
 
@@ -22,12 +22,12 @@ web/
 │       ├── css/style.css
 │       ├── js/
 │       │   ├── config.js        # API_URL, versão, intervalos, modo demo
-│       │   ├── store.js         # IndexedDB (catálogo) + localStorage (sessão etc.)
+│       │   ├── store.js         # IndexedDB (catálogo + playlist local) + localStorage (sessão etc.)
 │       │   ├── api.js           # Cliente da API FastAPI
-│       │   ├── playlist.js      # Parser M3U, classificação e agrupamento de séries
+│       │   ├── playlist.js      # Parser M3U, diagnóstico, classificação e agrupamento de séries
 │       │   ├── catalog.js       # Catálogo, busca sem acento, categorias, A-Z
 │       │   ├── player.js        # HLS / MPEG-TS / DASH / MP4
-│       │   ├── app.js           # Router, telas, auth, conta, ajustes, séries
+│       │   ├── app.js           # Router, telas, importação local, auth, conta, ajustes, séries
 │       │   └── pwa.js           # Instalação + service worker
 │       ├── img/                 # Ícones PNG, poster, prints reais (screens/)
 │       └── media/demo.mp4       # Vídeo de demonstração (12s, ~90 KB)
@@ -66,7 +66,7 @@ Abra:
 # parser M3U: canais, filmes, séries, temporadas, categorias e casos inválidos
 node web/tools/testar-playlist.js
 
-# app no Chrome headless: demo, playlist, modal de série, player, IndexedDB, SW, manifest e offline
+# app no Chrome headless: demo, importação local, persistência, paginação, série, player, IndexedDB, SW, manifest e offline
 node web/tools/testar-app.js
 ```
 
@@ -81,7 +81,7 @@ Edite `web/app/assets/js/config.js`:
 ```js
 window.EFTV_CONFIG = {
   API_URL: "https://eftv.onrender.com", // troque por https://api.eftv.com.br em produção
-  APP_VERSION: "1.1.0",
+  APP_VERSION: "1.1.3",
   APP_VERSION_CODE: 2,
   DEMO_FALLBACK: false, // não troca por demo quando a rede falha
   DEMO_MODE: true,      // mantém ?demo=1 explícito para landing/testes
@@ -145,6 +145,12 @@ Implementado em `api.js`, alinhado ao backend em `backend/app/routes/`:
   - `playlist.js` lê `#EXTINF`, `tvg-logo`, `group-title`, classifica canal/filme/série e agrupa episódios (`S01E02`, `1x02`, `Temporada 1 Episódio 2`);
   - o catálogo fica no **IndexedDB** (dezenas de milhares de itens) com validade de 6 h; falha de rede mantém o cache anterior;
   - se a playlist não estiver disponível, o app tenta `/channels` (paginado).
+- **Minha playlist** (canais reais sem backend):
+  - importa `.m3u`/`.m3u8` por arquivo (sempre) ou link (se o CORS permitir);
+  - limite de 50.000 itens, leitura UTF-8/UTF-16 e diagnóstico para HTML/JSON/DASH;
+  - fica no IndexedDB `eftv-web`/`local-playlist`, só no aparelho, e tem prioridade sobre backend/demo;
+  - a grade mostra 240 cards por vez com **Mostrar mais**;
+  - **Sair** e **Limpar cache** não apagam a lista; use **Minha playlist → Remover**.
 - Aba **Séries** com modal de temporadas e episódios, como no Android.
 - Logos/capas reais nos cards, com fallback para o gradiente e o nome.
 - Catálogo com busca **sem acento**, categorias com contagem, filtro de conteúdo adulto.
@@ -182,7 +188,7 @@ Implementado em `api.js`, alinhado ao backend em `backend/app/routes/`:
   - ícones/imagens: cache primeiro;
   - API, vídeo, áudio e range requests: **sem cache**.
 - Instalação: abra o app em HTTPS/localhost e use “Instalar app” (Android/desktop) ou Compartilhar → “Adicionar à Tela de Início” (iOS).
-- Ao publicar uma nova versão, incremente `CACHE` em `sw.js` (`eftv-web-v3` → `v4`) para limpar caches antigos. `playlist.js` faz parte do `CORE` do service worker.
+- Ao publicar uma nova versão, incremente `CACHE` em `sw.js` (`eftv-web-v6` atualmente; histórico `v3` → `v4` → `v5` → `v6`) para limpar caches antigos. `playlist.js` faz parte do `CORE` do service worker.
 
 ---
 
@@ -250,7 +256,8 @@ O app usa `API_URL` em `config.js`. Garanta CORS liberado para o domínio da lan
 
 ## 9. Limitações e cuidados
 
-- **CORS:** se o provedor de streams não liberar o domínio web, o canal não toca no navegador (toque no app Android). Não há proxy no cliente web.
+- **CORS:** se o provedor de streams não liberar o domínio web, o canal não toca no navegador (toque no app Android). Não há proxy no cliente web. Contorno local: `python server.py` na raiz e abra `http://127.0.0.1:8124/` (a versão web do app Android faz proxy dos streams).
+- **Playlist local:** o texto importado contém URLs/credenciais do provedor. Ele fica somente no IndexedDB do aparelho, não é enviado ao backend e não é apagado no logout; use **Minha playlist → Remover** para excluir.
 - **Autoplay:** navegadores bloqueiam áudio automático; o usuário pode precisar tocar em ▶.
 - **iOS:** instalação é manual (Compartilhar → Adicionar à Tela de Início) e HLS usa o player nativo.
 - **Direitos autorais:** o catálogo é agregado de terceiros. Antes de promover comercialmente, confirme licenciamento/autorização dos sinais. Este projeto não concede direitos sobre o conteúdo.
@@ -262,8 +269,9 @@ O app usa `API_URL` em `config.js`. Garanta CORS liberado para o domínio da lan
 
 Veja `CONTINUAR.md` para o checklist detalhado. Resumo:
 
-1. Validar login/catálogo/player/checkout contra o backend real com uma conta de assinante.
-2. Corrigir a URL da playlist no provedor/Render (hoje o backend recebe uma página de erro do nginx em vez da M3U).
-3. Trocar `demo.mp4` e os canais de exemplo por conteúdo autorizado.
-4. Testar em Android Chrome, iPhone Safari e desktop.
-5. Opcional: empacotar como TWA (Bubblewrap) para publicar na Play Store.
+1. Testar com a M3U real do provedor (~84 MB) na tela **Minha playlist** e confirmar quais streams tocam no navegador (CORS/hotlink).
+2. Validar login/catálogo/player/checkout contra o backend real com uma conta de assinante.
+3. Popular o cache da playlist no backend (`backend/scripts/upload_playlist_cache.py`) ou corrigir a URL do provedor no Render (hoje o backend recebe uma página de erro do nginx em vez da M3U).
+4. Trocar `demo.mp4` e os canais de exemplo por conteúdo autorizado.
+5. Testar em Android Chrome, iPhone Safari e desktop.
+6. Opcional: empacotar como TWA (Bubblewrap) para publicar na Play Store.

@@ -31,6 +31,64 @@ node web/tools/servidor.js . 4173
 
 Sem Node? Use `python -m http.server 4173` na raiz.
 
+## Minha playlist: onde ficam os canais reais
+
+Os canais **não estão embutidos no app nem no repositório**. O APK é um WebView
+sobre a pasta `assets/eftv/` e o repositório só tem `sample_playlist.m3u`. Os
+canais reais vêm da **M3U do provedor**, importada pelo usuário. O backend
+também está sem catálogo real: o Render recebe uma página do nginx no lugar da
+playlist (ver `/health`). Por isso o caminho garantido hoje é a playlist local.
+
+### Para assistir (passo a passo)
+
+1. Abra <https://evertonfagundes.github.io/eftv/web/app/>.
+2. Entre em **📥 Minha playlist**.
+3. Baixe o arquivo `.m3u`/`.m3u8` no painel do provedor.
+4. Clique em **Escolher arquivo .m3u/.m3u8** e selecione o arquivo.
+5. Os canais aparecem em **Ao Vivo**, com as categorias da lista.
+
+O campo de link é opcional. Ele só funciona se o provedor liberar CORS; se o
+navegador bloquear, use o arquivo. Em página HTTPS o link `http://` é trocado
+por `https://` automaticamente para evitar conteúdo misto.
+
+### O que acontece por dentro
+
+- A lista é lida com `file.text()`/`TextDecoder` (UTF-8, UTF-16LE ou UTF-16BE).
+  Arquivos `.gz`/`.zip` são recusados com instrução para extrair.
+- `playlist.parse()` limita a **50.000 itens** (`MAX_ITENS`, mesmo teto do app
+  Android) e `playlist.diagnosticar()` explica HTML/JSON/DASH/lista vazia.
+- O registro fica no IndexedDB `eftv-web`, store **`local-playlist`**, no formato
+  `{ nome, url, itens, total, criadoEm, salvoEm }`. Não é enviado ao backend.
+- `catalog.carregar()` dá prioridade à playlist local; sem ela, usa o cache de
+  6 h, depois `/player/playlist-text` e, por fim, `/channels`. O modo demo só
+  aparece com `?demo=1` ou sem sessão.
+- A grade renderiza **240 cards por vez** e o botão **Mostrar mais** carrega o
+  restante (`LIMITE_GRADE` em `app.js`). Os chips usam as categorias reais.
+- **Sair** não apaga a playlist local (ela é independente da conta). **Limpar
+  cache do catálogo** também não. Para apagar, use **Minha playlist → Remover**.
+- O texto contém URLs/credenciais do provedor: fica só no aparelho e nunca deve
+  ser colado em issue/log.
+
+### Mensagens de diagnóstico
+
+| Situação | Mensagem resumida |
+|---|---|
+| arquivo/link vazio | peça a playlist completa |
+| HTML | link retornou página web; baixe o `.m3u` |
+| JSON | use o endereço `get.php...type=m3u_plus` |
+| DASH | manifesto `.mpd` não é lista de canais |
+| `#EXTINF` sem URL http(s) | lista incompleta ou streams não HTTP |
+
+### Limitações
+
+- Reprodução no navegador ainda depende de CORS/hotlink do CDN; se o vídeo não
+  tocar, use o app Android ou `python server.py` na raiz (proxy local em
+  `http://127.0.0.1:8124/`).
+- Listas muito grandes (>50k) são truncadas; a importação de 50k itens leva
+  alguns segundos e a interface continua responsiva por causa da paginação.
+- O backend continua sem catálogo real até o cache ser populado
+  (`backend/scripts/upload_playlist_cache.py`).
+
 ## O que já está pronto
 
 - [x] Landing page PT-BR premium (hero cinematográfico, bento de experiência, pilares Ao Vivo/Filmes/Séries, catálogo filtrável, planos R$ 19,90, PWA e CTA), com animações de entrada, menu mobile e OG image atualizada.
@@ -64,6 +122,8 @@ Sem Node? Use `python -m http.server 4173` na raiz.
   - O `/health` de produção mostra o provedor devolvendo uma página nginx (235 bytes), não a M3U. O Render não alcança o provedor; o catálogo real depende do cache da playlist.
   - Para popular o cache, rode `backend/scripts/upload_playlist_cache.py` em uma rede que alcance o provedor (a URL e o login admin não devem ser colados no chat). Depois o app usa o cache mesmo com o provedor bloqueado.
   - O app agora mostra na tela o motivo da falha e um botão **Tentar novamente**; o aviso de modo demonstração também aparece no topo do Ao Vivo.
+- [x] **Importação local no PWA**: validada em 27/11/2026 no Chrome headless (arquivo, persistência, reload, offline) e no app publicado.
+- [ ] **Testar com a M3U real do provedor (~84 MB)**: o teste automatizado usa lista sintética de 50.000 itens; falta o arquivo real e confirmar quais streams tocam no navegador.
 - [x] Conferir CORS do FastAPI para o domínio da landing/app (`CORS_ORIGINS` inclui `https://evertonfagundes.github.io`; resposta 401 de `/player/playlist-text` veio com `Access-Control-Allow-Origin`).
 - [ ] Trocar `API_URL` em `web/app/assets/js/config.js` para o domínio final (`https://api.eftv.com.br`), se for usado.
 - [x] `DEMO_FALLBACK: false` em produção; `DEMO_MODE: true` mantém `?demo=1` para a landing/testes.
@@ -85,6 +145,10 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 7. O resultado é salvo no IndexedDB. Se a rede falhar, o cache anterior é mantido.
 8. O player chama `POST /player/play` com a URL do canal (a mesma que o Android usa) antes de abrir o vídeo.
 
+Detalhes da tela, armazenamento e diagnóstico estão na seção **Minha playlist**
+acima. A playlist local só é apagada em **Minha playlist → Remover**; sair da
+conta ou limpar o cache do catálogo não a remove.
+
 ### Limitações importantes
 
 - **CORS do provedor**: se o CDN do canal não liberar o domínio web, o vídeo não toca no navegador. Não há proxy no cliente web; é uma diferença em relação ao app Android. Para contornar, use `python server.py` na raiz e abra `http://127.0.0.1:8124/` (a versão web do app Android faz proxy dos streams).
@@ -102,21 +166,30 @@ Sem Node? Use `python -m http.server 4173` na raiz.
   - `POST /subscriptions/{id}/cancel` (não `/subscriptions/cancel`).
   - `/channels` pagina no máximo 100; `canaisTodas()` busca todas as páginas (fallback quando a playlist não está disponível).
   - `GET /player/playlist-text` pode demorar; o cliente espera até 130 s.
-- `web/app/assets/js/playlist.js` → parser M3U, classificação e agrupamento de séries.
-- `web/app/assets/js/catalog.js` → fonte do catálogo (playlist → API → cache → demo), busca sem acento, categorias, A-Z.
+- `web/app/assets/js/playlist.js` → parser M3U, `MAX_ITENS` (50.000), `diagnosticar()` e classificação/agrupamento de séries.
+- `web/app/assets/js/catalog.js` → prioridade da playlist local, fonte do catálogo (local → playlist → API → cache → demo), busca sem acento, categorias, A-Z.
 - `web/app/assets/js/store.js` → IndexedDB do catálogo (`eftv-web` / store `catalog`) e da playlist local (`local-playlist`); localStorage para sessão, favoritos, progresso e ajustes.
 - `web/app/assets/js/player.js` → token HLS via `xhrSetup`; reconexão automática; Media Session.
-- `web/app/assets/js/app.js` → router, telas, série/episódios, conta, ajustes.
-- `web/app/sw.js` → ao publicar, suba `CACHE` (`eftv-web-v3` → `v4` → `v5` → `v6`).
+- `web/app/assets/js/app.js` → router, telas, importação local (`importarPlaylistArquivo`/`importarPlaylistUrl`), `LIMITE_GRADE` (240), conta, ajustes.
+- `web/app/sw.js` → ao publicar, suba `CACHE` (atual `eftv-web-v6`; histórico `v3` → `v4` → `v5` → `v6`).
 - `web/tools/gerar-icones.ps1` → se PNG ficar bloqueado (antivírus/OneDrive), rode de novo; o script usa retentativas.
 - `web/tools/capturar.js` → requer Chrome com `--remote-debugging-port=9333` e o servidor em `4173`.
 
 ## Fluxo de deploy (GitHub Pages)
 
-1. Commit e push da pasta `web/`.
-2. GitHub Pages já serve a raiz; acesse `/web/landing/` e `/web/app/`.
-3. Abra o app em HTTPS, instale o PWA e teste o login real.
-4. Se mudar arquivos do app, incremente o cache do service worker (atualmente `eftv-web-v6`).
+1. Rode os testes (`testar-playlist.js` e `testar-app.js`).
+2. Se mudar arquivos do app, suba `APP_VERSION` em `config.js`/`index.html` e `CACHE` em `sw.js` (atual `eftv-web-v6`).
+3. Commit e push da pasta `web/`.
+4. GitHub Pages já serve a raiz; aguarde a publicação e confira `/web/landing/` e `/web/app/`.
+5. Abra o app em HTTPS e valide: versão exibida, cache do SW, **Minha playlist** (importar, recarregar, offline), instalação e login real.
+
+## Última validação (27/11/2026)
+
+- `node web/tools/testar-playlist.js`: 6 testes ok.
+- `node web/tools/testar-app.js`: todos ok, incluindo importação por `#playlist-file`, persistência após reload, paginação 240/300, service worker, manifest, instalabilidade e offline.
+- Teste sintético de 50.000 itens (6,4 MB): importação em ~7 s, 50.000 itens salvos, 240 cards por vez.
+- Live <https://evertonfagundes.github.io/eftv/web/app/>: versão **1.1.3**, SW **`eftv-web-v6`**, importação, reload e offline validados.
+- A M3U real do provedor (~84 MB) ainda não foi testada; ver pendências acima.
 
 ## Comandos úteis
 
