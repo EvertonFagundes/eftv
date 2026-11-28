@@ -183,7 +183,7 @@ function verificar(condicao, mensagem) {
     await cdp.enviar("Runtime.enable", {}, sessionId);
 
     await cdp.enviar("Page.navigate", { url: URL_APP + "?demo=1" }, sessionId);
-    await ESPERA(2200);
+    await ESPERA(4000);
 
     const inicial = await avaliar(
       cdp,
@@ -203,11 +203,139 @@ function verificar(condicao, mensagem) {
     verificar(inicial.cards > 0, "modo demonstração renderizou cards");
     verificar(inicial.demo === true, "catálogo está em modo demonstração");
     verificar(inicial.bannerAtualizacao === false, "PWA não oferece APK como atualização");
-    verificar(inicial.versao.includes("1.1.2"), "versão web exibida");
+    verificar(inicial.versao.includes("1.1.3"), "versão web exibida");
     verificar(
       inicial.alertaCatalogoVisivel && inicial.alertaCatalogo.includes("Modo demonstração"),
       "aviso de modo demonstração visível"
     );
+
+    // Importa a playlist pelo mesmo fluxo da tela "Minha playlist".
+    await avaliar(
+      cdp,
+      sessionId,
+      `(() => {
+        const texto = ${JSON.stringify(PLAYLIST)};
+        const arquivo = new File([texto], 'teste-local.m3u', { type: 'audio/x-mpegurl' });
+        const dt = new DataTransfer();
+        dt.items.add(arquivo);
+        const input = document.querySelector('#playlist-file');
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`
+    );
+    await ESPERA(1800);
+    const local = await avaliar(
+      cdp,
+      sessionId,
+      `(async () => {
+        const salvo = await window.EFTV_STORE.getLocalPlaylistAsync();
+        return {
+          fonte: window.EFTV_CATALOG.fonte,
+          canais: window.EFTV_CATALOG.canais.length,
+          demo: window.EFTV_CATALOG.demo,
+          cards: document.querySelectorAll('#grid-ao-vivo .item-card').length,
+          alertaVisivel: !document.querySelector('#catalog-alert').classList.contains('hidden'),
+          chips: [...document.querySelectorAll('#chips-ao-vivo .chip')].map((b) => b.textContent),
+          salvo: !!(salvo && salvo.itens && salvo.itens.length)
+        };
+      })()`
+    );
+    verificar(local.fonte === "local", "playlist local virou o catálogo");
+    verificar(local.canais === 4, "playlist local gerou 4 cards");
+    verificar(local.demo === false, "playlist local desliga o modo demonstração");
+    verificar(local.cards > 0, "canais locais apareceram na grade");
+    verificar(local.alertaVisivel === false, "aviso de demo some após importar");
+    verificar(
+      local.chips.some((c) => c.includes("Séries")) && local.chips.some((c) => c.includes("Filmes")),
+      "chips usam as categorias reais da playlist"
+    );
+    verificar(local.salvo === true, "playlist local foi salva no IndexedDB");
+
+    // Recarrega para confirmar que a playlist sobrevive ao fechamento do app.
+    await cdp.enviar("Page.reload", { ignoreCache: false }, sessionId);
+    await ESPERA(2500);
+    const localPersistido = await avaliar(
+      cdp,
+      sessionId,
+      `({
+        fonte: window.EFTV_CATALOG.fonte,
+        canais: window.EFTV_CATALOG.canais.length,
+        demo: window.EFTV_CATALOG.demo
+      })`
+    );
+    verificar(localPersistido.fonte === "local", "playlist local sobreviveu ao reload");
+    verificar(localPersistido.canais === 4, "canais locais voltaram após o reload");
+
+    // A tela "Minha playlist" mostra a lista importada.
+    await avaliar(cdp, sessionId, `location.hash = '#playlist'`);
+    await ESPERA(400);
+    const telaPlaylist = await avaliar(
+      cdp,
+      sessionId,
+      `({
+        atualVisivel: !document.querySelector('#playlist-atual').classList.contains('hidden'),
+        vazioVisivel: !document.querySelector('#playlist-empty').classList.contains('hidden'),
+        nome: document.querySelector('#playlist-nome').textContent,
+        meta: document.querySelector('#playlist-meta').textContent
+      })`
+    );
+    verificar(telaPlaylist.atualVisivel === true, "tela Minha playlist mostra a lista importada");
+    verificar(telaPlaylist.vazioVisivel === false, "estado vazio some após importar");
+    verificar(telaPlaylist.nome.includes("teste local"), "nome da playlist importada aparece");
+    verificar(telaPlaylist.meta.includes("5 itens"), "tela mostra a quantidade de itens");
+
+    // Limpa para os próximos testes (backend/demo).
+    await avaliar(
+      cdp,
+      sessionId,
+      `(async () => {
+        await window.EFTV_STORE.clearLocalPlaylistAsync();
+        window.EFTV_CATALOG.limpar();
+        window.EFTV_CATALOG.usarDemo();
+        return true;
+      })()`
+    );
+    await ESPERA(200);
+
+    // Listas grandes: a grade mostra 240 por vez e o botão carrega o restante.
+    const paginacao = await avaliar(
+      cdp,
+      sessionId,
+      `(() => {
+        const linhas = ['#EXTM3U'];
+        for (let i = 1; i <= 300; i++) {
+          linhas.push('#EXTINF:-1 group-title="Canais | Teste",Canal ' + i);
+          linhas.push('https://example.com/canal-' + i + '.m3u8');
+        }
+        const itens = window.EFTV_PLAYLIST.parse(linhas.join('\\n'));
+        const dados = window.EFTV_PLAYLIST.montarCatalogo(itens);
+        window.EFTV_CATALOG.aplicar(dados.canais, dados.categorias, false, 'teste-paginacao');
+        document.querySelector('.nav-link[data-view="ao-vivo"]').click();
+        return { canais: dados.canais.length };
+      })()`
+    );
+    await ESPERA(500);
+    const pagina1 = await avaliar(
+      cdp,
+      sessionId,
+      `({
+        cards: document.querySelectorAll('#grid-ao-vivo .item-card').length,
+        botao: !!document.querySelector('#view-ao-vivo .btn-mais-grade')
+      })`
+    );
+    verificar(paginacao.canais === 300, "catálogo grande foi montado");
+    verificar(pagina1.cards === 240, "grade limita a 240 cards por vez");
+    verificar(pagina1.botao === true, "botão Mostrar mais aparece");
+
+    await avaliar(cdp, sessionId, `document.querySelector('#view-ao-vivo .btn-mais-grade').click()`);
+    await ESPERA(500);
+    const pagina2 = await avaliar(
+      cdp,
+      sessionId,
+      `document.querySelectorAll('#grid-ao-vivo .item-card').length`
+    );
+    verificar(pagina2 === 300, "Mostrar mais carrega o restante da lista");
 
     const injetado = await avaliar(
       cdp,

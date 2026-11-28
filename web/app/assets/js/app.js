@@ -11,7 +11,11 @@
   const store = window.EFTV_STORE;
   const api = window.EFTV_API;
   const catalog = window.EFTV_CATALOG;
+  const playlist = window.EFTV_PLAYLIST;
   const player = window.EFTV_PLAYER;
+  // Listas reais podem ter dezenas de milhares de canais. A grade mostra um
+  // lote por vez (como no app Android) para não travar o navegador.
+  const LIMITE_GRADE = 240;
 
   /* ------------------------------------------------------------------
      Estado
@@ -24,6 +28,7 @@
     categoriaAtual: "todos",
     demo: false,
     catalogError: null,
+    localPlaylist: null,
     carregando: false,
     playerItem: null,
     playerSessao: null,
@@ -31,6 +36,7 @@
     settings: store.getSettings(),
     ultimoProgressoSalvo: 0,
     buscaTimer: null,
+    limiteGrade: LIMITE_GRADE,
   };
 
   /* ------------------------------------------------------------------
@@ -98,7 +104,7 @@
   ------------------------------------------------------------------ */
   const rotas = [
     "ao-vivo", "filmes", "series", "categorias", "categoria",
-    "favoritos", "continuar", "recentes", "conta", "ajustes", "ajuda", "busca",
+    "favoritos", "continuar", "recentes", "playlist", "conta", "ajustes", "ajuda", "busca",
   ];
 
   function navegar(view, opcoes = {}) {
@@ -112,7 +118,9 @@
       l.classList.toggle("active", l.dataset.view === view);
     });
 
+    const viewAnterior = state.view;
     state.view = view;
+    if (viewAnterior !== view) state.limiteGrade = LIMITE_GRADE;
     fecharSidebar();
 
     if (opcoes.hash !== false) {
@@ -133,6 +141,7 @@
       case "favoritos": renderFavoritos(); break;
       case "continuar": renderContinuar(); break;
       case "recentes": renderRecentes(); break;
+      case "playlist": renderPlaylist(); break;
       case "busca": renderBusca(state.termo); break;
       case "conta": carregarConta(); break;
       case "ajustes": renderAjustes(); break;
@@ -221,8 +230,28 @@
   }
 
   function preencherGrid(grid, itens, opcoes = {}) {
+    const limite = Math.max(LIMITE_GRADE, Number(state.limiteGrade) || LIMITE_GRADE);
+    const visiveis = itens.slice(0, limite);
     grid.innerHTML = "";
-    itens.forEach((item) => grid.appendChild(criarCard(item, opcoes)));
+    visiveis.forEach((item) => grid.appendChild(criarCard(item, opcoes)));
+
+    const view = grid.closest(".view") || grid.parentElement;
+    const antigo = view ? view.querySelector(".btn-mais-grade") : null;
+    if (antigo) antigo.remove();
+
+    if (itens.length > visiveis.length && view) {
+      const restantes = itens.length - visiveis.length;
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "btn btn-outline btn-mais-grade";
+      botao.textContent = `Mostrar mais (${restantes.toLocaleString("pt-BR")} restantes)`;
+      botao.addEventListener("click", () => {
+        state.limiteGrade += LIMITE_GRADE;
+        if (typeof opcoes.aoMais === "function") opcoes.aoMais();
+      });
+      const alvo = grid.closest(".content-with-az") || grid;
+      alvo.insertAdjacentElement("afterend", botao);
+    }
   }
 
   function toggleFavorito(id) {
@@ -248,16 +277,22 @@
     const chips = $("#chips-ao-vivo");
     const vazio = $("#empty-ao-vivo");
 
-    // Chips (categorias rápidas)
+    // Chips: usa as categorias que realmente vieram na playlist importada,
+    // em vez de uma lista fixa que esconderia parte do catálogo real.
     chips.innerHTML = "";
-    const cats = ["todos", "abertos", "tv", "noticias", "esportes", "filmes", "infantil"];
-    cats.forEach((id) => {
-      const cat = catalog.categorias.find((c) => c.id === id) || { id, nome: id, icone: "📺" };
+    const categorias = (catalog.categorias || []).filter(
+      (c) => c.id !== "adultos" || state.settings.adulto
+    );
+    if (state.categoriaAtual !== "todos" && !categorias.some((c) => c.id === state.categoriaAtual)) {
+      state.categoriaAtual = "todos";
+    }
+    categorias.forEach((cat) => {
       const b = document.createElement("button");
-      b.className = "chip" + (state.categoriaAtual === id ? " active" : "");
+      b.className = "chip" + (state.categoriaAtual === cat.id ? " active" : "");
       b.textContent = `${cat.icone || "📺"} ${cat.nome}`;
       b.addEventListener("click", () => {
-        state.categoriaAtual = id;
+        state.categoriaAtual = cat.id;
+        state.limiteGrade = LIMITE_GRADE;
         renderAoVivo();
       });
       chips.appendChild(b);
@@ -265,11 +300,11 @@
 
     let itens = canaisFiltrados().filter((c) => c.aoVivo || c.tipo === "canal");
     itens.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-    preencherGrid(grid, itens);
+    preencherGrid(grid, itens, { aoMais: renderAoVivo });
     renderCatalogoAviso(itens);
     vazio.classList.toggle("hidden", itens.length > 0 || !!state.catalogError);
 
-    renderAZ(itens);
+    renderAZ(itens.slice(0, state.limiteGrade));
   }
 
   function renderCatalogoAviso(itens) {
@@ -281,10 +316,15 @@
 
     if (state.demo) {
       alerta.innerHTML = `
-        <span><strong>Modo demonstração.</strong> Os canais exibidos são exemplos. Entre com sua conta para carregar os canais reais.</span>
-        <button type="button" class="btn-mini" id="btn-demo-entrar">Entrar</button>
+        <span><strong>Modo demonstração.</strong> Os canais exibidos são exemplos. Entre na sua conta ou importe sua playlist para ver os canais reais.</span>
+        <span class="catalog-alert-actions">
+          <button type="button" class="btn-mini ghost" id="btn-demo-importar">Importar playlist</button>
+          <button type="button" class="btn-mini" id="btn-demo-entrar">Entrar</button>
+        </span>
       `;
       alerta.classList.remove("hidden");
+      const importar = $("#btn-demo-importar");
+      if (importar) importar.addEventListener("click", () => navegar("playlist"));
       const entrar = $("#btn-demo-entrar");
       if (entrar) entrar.addEventListener("click", () => abrirAuth("login"));
       return;
@@ -294,9 +334,14 @@
       alerta.classList.add("erro");
       alerta.innerHTML = `
         <span><strong>Não foi possível carregar os canais reais.</strong> ${escapeHtml(state.catalogError)}</span>
-        <button type="button" class="btn-mini" id="btn-catalog-retry">Tentar novamente</button>
+        <span class="catalog-alert-actions">
+          <button type="button" class="btn-mini ghost" id="btn-catalog-importar">Importar playlist</button>
+          <button type="button" class="btn-mini" id="btn-catalog-retry">Tentar novamente</button>
+        </span>
       `;
       alerta.classList.remove("hidden");
+      const importar = $("#btn-catalog-importar");
+      if (importar) importar.addEventListener("click", () => navegar("playlist"));
       const tentar = $("#btn-catalog-retry");
       if (tentar) {
         tentar.addEventListener("click", async () => {
@@ -335,7 +380,7 @@
     const vazio = $("#empty-filmes");
     const itens = catalog.filtrar({ incluirAdulto: state.settings.adulto })
       .filter((c) => c.tipo === "filme" || c.categoria === "filmes");
-    preencherGrid(grid, itens);
+    preencherGrid(grid, itens, { aoMais: renderFilmes });
     vazio.classList.toggle("hidden", itens.length > 0);
   }
 
@@ -344,7 +389,7 @@
     const vazio = $("#empty-series");
     const itens = catalog.filtrar({ incluirAdulto: state.settings.adulto })
       .filter((c) => c.tipo === "serie" || c.categoria === "series");
-    preencherGrid(grid, itens);
+    preencherGrid(grid, itens, { aoMais: renderSeries });
     vazio.classList.toggle("hidden", itens.length > 0);
   }
 
@@ -372,15 +417,17 @@
     const titulo = $("#titulo-categoria");
     titulo.textContent = `${cat.icone || "📺"} ${cat.nome}`;
     const itens = catalog.filtrar({ categoria: cat.id, incluirAdulto: state.settings.adulto });
-    preencherGrid(grid, itens);
+    const mesmaView = state.view === "categoria";
     navegar("categoria");
+    if (!mesmaView) state.limiteGrade = LIMITE_GRADE;
+    preencherGrid(grid, itens, { aoMais: () => abrirCategoria(cat) });
   }
 
   function renderFavoritos() {
     const grid = $("#grid-favoritos");
     const vazio = $("#empty-favoritos");
     const itens = catalog.todos().filter((c) => state.favoritos.has(String(c.id)));
-    preencherGrid(grid, itens);
+    preencherGrid(grid, itens, { aoMais: renderFavoritos });
     vazio.classList.toggle("hidden", itens.length > 0);
   }
 
@@ -409,8 +456,218 @@
     const itens = lista
       .map((r) => catalog.porId(r.id))
       .filter(Boolean);
-    preencherGrid(grid, itens);
+    preencherGrid(grid, itens, { aoMais: renderRecentes });
     vazio.classList.toggle("hidden", itens.length > 0);
+  }
+
+  /* ------------------------------------------------------------------
+     Minha playlist (importação local)
+  ------------------------------------------------------------------ */
+  function nomeDaUrl(url) {
+    try {
+      const u = new URL(url);
+      const base = decodeURIComponent(u.pathname.split("/").pop() || "");
+      return base.replace(/\.(m3u8?|txt)$/i, "").replace(/[_-]+/g, " ").trim() || u.hostname;
+    } catch (_) {
+      return "Minha playlist";
+    }
+  }
+
+  function mostrarStatusPlaylist(mensagem, erro) {
+    const el = $("#playlist-status");
+    if (!el) return;
+    el.textContent = mensagem || "";
+    el.classList.toggle("erro", !!erro);
+    el.classList.toggle("hidden", !mensagem);
+  }
+
+  async function renderPlaylist() {
+    const local = await store.getLocalPlaylistAsync();
+    state.localPlaylist = local || null;
+    const atual = $("#playlist-atual");
+    const vazio = $("#playlist-empty");
+    if (!atual || !vazio) return;
+
+    if (!local) {
+      atual.classList.add("hidden");
+      vazio.classList.remove("hidden");
+      return;
+    }
+
+    atual.classList.remove("hidden");
+    vazio.classList.add("hidden");
+    const total = Number(local.total) || (local.itens || []).length;
+    $("#playlist-nome").textContent = local.nome || "Minha playlist";
+    $("#playlist-meta").textContent =
+      `${total.toLocaleString("pt-BR")} ${total === 1 ? "item" : "itens"} · importada em ` +
+      new Date(local.criadoEm || local.salvoEm || Date.now()).toLocaleString("pt-BR");
+    $("#playlist-fonte").textContent = local.url
+      ? "Importada por link · salva neste aparelho"
+      : "Importada de arquivo · salva neste aparelho";
+    mostrarStatusPlaylist("");
+  }
+
+  async function lerArquivoPlaylist(file) {
+    const cabecalho = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    const gzip = cabecalho[0] === 0x1f && cabecalho[1] === 0x8b;
+    const zip =
+      cabecalho[0] === 0x50 && cabecalho[1] === 0x4b &&
+      cabecalho[2] === 0x03 && cabecalho[3] === 0x04;
+    if (gzip || zip) {
+      throw new Error(
+        `O arquivo está compactado (${gzip ? "gzip" : "zip"}). Extraia o .m3u/.m3u8 antes de importar.`
+      );
+    }
+    if (cabecalho[0] === 0xff && cabecalho[1] === 0xfe) {
+      return new TextDecoder("utf-16le").decode(await file.arrayBuffer());
+    }
+    if (cabecalho[0] === 0xfe && cabecalho[1] === 0xff) {
+      return new TextDecoder("utf-16be").decode(await file.arrayBuffer());
+    }
+    return file.text();
+  }
+
+  async function importarPlaylistArquivo(file) {
+    if (!file) return;
+    if (!/\.(m3u8?|txt)$/i.test(file.name)) {
+      mostrarStatusPlaylist("Escolha um arquivo .m3u ou .m3u8.", true);
+      return;
+    }
+    try {
+      mostrarStatusPlaylist("Lendo o arquivo…");
+      const texto = await lerArquivoPlaylist(file);
+      const nome = file.name.replace(/\.(m3u8?|txt)$/i, "").replace(/[_-]+/g, " ").trim() || "Minha playlist";
+      await importarPlaylistTexto(texto, nome, "");
+    } catch (erro) {
+      mostrarStatusPlaylist(erro.message || "Não foi possível importar a playlist.", true);
+      mostrarToast(erro.message || "Falha ao importar a playlist");
+    }
+  }
+
+  async function importarPlaylistUrl(url) {
+    const original = String(url || "").trim();
+    if (!/^https?:\/\//i.test(original)) {
+      mostrarStatusPlaylist("O link precisa começar com http:// ou https://.", true);
+      return;
+    }
+    // Página HTTPS não baixa http:// (conteúdo misto). Tenta HTTPS primeiro.
+    let destino = original;
+    if (location.protocol === "https:" && /^http:\/\//i.test(destino)) {
+      destino = destino.replace(/^http:/i, "https:");
+    }
+    try {
+      mostrarStatusPlaylist("Baixando a playlist…");
+      let resposta;
+      try {
+        resposta = await fetch(destino, { cache: "no-store", mode: "cors", redirect: "follow" });
+      } catch (_) {
+        throw new Error(
+          "O navegador não conseguiu baixar o link (CORS ou HTTP bloqueado). Baixe o arquivo .m3u e importe pelo botão de arquivo."
+        );
+      }
+      if (!resposta.ok) {
+        throw new Error(`O servidor da playlist respondeu HTTP ${resposta.status}.`);
+      }
+      const texto = await resposta.text();
+      await importarPlaylistTexto(texto, nomeDaUrl(destino), destino);
+    } catch (erro) {
+      mostrarStatusPlaylist(erro.message || "Não foi possível importar a playlist.", true);
+      mostrarToast(erro.message || "Falha ao importar a playlist");
+    }
+  }
+
+  async function importarPlaylistTexto(texto, nome, url) {
+    const loading = $("#catalog-loading");
+    const rotulo = loading ? loading.querySelector("span:last-child") : null;
+    const rotuloAnterior = rotulo ? rotulo.textContent : "";
+    if (loading) loading.classList.remove("hidden");
+    if (rotulo) rotulo.textContent = "Lendo sua playlist… listas grandes podem levar até 2 minutos.";
+    await new Promise((r) => setTimeout(r, 40));
+
+    try {
+      const itens = playlist.parse(texto);
+      if (!itens.length) throw new Error(playlist.diagnosticar(texto));
+
+      const dados = playlist.montarCatalogo(itens);
+      if (!dados.canais.length) throw new Error("A playlist não gerou canais reproduzíveis.");
+
+      const registro = {
+        nome: nome || "Minha playlist",
+        url: url || "",
+        itens,
+        total: itens.length,
+        criadoEm: Date.now(),
+      };
+      const salvo = await store.setLocalPlaylistAsync(registro);
+
+      catalog.aplicar(dados.canais, dados.categorias, false, "local");
+      catalog.local = registro;
+      state.localPlaylist = registro;
+      state.demo = false;
+      state.catalogError = null;
+
+      const badge = $("#demo-note");
+      if (badge) badge.hidden = true;
+
+      await renderPlaylist();
+      navegar("ao-vivo");
+      let mensagem = salvo
+        ? `${itens.length.toLocaleString("pt-BR")} itens importados`
+        : "Playlist carregada, mas não foi possível salvar neste aparelho";
+      if (itens.length >= playlist.MAX_ITENS) {
+        mensagem += ` (limitada aos primeiros ${playlist.MAX_ITENS.toLocaleString("pt-BR")})`;
+      }
+      mostrarToast(mensagem, 4200);
+    } finally {
+      if (loading) loading.classList.add("hidden");
+      if (rotulo) rotulo.textContent = rotuloAnterior;
+    }
+  }
+
+  async function removerPlaylistLocal() {
+    if (!confirm("Remover a playlist importada deste aparelho?")) return;
+    await store.clearLocalPlaylistAsync();
+    state.localPlaylist = null;
+    catalog.limpar();
+    mostrarStatusPlaylist("");
+    await carregarCatalogo(true);
+    await renderPlaylist();
+    renderAoVivo();
+    mostrarToast("Playlist removida");
+  }
+
+  function configurarPlaylist() {
+    const arquivo = $("#playlist-file");
+    const botaoArquivo = $("#btn-playlist-arquivo");
+    if (botaoArquivo && arquivo) {
+      botaoArquivo.addEventListener("click", () => arquivo.click());
+      arquivo.addEventListener("change", () => {
+        const file = arquivo.files && arquivo.files[0];
+        arquivo.value = "";
+        if (file) importarPlaylistArquivo(file);
+      });
+    }
+
+    const formUrl = $("#playlist-form-url");
+    if (formUrl) {
+      formUrl.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const url = ($("#playlist-url")?.value || "").trim();
+        if (!url) {
+          mostrarStatusPlaylist("Cole o link da playlist.", true);
+          return;
+        }
+        importarPlaylistUrl(url);
+      });
+    }
+
+    const ver = $("#btn-playlist-ver");
+    if (ver) ver.addEventListener("click", () => navegar("ao-vivo"));
+    const remover = $("#btn-playlist-remover");
+    if (remover) remover.addEventListener("click", removerPlaylistLocal);
+
+    const ajustes = $("#btn-importar-playlist-ajustes");
+    if (ajustes) ajustes.addEventListener("click", () => navegar("playlist"));
   }
 
   function renderBusca(termo) {
@@ -426,7 +683,7 @@
     }
     const itens = catalog.filtrar({ termo: q, incluirAdulto: state.settings.adulto });
     titulo.textContent = `Resultados para “${q}” (${itens.length})`;
-    preencherGrid(grid, itens);
+    preencherGrid(grid, itens, { aoMais: () => renderBusca(termo) });
     vazio.classList.toggle("hidden", itens.length > 0);
   }
 
@@ -443,6 +700,7 @@
       clearTimeout(state.buscaTimer);
       state.buscaTimer = setTimeout(() => {
         state.termo = valor;
+        state.limiteGrade = LIMITE_GRADE;
         if (valor.trim()) navegar("busca");
         else navegar("ao-vivo");
       }, 250);
@@ -453,6 +711,7 @@
         e.preventDefault();
         clearTimeout(state.buscaTimer);
         state.termo = input.value;
+        state.limiteGrade = LIMITE_GRADE;
         navegar(state.termo.trim() ? "busca" : "ao-vivo");
       }
     });
@@ -460,6 +719,7 @@
     limpar.addEventListener("click", () => {
       input.value = "";
       state.termo = "";
+      state.limiteGrade = LIMITE_GRADE;
       limpar.classList.add("hidden");
       navegar("ao-vivo");
     });
@@ -1175,10 +1435,19 @@
     await api.logout();
     store.clearSession();
     await store.clearCatalogCacheAsync();
-    catalog.usarDemo();
+    // A playlist importada é independente da conta: continua valendo após sair.
+    const local = await store.getLocalPlaylistAsync();
+    if (local && Array.isArray(local.itens) && local.itens.length) {
+      catalog.usarLocal(local);
+      state.localPlaylist = local;
+      state.demo = false;
+    } else {
+      catalog.usarDemo();
+      state.localPlaylist = null;
+      state.demo = true;
+    }
     state.usuario = null;
     state.assinatura = null;
-    state.demo = true;
     state.catalogError = null;
     $("#sidebar-user").textContent = "Convidado";
     mostrarToast("Você saiu da conta");
@@ -1196,8 +1465,11 @@
     document.body.classList.toggle("modo-tv", !!state.settings.modoTV);
     const fonte = catalog.fonte || (state.demo ? "demo" : "—");
     const erro = state.catalogError ? ` · Erro: ${state.catalogError}` : "";
+    const localInfo = state.localPlaylist
+      ? ` · Playlist local: ${Number(state.localPlaylist.total || (state.localPlaylist.itens || []).length).toLocaleString("pt-BR")} itens`
+      : "";
     $("#settings-api").textContent =
-      `API: ${cfg.API_URL} · Versão: ${cfg.APP_VERSION} · Catálogo: ${fonte} (${catalog.canais.length} itens)${erro}`;
+      `API: ${cfg.API_URL} · Versão: ${cfg.APP_VERSION} · Catálogo: ${fonte} (${catalog.canais.length} itens)${localInfo}${erro}`;
   }
 
   function configurarAjustes() {
@@ -1302,20 +1574,30 @@
     const loading = $("#catalog-loading");
     if (loading) loading.classList.remove("hidden");
 
-    if (!store.getSession() || state.demo || (store.getSession() && store.getSession().access === "demo-access")) {
+    // A playlist importada pelo usuário vence o backend e o modo demo.
+    const local = await store.getLocalPlaylistAsync();
+    if (local && Array.isArray(local.itens) && local.itens.length) {
+      catalog.usarLocal(local);
+      state.localPlaylist = local;
+      state.demo = false;
+      state.catalogError = null;
+    } else if (!store.getSession() || state.demo || (store.getSession() && store.getSession().access === "demo-access")) {
       catalog.usarDemo();
       state.demo = true;
+      state.localPlaylist = null;
       state.catalogError = null;
     } else {
       try {
         await catalog.carregar(forcar);
         state.demo = catalog.demo;
+        state.localPlaylist = catalog.local || null;
         state.catalogError = null;
         if (catalog.erro) {
           mostrarToast("Não foi possível atualizar; usando o catálogo salvo.");
         }
       } catch (erro) {
         state.demo = false;
+        state.localPlaylist = null;
         state.catalogError = erro.message || "Falha ao carregar o catálogo";
         if (cfg.DEMO_FALLBACK) {
           catalog.usarDemo();
@@ -1417,6 +1699,7 @@
     configurarConta();
     configurarAuth();
     configurarAjustes();
+    configurarPlaylist();
     configurarTV();
     configurarSerie();
     configurarErros();

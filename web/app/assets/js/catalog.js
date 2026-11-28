@@ -83,9 +83,18 @@
     erro: null,
     erroPlaylist: null,
     fonte: null,
+    local: null,
     _mapa: new Map(),
 
     async carregar(forcar = false) {
+      // Playlist importada pelo usuário tem prioridade: é a forma de assistir
+      // aos canais reais mesmo quando o backend/provedor está bloqueado.
+      const local = await store.getLocalPlaylistAsync();
+      if (local && Array.isArray(local.itens) && local.itens.length) {
+        this.usarLocal(local);
+        return this;
+      }
+
       // Usa cache local por 6h (igual ao app Android). O catálogo real fica
       // no IndexedDB porque pode ter dezenas de milhares de itens.
       const cache = await store.getCatalogCacheAsync();
@@ -195,8 +204,18 @@
       this.categorias = Array.isArray(categorias) ? categorias : [];
       this.demo = !!demo;
       this.fonte = fonte || null;
+      if (fonte !== "local") this.local = null;
       this.carregado = true;
       this._indexar();
+    },
+
+    // Monta o catálogo a partir da playlist que a pessoa importou no navegador.
+    usarLocal(registro) {
+      const dados = playlist.montarCatalogo((registro && registro.itens) || []);
+      this.aplicar(dados.canais, dados.categorias, false, "local");
+      this.local = registro || null;
+      this.erro = null;
+      return this;
     },
 
     _indexar() {

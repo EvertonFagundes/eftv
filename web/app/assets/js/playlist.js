@@ -10,6 +10,8 @@
 
   const ATTR_REGEX = /([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"/g;
   const INVALID_LOGOS = new Set(["xx", "xxx", "tvg-logo=", "null", "none", "-"]);
+  // Mesmo teto do app Android: evita travar o navegador com listas gigantes.
+  const MAX_ITENS = 50000;
 
   const LIVE_STRONG = ["canal", "canais", "ao vivo", "live", "24h", "24 horas", "ppv"];
   const SERIES_GROUP = [
@@ -335,9 +337,35 @@
       item.streamType = streamType(item.url);
       itens.push(item);
       pending = null;
+      if (itens.length >= MAX_ITENS) break;
     }
 
     return itens;
+  }
+
+  /**
+   * Explica por que uma lista não gerou canais. Mesmas pistas do app Android,
+   * para a pessoa saber se baixou a página errada do provedor.
+   */
+  function diagnosticar(texto) {
+    const t = String(texto || "").replace(/^\uFEFF/, "").trim();
+    if (!t) {
+      return "O arquivo ou link está vazio. Escolha a playlist .m3u/.m3u8 completa do provedor.";
+    }
+    const inicio = t.slice(0, 2500);
+    if (/^<!doctype\s+html|^<html[\s>]|<\?xml[^>]*>\s*<html/i.test(inicio) || /<html[\s>]/i.test(inicio)) {
+      return "O link retornou uma página da web em vez da playlist. Copie o link M3U completo do provedor ou baixe o arquivo .m3u e importe pelo botão de arquivo.";
+    }
+    if (/<MPD[\s>]/i.test(inicio)) {
+      return "O link retornou um manifesto DASH (.mpd), que não é uma lista de canais. Use o link M3U do provedor.";
+    }
+    if (/^[\[{]/.test(t)) {
+      return "O link retornou JSON em vez de uma lista M3U. Use o endereço de playlist do provedor (get.php...type=m3u_plus).";
+    }
+    if (/#EXTINF/i.test(t)) {
+      return "A lista tem canais declarados, mas nenhum endereço http(s) reproduzível foi encontrado. Verifique se o arquivo está completo e se os streams usam HTTP/HTTPS.";
+    }
+    return "O conteúdo não parece ser uma lista M3U/M3U8. Baixe o arquivo .m3u/.m3u8 completo do provedor e importe novamente.";
   }
 
   function montarCategorias(cards) {
@@ -461,7 +489,9 @@
   }
 
   window.EFTV_PLAYLIST = {
+    MAX_ITENS,
     parse,
+    diagnosticar,
     montarCatalogo,
     parseSeries,
     classificar,

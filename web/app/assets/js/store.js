@@ -227,6 +227,19 @@
       await idbDelete("atual");
       remover("catalog");
     },
+
+    // ---------- Playlist importada pelo usuário ----------
+    // Fica separada do cache do catálogo: limpar o cache da API não apaga a
+    // lista que a pessoa importou do provedor.
+    async getLocalPlaylistAsync() {
+      return idbGet("local-playlist");
+    },
+    async setLocalPlaylistAsync(dados) {
+      return idbSet("local-playlist", { ...dados, salvoEm: Date.now() });
+    },
+    async clearLocalPlaylistAsync() {
+      await idbDelete("local-playlist");
+    },
   };
 
   window.EFTV_STORE = store;

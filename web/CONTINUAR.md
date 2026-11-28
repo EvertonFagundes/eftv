@@ -9,6 +9,14 @@ Guia para retomar o trabalho em outra máquina. Leia também `README.md`.
 - **Não altere `android/`.** O web é independente.
 - Se você está em outra máquina: `git clone https://github.com/EvertonFagundes/eftv.git` e entre em `web/`.
 
+## A versão web do app Android já existe na raiz
+
+- `index.html`, `canal.html`, `assets/` e `sw.js` na raiz são uma cópia dos assets web embutidos no APK (`android/app/src/main/assets/eftv/`).
+- O APK é um **WebView** sobre esses arquivos; ele não traz os canais do provedor. Os canais vêm da playlist que o usuário importa.
+- A versão da raiz já tem importação de playlist por arquivo/link e player HLS/DASH/MPEG-TS.
+- `server.py` na raiz serve essa versão em `http://127.0.0.1:8124/` e faz proxy dos streams, contornando CORS. No GitHub Pages (sem servidor), o download da playlist e os streams dependem do CORS do provedor.
+- O PWA em `web/app/` é a versão nova, com login/assinatura. A importação local também foi portada para ele.
+
 ## Rodar em 1 minuto
 
 ```bash
@@ -26,13 +34,14 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 ## O que já está pronto
 
 - [x] Landing page PT-BR premium (hero cinematográfico, bento de experiência, pilares Ao Vivo/Filmes/Séries, catálogo filtrável, planos R$ 19,90, PWA e CTA), com animações de entrada, menu mobile e OG image atualizada.
-- [x] App shell com sidebar, views: Ao Vivo, Filmes, Séries, Categorias, Favoritos, Continuar, Recentes, Conta, Ajustes, Ajuda, Busca.
+- [x] App shell com sidebar, views: Ao Vivo, Filmes, Séries, Categorias, Favoritos, Continuar, Recentes, **Minha playlist**, Conta, Ajustes, Ajuda, Busca.
 - [x] Login/cadastro/esqueci senha/verificação de e-mail (endpoints reais).
 - [x] Catálogo real pela playlist licenciada:
   - o backend entrega o texto M3U em `GET /player/playlist-text` (autenticado);
   - `playlist.js` lê `#EXTINF`, `tvg-logo`, `group-title`, classifica canal/filme/série e agrupa episódios (`S01E02`, `1x02`, `Temporada 1 Episódio 2`);
   - o catálogo fica no **IndexedDB** (dezenas de milhares de itens) com validade de 6h;
   - falha de rede mantém o catálogo salvo; falha sem cache mostra erro (sem trocar por demo).
+- [x] **Minha playlist**: importa o arquivo `.m3u`/`.m3u8` direto no navegador (ou link, quando o CORS permite), salva no IndexedDB (`local-playlist`) e tem prioridade sobre backend/demo. A grade mostra 240 cards por vez com **Mostrar mais**.
 - [x] Aba Séries com modal de temporadas e episódios.
 - [x] Logos/capas reais nos cards, com fallback para o gradiente e o nome.
 - [x] Busca sem acento, categorias, A-Z, filtro adulto.
@@ -46,7 +55,7 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 - [x] Media Session API (controles na tela de bloqueio/central de mídia).
 - [x] Testes automatizados:
   - `node web/tools/testar-playlist.js` — parser, agrupamento e categorias;
-  - `node web/tools/testar-app.js` - Chrome headless: demo, playlist, série, player, IndexedDB, service worker, manifest, instalabilidade PWA e offline.
+  - `node web/tools/testar-app.js` - Chrome headless: demo, importação local por arquivo, persistência no IndexedDB, paginação de listas grandes, playlist autenticada, série, player, service worker, manifest, instalabilidade PWA e offline.
 - [x] Scripts: servidor local, geração de ícones, captura de prints, layout da OG.
 
 ## O que falta / validar
@@ -67,20 +76,22 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 
 ## Como funciona a importação da playlist
 
-1. O usuário faz login e o app guarda `access`/`refresh` no `localStorage`.
-2. `catalog.carregar()` verifica o cache do IndexedDB (6h).
-3. Sem cache válido, chama `GET /player/playlist-text` com `Authorization: Bearer` e `X-Device-Id`.
-4. O backend baixa a M3U do provedor (a URL nunca vai para o navegador) e devolve o texto.
-5. `playlist.js` monta os cards; `catalog.js` indexa por id e categoria.
-6. O resultado é salvo no IndexedDB. Se a rede falhar, o cache anterior é mantido.
-7. O player chama `POST /player/play` com a URL do canal (a mesma que o Android usa) antes de abrir o vídeo.
+1. Se existir uma playlist importada em **Minha playlist** (`local-playlist` no IndexedDB), ela vence e o app monta o catálogo localmente, sem backend.
+2. Sem playlist local, o usuário faz login e o app guarda `access`/`refresh` no `localStorage`.
+3. `catalog.carregar()` verifica o cache do IndexedDB (6h).
+4. Sem cache válido, chama `GET /player/playlist-text` com `Authorization: Bearer` e `X-Device-Id`.
+5. O backend baixa a M3U do provedor (a URL nunca vai para o navegador) e devolve o texto.
+6. `playlist.js` monta os cards; `catalog.js` indexa por id e categoria.
+7. O resultado é salvo no IndexedDB. Se a rede falhar, o cache anterior é mantido.
+8. O player chama `POST /player/play` com a URL do canal (a mesma que o Android usa) antes de abrir o vídeo.
 
 ### Limitações importantes
 
-- **CORS do provedor**: se o CDN do canal não liberar o domínio web, o vídeo não toca no navegador. Não há proxy no cliente web; é uma diferença em relação ao app Android.
+- **CORS do provedor**: se o CDN do canal não liberar o domínio web, o vídeo não toca no navegador. Não há proxy no cliente web; é uma diferença em relação ao app Android. Para contornar, use `python server.py` na raiz e abra `http://127.0.0.1:8124/` (a versão web do app Android faz proxy dos streams).
 - **Mixed content**: se a playlist entregar `http://` e o app estiver em `https://`, o navegador bloqueia o vídeo.
 - **Headers/User-Agent**: canais que exigem cabeçalhos específicos continuam exclusivos do app Android.
-- O texto da playlist contém credenciais do provedor; o cache do IndexedDB é local do aparelho e é apagado no logout.
+- A playlist importada contém URLs/credenciais do provedor. Ela fica **somente no IndexedDB do aparelho**, não é enviada ao backend e **não é apagada no logout** (é independente da conta). Use **Minha playlist → Remover** para apagá-la.
+- O texto da playlist do backend também fica no IndexedDB local e é apagado no logout.
 
 ## Pontos de atenção no código
 
@@ -93,10 +104,10 @@ Sem Node? Use `python -m http.server 4173` na raiz.
   - `GET /player/playlist-text` pode demorar; o cliente espera até 130 s.
 - `web/app/assets/js/playlist.js` → parser M3U, classificação e agrupamento de séries.
 - `web/app/assets/js/catalog.js` → fonte do catálogo (playlist → API → cache → demo), busca sem acento, categorias, A-Z.
-- `web/app/assets/js/store.js` → IndexedDB do catálogo (`eftv-web` / store `catalog`); localStorage para sessão, favoritos, progresso e ajustes.
+- `web/app/assets/js/store.js` → IndexedDB do catálogo (`eftv-web` / store `catalog`) e da playlist local (`local-playlist`); localStorage para sessão, favoritos, progresso e ajustes.
 - `web/app/assets/js/player.js` → token HLS via `xhrSetup`; reconexão automática; Media Session.
 - `web/app/assets/js/app.js` → router, telas, série/episódios, conta, ajustes.
-- `web/app/sw.js` → ao publicar, suba `CACHE` (`eftv-web-v3` → `v4`).
+- `web/app/sw.js` → ao publicar, suba `CACHE` (`eftv-web-v3` → `v4` → `v5` → `v6`).
 - `web/tools/gerar-icones.ps1` → se PNG ficar bloqueado (antivírus/OneDrive), rode de novo; o script usa retentativas.
 - `web/tools/capturar.js` → requer Chrome com `--remote-debugging-port=9333` e o servidor em `4173`.
 
@@ -105,7 +116,7 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 1. Commit e push da pasta `web/`.
 2. GitHub Pages já serve a raiz; acesse `/web/landing/` e `/web/app/`.
 3. Abra o app em HTTPS, instale o PWA e teste o login real.
-4. Se mudar arquivos do app, incremente o cache do service worker (atualmente `eftv-web-v5`).
+4. Se mudar arquivos do app, incremente o cache do service worker (atualmente `eftv-web-v6`).
 
 ## Comandos úteis
 

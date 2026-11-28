@@ -373,7 +373,10 @@ input { font-family: inherit; }
   background: rgba(255,77,109,0.1); border-color: rgba(255,77,109,0.28);
 }
 .catalog-alert.erro strong { color: var(--danger); }
-.catalog-alert .btn-mini { margin-left: auto; flex: 0 0 auto; }
+.catalog-alert .catalog-alert-actions {
+  margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px;
+}
+.catalog-alert .btn-mini { flex: 0 0 auto; }
 
 /* ===== Botões ===== */
 .btn {
@@ -654,3 +657,62 @@ body.modo-tv .nav-link { font-size: 1rem; padding: 12px 14px; }
 .item-badge-live,
 .item-badge-fav,
 .item-progress { z-index: 2; }
+
+/* ===== Minha playlist (importação local) ===== */
+.playlist-card {
+  background: var(--surface); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius); padding: 22px; max-width: 620px; margin-bottom: 18px;
+}
+.playlist-card h3 { font-size: 1.05rem; margin-bottom: 6px; }
+.playlist-intro { color: var(--text-muted); font-size: 0.92rem; line-height: 1.55; margin-bottom: 16px; }
+.playlist-intro code, .playlist-hint code {
+  background: rgba(255,255,255,0.08); border-radius: 4px; padding: 1px 5px;
+  font-size: 0.86em;
+}
+.playlist-or {
+  display: flex; align-items: center; gap: 10px; margin: 16px 0;
+  color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.playlist-or::before, .playlist-or::after {
+  content: ""; flex: 1; height: 1px; background: rgba(255,255,255,0.08);
+}
+.playlist-url-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.playlist-url-row input {
+  flex: 1 1 240px; min-width: 0; padding: 12px 14px;
+  border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.25); color: var(--text); font-size: 0.9rem;
+}
+.playlist-url-row input:focus { outline: none; border-color: var(--accent); }
+.playlist-url-row .btn { flex: 0 0 auto; }
+.playlist-hint { margin-top: 10px; color: var(--text-muted); font-size: 0.78rem; line-height: 1.5; }
+.playlist-status {
+  margin-top: 14px; padding: 10px 12px; border-radius: 8px;
+  background: rgba(47,155,255,0.1); border: 1px solid rgba(47,155,255,0.25);
+  font-size: 0.85rem; line-height: 1.45;
+}
+.playlist-status.erro {
+  background: rgba(255,77,109,0.1); border-color: rgba(255,77,109,0.28);
+  color: var(--danger);
+}
+.playlist-atual {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap; background: var(--surface); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius); padding: 18px 20px; max-width: 620px; margin-bottom: 18px;
+}
+.playlist-atual-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.playlist-atual-info strong { font-size: 1rem; word-break: break-word; }
+.playlist-atual-info small { color: var(--text-muted); font-size: 0.8rem; }
+.playlist-atual-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.playlist-atual-actions .btn { padding: 10px 14px; font-size: 0.86rem; }
+.playlist-empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 36px 16px; color: var(--text-muted);
+}
+.playlist-empty h3 { color: var(--text); font-size: 1.05rem; margin-bottom: 6px; }
+.playlist-empty p { max-width: 340px; font-size: 0.9rem; }
+
+/* Botão de paginação das grades grandes */
+.btn-mais-grade {
+  display: flex; width: 100%; max-width: 340px;
+  margin: 18px auto 8px; padding: 12px 16px;
+}
