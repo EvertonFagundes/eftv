@@ -40,13 +40,13 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 - [x] Player HLS/TS/DASH/MP4 com qualidade, áudio, legenda, PiP, fullscreen, retry/reconexão, voltar ao vivo.
 - [x] Sessão de player: `/player/play`, heartbeat 45 s, stop, limite de tela (`stream_limit`).
 - [x] Assinatura: `/subscriptions/current`, checkout Mercado Pago com `back_urls`, cancelar, dispositivos.
-- [x] PWA: manifest, service worker, ícones PNG, prints no manifest, instalação iOS/Android.
+- [x] PWA: manifest, service worker, ícones PNG, prints no manifest, instalação iOS/Android, abertura offline e atualização pela própria PWA (sem APK).
 - [x] `checkout.html` (retorno do Mercado Pago + deep link `eftv://open`).
 - [x] Modo demo explícito (`?demo=1`) com catálogo de exemplo e `media/demo.mp4`.
 - [x] Media Session API (controles na tela de bloqueio/central de mídia).
 - [x] Testes automatizados:
   - `node web/tools/testar-playlist.js` — parser, agrupamento e categorias;
-  - `node web/tools/testar-app.js` — Chrome headless: demo, playlist, série, player, IndexedDB, service worker, manifest e offline.
+  - `node web/tools/testar-app.js` - Chrome headless: demo, playlist, série, player, IndexedDB, service worker, manifest, instalabilidade PWA e offline.
 - [x] Scripts: servidor local, geração de ícones, captura de prints, layout da OG.
 
 ## O que falta / validar
@@ -102,7 +102,7 @@ Sem Node? Use `python -m http.server 4173` na raiz.
 1. Commit e push da pasta `web/`.
 2. GitHub Pages já serve a raiz; acesse `/web/landing/` e `/web/app/`.
 3. Abra o app em HTTPS, instale o PWA e teste o login real.
-4. Se mudar arquivos do app, incremente o cache do service worker (`eftv-web-v3` → `v4`).
+4. Se mudar arquivos do app, incremente o cache do service worker (atualmente `eftv-web-v4`).
 
 ## Comandos úteis
 
@@ -138,4 +138,5 @@ git push origin main
 
 - O modo demo é acionado por `?demo=1` e funciona mesmo com `DEMO_FALLBACK: false` graças a `DEMO_MODE: true`.
 - O service worker não registra em `file://`; use `localhost`/HTTPS.
+- A atualização do app web é feita pelo service worker. Não use `/app/version` (versão do Android/APK) para decidir atualização da PWA.
 - Prints reais ficam em `web/app/assets/img/screens/` e são usados na landing e no manifest.
