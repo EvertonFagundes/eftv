@@ -1285,21 +1285,8 @@
   }
 
   /* ------------------------------------------------------------------
-     Atualização / erros
+     Erros
   ------------------------------------------------------------------ */
-  async function verificarAtualizacao() {
-    try {
-      const dados = await api.versaoApp();
-      if (dados && Number(dados.version_code) > cfg.APP_VERSION_CODE) {
-        $("#update-banner").classList.remove("hidden");
-        $("#btn-update").onclick = () => {
-          if (dados.apk_url) window.location.href = dados.apk_url;
-          else location.reload();
-        };
-      }
-    } catch (_) {}
-  }
-
   function configurarErros() {
     window.addEventListener("error", (e) => {
       api.reportarErro({
@@ -1384,10 +1371,6 @@
     configurarSerie();
     configurarErros();
 
-    $("#btn-update-close").addEventListener("click", () => {
-      $("#update-banner").classList.add("hidden");
-    });
-
     $("#btn-atualizar-catalogo").addEventListener("click", async () => {
       mostrarToast("Atualizando catálogo…");
       await carregarCatalogo(true);
@@ -1425,9 +1408,6 @@
         history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
       } catch (_) {}
     }
-
-    // Verificações em segundo plano
-    verificarAtualizacao();
   }
 
   init();

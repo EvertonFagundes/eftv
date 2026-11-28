@@ -293,10 +293,6 @@
     },
 
     // ---------- App ----------
-    async versaoApp() {
-      return request("/app/version", { timeout: 6000 });
-    },
-
     async reportarErro(dados) {
       try {
         await request("/app/crashes", {

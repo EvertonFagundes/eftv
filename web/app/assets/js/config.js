@@ -7,9 +7,8 @@ window.EFTV_CONFIG = {
   // Backend FastAPI (Render). Troque para https://api.eftv.com.br em produção.
   API_URL: localStorage.getItem("eftv_api_url") || "https://eftv.onrender.com",
 
-  // Versão exibida no app (comparada com /app/version para atualização)
-  APP_VERSION: "1.1.0",
-  APP_VERSION_CODE: 2,
+  // Versão exibida no app. Atualizações do PWA são tratadas pelo service worker.
+  APP_VERSION: "1.1.1",
 
   // Quando true, se a API não responder, o app usa dados de demonstração.
   // Em produção fica false: falha de rede mantém o catálogo salvo e mostra

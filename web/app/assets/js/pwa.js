@@ -9,7 +9,12 @@
 
   const botoes = [...document.querySelectorAll("[data-install-app]")];
   const dialogo = document.getElementById("install-dialog");
+  const bannerAtualizacao = document.getElementById("update-banner");
+  const btnAtualizar = document.getElementById("btn-update");
+  const btnFecharAtualizacao = document.getElementById("btn-update-close");
   let promptDiferido = null;
+  let atualizacaoDisponivel = null;
+  let recarregarAoAtivar = false;
 
   function estaInstalado() {
     return (
@@ -44,6 +49,16 @@
     } else {
       dialogo.hidden = true;
     }
+  }
+
+  function mostrarAtualizacao(worker) {
+    if (!bannerAtualizacao || !worker) return;
+    atualizacaoDisponivel = worker;
+    bannerAtualizacao.classList.remove("hidden");
+  }
+
+  function esconderAtualizacao() {
+    if (bannerAtualizacao) bannerAtualizacao.classList.add("hidden");
   }
 
   window.addEventListener("beforeinstallprompt", (evento) => {
@@ -97,6 +112,21 @@
     setTimeout(mostrarBotoes, 1000);
   }
 
+  if (btnFecharAtualizacao) {
+    btnFecharAtualizacao.addEventListener("click", esconderAtualizacao);
+  }
+
+  if (btnAtualizar) {
+    btnAtualizar.addEventListener("click", () => {
+      if (atualizacaoDisponivel) {
+        recarregarAoAtivar = true;
+        atualizacaoDisponivel.postMessage("SKIP_WAITING");
+      } else {
+        location.reload();
+      }
+    });
+  }
+
   // Registra o service worker (só em https, localhost ou 127.0.0.1)
   if (
     "serviceWorker" in navigator &&
@@ -104,8 +134,27 @@
      location.hostname === "localhost" ||
      location.hostname === "127.0.0.1")
   ) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (recarregarAoAtivar) location.reload();
+    });
+
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js").catch((erro) => {
+      navigator.serviceWorker.register("sw.js").then((registro) => {
+        // Já existe uma versão nova instalada esperando para assumir.
+        if (registro.waiting && navigator.serviceWorker.controller) {
+          mostrarAtualizacao(registro.waiting);
+        }
+
+        registro.addEventListener("updatefound", () => {
+          const novo = registro.installing;
+          if (!novo) return;
+          novo.addEventListener("statechange", () => {
+            if (novo.state === "installed" && navigator.serviceWorker.controller) {
+              mostrarAtualizacao(novo);
+            }
+          });
+        });
+      }).catch((erro) => {
         console.warn("EFTV: não foi possível registrar o service worker.", erro);
       });
     });

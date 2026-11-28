@@ -192,12 +192,16 @@ function verificar(condicao, mensagem) {
         pronto: document.readyState,
         cards: document.querySelectorAll('#grid-ao-vivo .item-card').length,
         demo: !!(window.EFTV_CATALOG && window.EFTV_CATALOG.demo),
-        canais: window.EFTV_CATALOG ? window.EFTV_CATALOG.canais.length : -1
+        canais: window.EFTV_CATALOG ? window.EFTV_CATALOG.canais.length : -1,
+        bannerAtualizacao: !document.querySelector('#update-banner').classList.contains('hidden'),
+        versao: document.querySelector('#app-version').textContent
       }))()`
     );
     verificar(inicial.pronto === "complete", "página carregou");
     verificar(inicial.cards > 0, "modo demonstração renderizou cards");
     verificar(inicial.demo === true, "catálogo está em modo demonstração");
+    verificar(inicial.bannerAtualizacao === false, "PWA não oferece APK como atualização");
+    verificar(inicial.versao.includes("1.1.1"), "versão web exibida");
 
     const injetado = await avaliar(
       cdp,
@@ -310,6 +314,11 @@ function verificar(condicao, mensagem) {
 
     const manifest = await cdp.enviar("Page.getAppManifest", {}, sessionId);
     verificar(!manifest.errors || manifest.errors.length === 0, "manifest PWA sem erros");
+
+    const instalabilidade = await cdp.enviar("Page.getInstallabilityErrors", {}, sessionId);
+    const errosInstalacao = (instalabilidade.installabilityErrors || []).map((e) => e.errorId);
+    verificar(errosInstalacao.length === 0, "PWA instalável (sem erros de instalabilidade)");
+    if (errosInstalacao.length) console.error("Instalabilidade:", errosInstalacao.join(", "));
 
     // Offline: o service worker deve servir a casca do app.
     await cdp.enviar("Network.enable", {}, sessionId);

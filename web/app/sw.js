@@ -6,7 +6,7 @@
   - Vídeos, áudio, range requests e API: passam direto, sem cache.
   ======================================================================*/
 
-const CACHE = "eftv-web-v3";
+const CACHE = "eftv-web-v4";
 
 const CORE = [
   "./",
@@ -37,7 +37,7 @@ self.addEventListener("install", (event) => {
       return cache.addAll(CORE).catch((err) => {
         console.warn("EFTV SW: falha ao cachear alguns itens iniciais", err);
       });
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
