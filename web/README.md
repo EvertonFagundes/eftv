@@ -2,7 +2,7 @@
 
 Versão web do EFTV (canais ao vivo, filmes e séries) com **landing page** de vendas e **app instalável (PWA)**. O app Android em `android/` não foi alterado.
 
-> **Status:** interface e fluxos completos. O catálogo real é provisionado **automaticamente**, como no Android: o app baixa a playlist licenciada por `GET /player/playlist` (URL do backend) ou, se o navegador bloquear, por `GET /player/playlist-text`. Em build privado, `PLAYLIST_URL` em `config.js` pode trazer a URL embutida. Não há tela de importação para o assinante. O modo demonstração aparece com `?demo=1` ou quando não há sessão. Os canais **não são embutidos** no repositório. Falta validar login/player/checkout com uma conta real em produção e testar a M3U real de ~84 MB (ver `CONTINUAR.md`).
+> **Status:** interface e fluxos completos. O catálogo real é provisionado **automaticamente**, como no Android: o app baixa a playlist licenciada por `GET /player/playlist` (URL do backend) ou, se o navegador bloquear, por `GET /player/playlist-text`. Em build privado, `PLAYLIST_URL` em `config.js` pode trazer a URL embutida. Não há tela de importação para o assinante. No modo **self-hosted**, o app detecta o `server.py` (mesma origem ou `PROXY_URL`) e usa o catálogo magro + proxy com headers/DoH. O modo demonstração aparece com `?demo=1` ou quando não há sessão nem servidor local. Os canais **não são embutidos** no repositório. Falta validar login/player/checkout com uma conta real em produção e testar a M3U real de ~84 MB (ver `CONTINUAR.md`).
 
 ---
 
@@ -81,8 +81,10 @@ Edite `web/app/assets/js/config.js`:
 ```js
 window.EFTV_CONFIG = {
   API_URL: "https://eftv.onrender.com", // troque por https://api.eftv.com.br em produção
-  APP_VERSION: "1.1.4",
+  APP_VERSION: "1.2.0",
   PLAYLIST_URL: "",     // opcional: só em build privado; nunca comite credenciais
+  PROXY_URL: "",        // opcional: server.py local ou proxy HTTPS próprio
+  TRIAL_NUDGE_DAYS: 3,  // aviso de fim de teste nos últimos N dias
   DEMO_FALLBACK: false, // não troca por demo quando a rede falha
   DEMO_MODE: true,      // mantém ?demo=1 explícito para landing/testes
   HEARTBEAT_MS: 45000,
@@ -143,24 +145,26 @@ Implementado em `api.js`, alinhado ao backend em `backend/app/routes/`:
 - Catálogo real pela playlist licenciada, provisionado automaticamente:
   - `PLAYLIST_URL` embutida (build privado) ou `GET /player/playlist` (mesma rota do Android) e download direto no navegador;
   - se o navegador bloquear por CORS/hotlink, `GET /player/playlist-text` entrega a M3U autenticada;
-  - `playlist.js` lê `#EXTINF`, `tvg-logo`, `group-title`, classifica canal/filme/série e agrupa episódios (`S01E02`, `1x02`, `Temporada 1 Episódio 2`);
-  - o catálogo fica no **IndexedDB** (dezenas de milhares de itens) com validade de 6 h; falha de rede mantém o cache anterior;
-  - se a playlist não estiver disponível, o app tenta `/channels` (paginado).
-- Sem tela de importação: o assinante só faz login. A grade mostra 240 cards por vez com **Mostrar mais**; o parser aceita até 50.000 itens e tem diagnóstico para HTML/JSON/DASH.
+  - `playlist.js` lê `#EXTINF`, `tvg-logo`, `group-title`, `#EXTVLCOPT`/`#EXTHTTP`/`#KODIPROP`, headers embutidos na URL, classifica canal/filme/série e agrupa episódios (`S01E02`, `1x02`, `Temporada 1 Episódio 2`);
+  - o catálogo fica no **IndexedDB** (dezenas de milhares de itens) com validade de 6 h e cache versão 3; falha de rede mantém o cache anterior;
+  - se a playlist não estiver disponível, o app tenta o catálogo local do `server.py` e depois `/channels` (paginado).
+- Sem tela de importação: o assinante só faz login. A grade mostra 240 cards por vez com **Mostrar mais**; o parser aceita até 250.000 itens e tem diagnóstico para HTML/JSON/DASH.
 - Aba **Séries** com modal de temporadas e episódios, como no Android.
 - Logos/capas reais nos cards, com fallback para o gradiente e o nome.
-- Catálogo com busca **sem acento**, categorias com contagem, filtro de conteúdo adulto.
+- Catálogo com busca **sem acento**, busca de categorias, categorias com contagem e filtro de conteúdo adulto.
 - Índice **A-Z** nos canais ao vivo.
-- Favoritos, recentes e **continuar assistindo** (progresso salvo a cada ~1%).
+- Favoritos, recentes e **continuar assistindo** (progresso salvo a cada ~1% + carrossel na home).
+- **Modo self-hosted**: detecta o `server.py` na mesma origem ou em `PROXY_URL`, carrega o catálogo magro (`/api/catalogo.json`), resolve fontes em `/api/canal?slug=` e usa o proxy com headers/DoH/Range.
 - Player **HLS (hls.js), MPEG-TS (mpegts.js), DASH (dash.js) e MP4**, com:
   - qualidade, faixa de áudio e legenda;
   - voltar 10 s / avançar 10 s, mudo, tela cheia, Picture-in-Picture;
-  - “Voltar ao vivo”, reconexão automática e retry;
-  - heartbeat de sessão e encerramento no fechamento.
+  - “Voltar ao vivo”, reconexão com backoff, troca de fonte (proxy↔direto) e fallback HLS derivado de `.ts`;
+  - headers por canal, Wake Lock, Media Session e heartbeat de sessão.
 - Limite de **1 tela simultânea** (tratamento de `403 stream_limit` e `409 session_closed`).
 - Limite de **2 dispositivos**, com lista e desvincular todos.
 - Assinatura: status, validade, dias restantes, checkout Mercado Pago, cancelamento e “restaurar compras”.
-- Ajustes: conteúdo adulto, modo TV (foco ampliado), economia de dados, autoplay, limpar cache.
+- Aviso de fim do teste grátis nos últimos `TRIAL_NUDGE_DAYS` (uma vez por dia).
+- Ajustes: conteúdo adulto, modo TV, economia de dados, autoplay, proxy local, passar streams pelo proxy, overscan de TV e limpar cache.
 - Instalação PWA (Android/Chrome/Edge e instruções para iPhone/Safari).
 - Deep link `?canal=slug` / `?id=UUID` e retorno de pagamento em `checkout.html`.
 - Login por código para TV (quando o backend expõe `/auth/device-code`).
@@ -169,7 +173,7 @@ Implementado em `api.js`, alinhado ao backend em `backend/app/routes/`:
 ### Diferenças inevitáveis em relação ao Android
 
 - **Downloads offline de vídeo** não são possíveis no navegador (o PWA guarda apenas a casca/interface).
-- **Canais que exigem headers/User-Agent específicos ou proxy local** só funcionam no app Android, por causa de CORS.
+- **Canais que exigem headers/User-Agent específicos ou proxy local** funcionam pelo modo self-hosted (`server.py`) ou por um proxy HTTPS próprio; no modo direto dependem do CORS e dos headers que o navegador/hls.js consegue enviar.
 - **DRM Widevine** depende do navegador/dispositivo; o app não implementa licenciamento próprio.
 - **Reprodução em segundo plano** é limitada pelo sistema (Media Session/PiP ajudam, mas não é igual ao serviço nativo).
 - **Android TV / Fire TV** continuam exclusivos do app nativo.
@@ -184,7 +188,7 @@ Implementado em `api.js`, alinhado ao backend em `backend/app/routes/`:
   - ícones/imagens: cache primeiro;
   - API, vídeo, áudio e range requests: **sem cache**.
 - Instalação: abra o app em HTTPS/localhost e use “Instalar app” (Android/desktop) ou Compartilhar → “Adicionar à Tela de Início” (iOS).
-- Ao publicar uma nova versão, incremente `CACHE` em `sw.js` (`eftv-web-v7` atualmente; histórico `v3` → `v4` → `v5` → `v6` → `v7`) para limpar caches antigos. `playlist.js` faz parte do `CORE` do service worker.
+- Ao publicar uma nova versão, incremente `CACHE` em `sw.js` (`eftv-web-v8` atualmente; histórico `v3` → `v4` → `v5` → `v6` → `v7` → `v8`) para limpar caches antigos. `playlist.js`, `catalog.js` e `source.js` fazem parte do `CORE` do service worker.
 
 ---
 
@@ -252,7 +256,7 @@ O app usa `API_URL` em `config.js`. Garanta CORS liberado para o domínio da lan
 
 ## 9. Limitações e cuidados
 
-- **CORS:** se o provedor de streams não liberar o domínio web, o canal não toca no navegador (toque no app Android). Não há proxy no cliente web. Contorno local: `python server.py` na raiz e abra `http://127.0.0.1:8124/` (a versão web do app Android faz proxy dos streams).
+- **CORS:** sem proxy, se o provedor de streams não liberar o domínio web, o canal não toca no navegador. O modo self-hosted (`python server.py` e abrir `http://127.0.0.1:8124/web/app/`) resolve CORS, headers, DoH e streams HTTP; em página HTTPS, um proxy `http://127.0.0.1` é bloqueado por mixed content, então use um proxy HTTPS.
 - **Playlist provisionada:** a URL licenciada contém credenciais do provedor e não é logada. Quando vem de `/player/playlist`, fica visível apenas na rede/memória do cliente autenticado (como no Android); o fallback `/playlist-text` evita expor a URL ao navegador. O catálogo (com as URLs dos streams) fica no IndexedDB local e é apagado no logout.
 - **Autoplay:** navegadores bloqueiam áudio automático; o usuário pode precisar tocar em ▶.
 - **iOS:** instalação é manual (Compartilhar → Adicionar à Tela de Início) e HLS usa o player nativo.

@@ -189,6 +189,8 @@
         modoTV: false,
         economizarDados: false,
         autoplay: true,
+        proxyStreams: true,
+        overscan: 0,
         ...ler("settings", {}),
       };
     },

@@ -62,11 +62,12 @@ Não existe tela de importação de M3U no PWA: o assinante só faz login.
 - catalog._carregarPlaylistUrl() baixa e parseia a M3U; a URL e o texto não
   são logados.
 - catalog._buscar() tenta URL embutida → URL do backend → texto do backend →
-  /channels.
-- O catálogo fica no IndexedDB (eftv-web / store catalog) por 6 h; falha de
-  rede mantém a cópia salva e o app abre offline.
-- playlist.js limita a **50.000 itens** (MAX_ITENS) e diagnosticar()
-  explica HTML/JSON/DASH/lista vazia.
+  catálogo local do server.py → /channels.
+- O catálogo fica no IndexedDB (eftv-web / store catalog) por 6 h, com cache
+  versão 3; falha de rede mantém a cópia salva e o app abre offline.
+- playlist.js limita a **250.000 itens** (MAX_ITENS), lê `#EXTVLCOPT`/
+  `#EXTHTTP`/`#KODIPROP` e headers na URL; diagnosticar() explica
+  HTML/JSON/DASH/lista vazia.
 - A grade mostra **240 cards por vez** com **Mostrar mais** (LIMITE_GRADE).
 - Os chips usam as categorias reais da playlist.
 
@@ -142,63 +143,68 @@ pública, deixe vazio e use o backend.
    - se `PLAYLIST_URL` estiver configurada em `config.js`, baixa essa URL;
    - senão chama `GET /player/playlist` e baixa a URL licenciada direto no navegador;
    - se o navegador bloquear (CORS/hotlink), chama `GET /player/playlist-text`;
-   - se ainda falhar, tenta `/channels` (paginado).
+   - se ainda falhar, tenta o catálogo magro do `server.py` local (`/api/catalogo.json`);
+   - por último, tenta `/channels` (paginado).
 4. `playlist.js` monta os cards; `catalog.js` indexa por id e categoria.
-5. O resultado é salvo no IndexedDB. Se a rede falhar, o cache anterior é mantido.
+5. O resultado é salvo no IndexedDB (cache versão 3). Se a rede falhar, o cache anterior é mantido.
 6. O player chama `POST /player/play` com a URL do canal (a mesma que o Android usa) antes de abrir o vídeo.
+7. No modo self-hosted, `source.js` detecta o `server.py`, baixa o catálogo sem URLs e resolve a fonte em `/api/canal?slug=`; o player tenta proxy/direto e HLS derivado de `.ts`, com backoff exponencial.
 
 ### Limitações importantes
 
-- **CORS do provedor**: se o CDN do canal não liberar o domínio web, o vídeo não toca no navegador. Não há proxy no cliente web; é uma diferença em relação ao app Android. Para contornar, use `python server.py` na raiz e abra `http://127.0.0.1:8124/` (a versão web do app Android faz proxy dos streams).
-- **Mixed content**: se a playlist entregar `http://` e o app estiver em `https://`, o navegador bloqueia o vídeo.
-- **Headers/User-Agent**: canais que exigem cabeçalhos específicos continuam exclusivos do app Android.
+- **CORS do provedor**: sem proxy, se o CDN do canal não liberar o domínio web, o vídeo não toca no navegador. O modo self-hosted (`server.py`) contorna CORS/headers/DoH; no GitHub Pages (HTTPS) um proxy `http://127.0.0.1:8124` é bloqueado por mixed content, então o proxy precisa ser HTTPS ou a página precisa ser servida pelo próprio `server.py`.
+- **Mixed content**: se a playlist entregar `http://` e o app estiver em `https://`, o navegador bloqueia o vídeo sem um proxy HTTPS.
+- **Headers/User-Agent**: o parser lê `#EXTVLCOPT`, `#EXTHTTP`, `#KODIPROP` e `URL|User-Agent=...`; no modo direto o hls.js aplica os headers, mas MP4/TS nativo depende do navegador. O proxy local resolve os casos restantes.
 - A URL licenciada contém credenciais do provedor e não é logada. Quando vem de `/player/playlist`, fica visível apenas na rede/memória do cliente autenticado (como no Android); o fallback `/playlist-text` evita expor a URL ao navegador.
 - O catálogo (com as URLs dos streams) fica no IndexedDB local e é apagado no logout.
 
 ## Pontos de atenção no código
 
-- `web/app/assets/js/config.js` → `API_URL`, `PLAYLIST_URL` (opcional, build privado), `DEMO_FALLBACK`, `DEMO_MODE`.
+- `web/app/assets/js/config.js` → `API_URL`, `PLAYLIST_URL` (opcional, build privado), `PROXY_URL` (opcional), `TRIAL_NUDGE_DAYS`, `DEMO_FALLBACK`, `DEMO_MODE`.
+- `web/app/assets/js/source.js` → detecção do `server.py` (mesma origem ou URL configurada), URL direta vs proxy, catálogo local magro (`/api/catalogo.json` + `/api/canal?slug=`) e candidatos de fonte com fallback HLS de `.ts`.
 - `web/app/assets/js/api.js` → contrato do backend. Rotas confirmadas em `backend/app/routes/`.
   - `POST /player/play` recebe `{ channel_url, channel_name }` (não `channel_id`).
   - `GET /subscriptions/current` (não `/subscriptions/me`).
   - `POST /subscriptions/{id}/cancel` (não `/subscriptions/cancel`).
   - `/channels` pagina no máximo 100; `canaisTodas()` busca todas as páginas (fallback quando a playlist não está disponível).
   - `GET /player/playlist` entrega a URL licenciada (mesma rota do Android); `GET /player/playlist-text` pode demorar e o cliente espera até 130 s.
-- `web/app/assets/js/playlist.js` → parser M3U, `MAX_ITENS` (50.000), `diagnosticar()` e classificação/agrupamento de séries.
-- `web/app/assets/js/catalog.js` → provisionamento automático (URL embutida → `/player/playlist` → `/playlist-text` → `/channels`), cache, busca sem acento, categorias, A-Z.
-- `web/app/assets/js/store.js` → IndexedDB do catálogo (`eftv-web` / store `catalog`); localStorage para sessão, favoritos, progresso e ajustes.
-- `web/app/assets/js/player.js` → token HLS via `xhrSetup`; reconexão automática; Media Session.
-- `web/app/assets/js/app.js` → router, telas, `LIMITE_GRADE` (240), conta, ajustes.
-- `web/app/sw.js` → ao publicar, suba `CACHE` (atual `eftv-web-v7`; histórico `v3` → `v4` → `v5` → `v6` → `v7`).
+- `web/app/assets/js/playlist.js` → parser M3U incremental, `MAX_ITENS` (250.000), `#EXTVLCOPT`/`#EXTHTTP`/`#KODIPROP`, headers embutidos na URL, `diagnosticar()` e classificação/agrupamento de séries.
+- `web/app/assets/js/catalog.js` → provisionamento automático (URL embutida → `/player/playlist` → `/playlist-text` → catálogo local → `/channels`), cache versão 3, busca sem acento, categorias (incluindo “Abertos”), A-Z e fontes locais sob demanda.
+- `web/app/assets/js/store.js` → IndexedDB do catálogo (`eftv-web` / store `catalog`); localStorage para sessão, favoritos, progresso, ajustes (`proxyStreams`, `overscan`) e aviso de teste.
+- `web/app/assets/js/player.js` → headers por canal, token HLS via `xhrSetup`, retry com backoff, troca direto↔proxy e HLS↔TS, Wake Lock, Media Session e overscan.
+- `web/app/assets/js/app.js` → router, telas, `LIMITE_GRADE` (240), busca de categorias, carrossel “Continuar assistindo”, aviso de fim de teste, conta, ajustes de proxy/overscan.
+- `web/app/sw.js` → ao publicar, suba `CACHE` (atual `eftv-web-v8`; histórico `v3` → `v4` → `v5` → `v6` → `v7` → `v8`).
 - `web/tools/gerar-icones.ps1` → se PNG ficar bloqueado (antivírus/OneDrive), rode de novo; o script usa retentativas.
 - `web/tools/capturar.js` → requer Chrome com `--remote-debugging-port=9333` e o servidor em `4173`.
 
 ## Fluxo de deploy (GitHub Pages)
 
 1. Rode os testes (`testar-playlist.js` e `testar-app.js`).
-2. Se mudar arquivos do app, suba `APP_VERSION` em `config.js`/`index.html` e `CACHE` em `sw.js` (atual `eftv-web-v7`).
-3. Commit e push da pasta `web/`.
+2. Se mudar arquivos do app, suba `APP_VERSION` em `config.js`/`index.html` e `CACHE` em `sw.js` (atual `eftv-web-v8`).
+3. Commit e push da pasta `web/` e de `docs/APP-WEB.md`.
 4. GitHub Pages já serve a raiz; aguarde a publicação e confira `/web/landing/` e `/web/app/`.
 5. Abra o app em HTTPS e valide: versão exibida, cache do SW, login, provisionamento automático da playlist, recarregar e offline.
 
-## Última validação (27/11/2026)
+## Última validação (28/11/2026)
 
-- `node web/tools/testar-playlist.js`: 6 testes ok.
-- `node web/tools/testar-app.js`: todos ok, incluindo provisionamento automático pela URL do backend, fallback pelo texto do backend, paginação 240/300, service worker, manifest, instalabilidade e offline.
+- `node web/tools/testar-playlist.js`: 9 testes ok, incluindo `#EXTVLCOPT`, `#KODIPROP`, headers na URL e leitura em streaming.
+- `node web/tools/testar-app.js`: todos ok, incluindo provisionamento automático pela URL do backend, fallback pelo texto do backend, catálogo local via proxy, paginação 240/300, service worker, manifest, instalabilidade e offline.
 - Teste sintético de 50.000 itens (6,4 MB) no parser: ~7 s e 240 cards por vez.
-- Live <https://evertonfagundes.github.io/eftv/web/app/>: versão **1.1.4**, SW **`eftv-web-v7`**; o carregamento real depende do backend/cache ou de `PLAYLIST_URL` em build privado.
+- Live <https://evertonfagundes.github.io/eftv/web/app/>: versão **1.2.0**, SW **`eftv-web-v8`**; o carregamento real depende do backend/cache, de `PLAYLIST_URL` em build privado ou do modo self-hosted com `server.py`.
 - A URL real do provedor (~84 MB) ainda não foi testada; ver pendências acima.
 
 ## Comandos úteis
 
 ```bash
 # validar sintaxe de todos os JS
+node --check web/app/assets/js/config.js
+node --check web/app/assets/js/store.js
+node --check web/app/assets/js/api.js
+node --check web/app/assets/js/source.js
 node --check web/app/assets/js/playlist.js
 node --check web/app/assets/js/app.js
-node --check web/app/assets/js/api.js
 node --check web/app/assets/js/catalog.js
 node --check web/app/assets/js/player.js
-node --check web/app/assets/js/store.js
 
 # validar manifest
 node -e "JSON.parse(require('fs').readFileSync('web/app/manifest.webmanifest','utf8')); console.log('ok')"

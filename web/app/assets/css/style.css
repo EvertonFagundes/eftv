@@ -660,3 +660,121 @@ body.modo-tv .nav-link { font-size: 1rem; padding: 12px 14px; }
   display: flex; width: 100%; max-width: 340px;
   margin: 18px auto 8px; padding: 12px 16px;
 }
+
+
+/* ============================================================
+   1.2.0 — Proxy local, overscan, continuar assistindo e trial
+   ============================================================ */
+
+/* Overscan de TV: margem de segurança só na interface. O player
+   em tela cheia continua ocupando a tela inteira. */
+:root { --overscan-px: 0px; }
+.app-header { top: var(--overscan-px); left: var(--overscan-px); right: var(--overscan-px); }
+.app-main {
+  top: calc(var(--header-height) + var(--overscan-px));
+  padding-left: calc(22px + var(--overscan-px));
+  padding-right: calc(22px + var(--overscan-px));
+  padding-bottom: calc(90px + var(--overscan-px));
+}
+.sidebar { top: var(--overscan-px); height: calc(100vh - var(--overscan-px)); }
+@media (min-width: 1024px) {
+  .app-header { left: calc(var(--sidebar-width) + var(--overscan-px)); }
+  .app-main {
+    padding-left: calc(30px + var(--overscan-px));
+    padding-right: calc(30px + var(--overscan-px));
+  }
+}
+@media (max-width: 760px) {
+  .app-main {
+    padding-left: calc(14px + var(--overscan-px));
+    padding-right: calc(14px + var(--overscan-px));
+  }
+}
+
+/* Aviso de fim de teste */
+.trial-banner {
+  position: fixed;
+  top: calc(var(--header-height) + var(--overscan-px) + 8px);
+  left: 12px; right: 12px; z-index: 95;
+  display: flex; align-items: center; gap: 10px;
+  max-width: 760px; margin: 0 auto;
+  padding: 10px 14px; border-radius: 12px;
+  background: linear-gradient(90deg, rgba(255,176,32,0.96), rgba(255,120,40,0.96));
+  color: #241400; font-size: 0.86rem; font-weight: 700;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+}
+.trial-banner span { flex: 1; }
+.trial-banner .btn-mini { background: rgba(0,0,0,0.18); color: #241400; }
+
+/* Continuar assistindo (trilho horizontal na home) */
+.continue-section { margin-bottom: 20px; }
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px;
+}
+.section-head h3 { font-size: 1rem; font-weight: 700; }
+.continue-rail {
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+.continue-card {
+  flex: 0 0 190px; display: flex; flex-direction: column; gap: 7px;
+  text-align: left; padding: 0; background: transparent; color: var(--text);
+  scroll-snap-align: start; border-radius: 10px;
+}
+.continue-thumb {
+  position: relative; display: block; aspect-ratio: 16 / 9;
+  border-radius: 10px; overflow: hidden;
+  background:
+    radial-gradient(120% 100% at 20% 0%, hsla(var(--hue, 210), 70%, 40%, 0.55), transparent 60%),
+    linear-gradient(135deg, hsl(var(--hue, 210), 45%, 18%), #0a1220);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.continue-thumb img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; padding: 14px; background: rgba(0,0,0,0.18);
+}
+.continue-play {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 1.5rem; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+  z-index: 2;
+}
+.continue-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
+  background: rgba(0,0,0,0.55); z-index: 2;
+}
+.continue-progress i { display: block; height: 100%; background: var(--accent); }
+.continue-info { display: flex; flex-direction: column; min-width: 0; }
+.continue-nome {
+  font-size: 0.82rem; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.continue-meta { font-size: 0.72rem; color: var(--text-muted); }
+
+/* Busca de categorias */
+.input-busca-categoria {
+  width: min(260px, 46vw); padding: 8px 12px;
+  border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06); color: var(--text);
+  font-size: 0.86rem; outline: none;
+}
+.input-busca-categoria:focus { border-color: var(--accent); }
+
+/* Proxy e overscan nos ajustes */
+.settings-field {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.settings-field > label { font-size: 0.92rem; font-weight: 600; }
+.settings-field small { font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; }
+.settings-inline { display: flex; gap: 8px; align-items: stretch; }
+.settings-inline input {
+  flex: 1; min-width: 0; padding: 9px 11px; border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06);
+  color: var(--text); font-size: 0.86rem; outline: none;
+}
+.settings-inline input:focus { border-color: var(--accent); }
+.settings-inline .btn { padding: 8px 14px; flex: 0 0 auto; }
+.settings-field input[type="range"] {
+  width: 100%; accent-color: var(--accent);
+}

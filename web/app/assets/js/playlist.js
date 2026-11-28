@@ -3,6 +3,10 @@
    Importa a playlist licenciada pelo backend autenticado
    (/player/playlist-text), classifica canais/filmes/séries e
    agrupa episódios, como o app Android.
+
+   O parser aceita leitura incremental (response.body) para listas
+   grandes, #EXTVLCOPT/#EXTHTTP e headers no estilo Kodi
+   (http://...|User-Agent=...&Referer=...).
    ============================================================ */
 
 (() => {
@@ -10,8 +14,12 @@
 
   const ATTR_REGEX = /([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"/g;
   const INVALID_LOGOS = new Set(["xx", "xxx", "tvg-logo=", "null", "none", "-"]);
-  // Mesmo teto do app Android: evita travar o navegador com listas gigantes.
-  const MAX_ITENS = 50000;
+  // O Android importa centenas de milhares de itens em streaming. O navegador
+  // não tem SQLite, mas 250 mil itens ainda cabem no IndexedDB da maioria dos
+  // aparelhos; a grade continua renderizando em lotes de 240.
+  const MAX_ITENS = 250000;
+  const MAX_LINHAS = 4000000;
+  const AMOSTRA_MAX = 8192;
 
   const LIVE_STRONG = ["canal", "canais", "ao vivo", "live", "24h", "24 horas", "ppv"];
   const SERIES_GROUP = [
@@ -43,10 +51,31 @@
     "erotic", "sensual", "sexy", "sexo",
   ];
 
+  // Mesmas regras do FreeTv.kt (Android): nome da emissora + exclusões dos
+  // canais pagos da mesma família. A categoria virtual também aceita itens
+  // cujo grupo já contenha "aberto".
   const ABERTOS = [
-    "globo", "record", "sbt", "band", "redetv", "cultura", "tv brasil",
-    "gazeta", "aparecida", "cancao nova", "rede vida", "tv senado",
-    "tv camara", "tv justica", "futura", "tv escola",
+    { nome: "globo", exclui: ["globonews", "globoplay", "premiere", "telecine", "canal globo"] },
+    { nome: "record", exclui: [] },
+    { nome: "sbt", exclui: [] },
+    { nome: "band", exclui: ["bandsports", "band sports", "bandnews", "band news", "band play"] },
+    { nome: "redetv", exclui: [] },
+    { nome: "rede tv", exclui: [] },
+    { nome: "cultura", exclui: [] },
+    { nome: "tv brasil", exclui: [] },
+    { nome: "gazeta", exclui: [] },
+    { nome: "aparecida", exclui: [] },
+    { nome: "cancaonova", exclui: [] },
+    { nome: "canção nova", exclui: [] },
+    { nome: "rede vida", exclui: [] },
+    { nome: "loading", exclui: [] },
+    { nome: "ideal tv", exclui: [] },
+    { nome: "futura", exclui: [] },
+    { nome: "tv senado", exclui: [] },
+    { nome: "tv camara", exclui: [] },
+    { nome: "tv justica", exclui: [] },
+    { nome: "tv assembleia", exclui: [] },
+    { nome: "record news", exclui: [] },
   ];
 
   const CATEGORIAS_INFO = [
@@ -153,10 +182,10 @@
     return valor;
   }
 
-  function streamType(url) {
+  function streamType(url, kodiType) {
     const u = String(url || "").toLowerCase();
-    if (u.includes(".mpd")) return "dash";
-    if (u.includes(".ts")) return "ts";
+    if (kodiType === "dash" || u.includes(".mpd")) return "dash";
+    if (kodiType === "ts" || u.includes(".ts")) return "ts";
     if (/\.(mp4|mkv|avi|mov|webm|m4v)(?:$|\?)/.test(u)) return "mp4";
     return "hls";
   }
@@ -170,9 +199,11 @@
     const n = normalizar(name);
     const u = String(url || "").toLowerCase();
 
-    if (LIVE_STRONG.some((t) => g.includes(t))) return "canal";
+    // Grupos específicos vêm antes de "canais": o provedor costuma usar
+    // "Canais | Filmes" e "Canais | Séries".
     if (SERIES_GROUP.some((t) => g.includes(t))) return "serie";
     if (MOVIE_GROUP.some((t) => g.includes(t))) return "filme";
+    if (LIVE_STRONG.some((t) => g.includes(t))) return "canal";
 
     if (SERIES_NAME.test(n)) return "serie";
     if (VOD_EXTENSION.test(u)) return "filme";
@@ -189,9 +220,14 @@
     return ADULTO.some((t) => texto.includes(normalizar(t)));
   }
 
-  function ehAberto(nome) {
+  function ehAberto(nome, grupo) {
     const n = normalizar(nome);
-    return ABERTOS.some((t) => n.includes(normalizar(t)));
+    for (const regra of ABERTOS) {
+      if (!n.includes(normalizar(regra.nome))) continue;
+      if (regra.exclui.some((termo) => n.includes(normalizar(termo)))) continue;
+      return true;
+    }
+    return normalizar(grupo).includes("aberto");
   }
 
   function categoriaDoGrupo(group, tipo) {
@@ -292,18 +328,81 @@
     return null;
   }
 
+  function chaveHeader(nome) {
+    const n = normalizar(nome).replace(/\s+/g, "-");
+    if (n === "user-agent" || n === "useragent") return "User-Agent";
+    if (n === "referer" || n === "referrer") return "Referer";
+    if (n === "origin") return "Origin";
+    if (n === "cookie") return "Cookie";
+    if (n === "authorization") return "Authorization";
+    return String(nome || "").trim();
+  }
+
+  function adicionarHeaders(destino, texto) {
+    if (!texto) return;
+    String(texto).split(/[&;]/).forEach((par) => {
+      const igual = par.indexOf("=");
+      if (igual <= 0) return;
+      const chave = par.slice(0, igual).trim();
+      const valor = par.slice(igual + 1).trim();
+      if (chave && valor) destino[chaveHeader(chave)] = valor;
+    });
+  }
+
   /**
-   * Lê o texto M3U e devolve os itens crus (sem agrupar séries).
-   * Só aceita URLs http(s): rtmp/udp/rtsp não tocam no navegador.
+   * Separa headers embutidos na URL no estilo Kodi:
+   * http://servidor/canal.m3u8|User-Agent=VLC&Referer=http://...
    */
-  function parse(texto) {
+  function separarUrlHeaders(linha) {
+    const texto = String(linha || "").trim();
+    const barra = texto.indexOf("|");
+    if (barra < 0) return { url: texto, headers: null };
+    const url = texto.slice(0, barra).trim();
+    const headers = {};
+    adicionarHeaders(headers, texto.slice(barra + 1));
+    return { url, headers: Object.keys(headers).length ? headers : null };
+  }
+
+  function extrairHeadersExtvlc(line, headers) {
+    const texto = line.substring(line.indexOf(":") + 1).trim();
+    const igual = texto.indexOf("=");
+    if (igual <= 0) return;
+    const chave = normalizar(texto.slice(0, igual));
+    const valor = texto.slice(igual + 1).trim();
+    if (!valor) return;
+    if (chave === "http-user-agent") headers["User-Agent"] = valor;
+    else if (chave === "http-referrer" || chave === "http-referer") headers.Referer = valor;
+    else if (chave === "http-origin") headers.Origin = valor;
+    else if (chave === "http-cookie") headers.Cookie = valor;
+    else if (chave === "http-header") adicionarHeaders(headers, valor);
+  }
+
+  /**
+   * Cria um parser incremental. Cada linha é processada e descartada; os itens
+   * prontos ficam em `itens`. Isso permite baixar uma M3U enorme sem manter o
+   * texto inteiro na memória.
+   */
+  function criarParser(opcoes = {}) {
+    const maxItens = Number(opcoes.maxItens) > 0 ? Number(opcoes.maxItens) : MAX_ITENS;
     const itens = [];
     let pending = null;
-    const linhas = String(texto || "").replace(/^\uFEFF/, "").split(/\r?\n/);
+    let totalLinhas = 0;
+    let amostra = "";
+    let truncado = false;
 
-    for (const bruta of linhas) {
-      const line = bruta.trim();
-      if (!line) continue;
+    function processarLinha(bruta) {
+      if (truncado) return;
+      totalLinhas += 1;
+      if (totalLinhas > MAX_LINHAS) {
+        truncado = true;
+        return;
+      }
+      const linhaOriginal = String(bruta == null ? "" : bruta);
+      if (amostra.length < AMOSTRA_MAX) {
+        amostra += linhaOriginal.slice(0, AMOSTRA_MAX - amostra.length) + "\n";
+      }
+      const line = linhaOriginal.trim();
+      if (!line) return;
 
       if (/^#EXTINF/i.test(line)) {
         const { attrs, logos } = parseAttributes(line);
@@ -313,34 +412,163 @@
           group: attrs["group-title"] || "Sem categoria",
           logo: escolherLogo(logos),
           tvgId: attrs["tvg-id"] || "",
+          headers: {},
+          kodiType: "",
         };
-        continue;
+        return;
       }
 
       if (/^#EXTGRP/i.test(line)) {
         const grupo = line.substring(line.indexOf(":") + 1).trim();
         if (grupo && pending) pending.group = grupo;
-        continue;
+        return;
       }
 
-      if (line.startsWith("#")) continue;
+      if (/^#EXTVLCOPT/i.test(line)) {
+        if (pending) extrairHeadersExtvlc(line, pending.headers);
+        return;
+      }
 
-      if (!pending) continue;
-      if (!isPlayableUrl(line)) {
+      if (/^#EXTHTTP/i.test(line)) {
+        if (!pending) return;
+        const json = line.substring(line.indexOf(":") + 1).trim();
+        try {
+          const dados = JSON.parse(json);
+          Object.entries(dados || {}).forEach(([chave, valor]) => {
+            if (valor != null && String(valor).trim()) {
+              pending.headers[chaveHeader(chave)] = String(valor).trim();
+            }
+          });
+        } catch (_) {}
+        return;
+      }
+
+      if (/^#KODIPROP/i.test(line)) {
+        if (!pending) return;
+        const texto = line.substring(line.indexOf(":") + 1).trim();
+        const igual = texto.indexOf("=");
+        if (igual <= 0) return;
+        const chave = normalizar(texto.slice(0, igual));
+        const valor = texto.slice(igual + 1).trim();
+        if (chave === "inputstream.adaptive.manifest_type" && valor) {
+          pending.kodiType = valor.toLowerCase();
+        } else if (chave === "inputstream.adaptive.stream_headers") {
+          adicionarHeaders(pending.headers, valor);
+        }
+        return;
+      }
+
+      if (line.startsWith("#")) return;
+      if (!pending) return;
+
+      const separado = separarUrlHeaders(line);
+      if (!isPlayableUrl(separado.url)) {
         pending = null;
-        continue;
+        return;
       }
 
-      const item = pending;
-      item.url = line;
-      item.tipo = classificar(item.group, item.name, item.url);
-      item.streamType = streamType(item.url);
+      const headers = { ...(pending.headers || {}), ...(separado.headers || {}) };
+      const item = {
+        name: pending.name,
+        group: pending.group,
+        logo: pending.logo,
+        tvgId: pending.tvgId,
+        url: separado.url,
+        tipo: classificar(pending.group, pending.name, separado.url),
+        streamType: streamType(separado.url, pending.kodiType),
+      };
+      if (Object.keys(headers).length) item.headers = headers;
       itens.push(item);
       pending = null;
-      if (itens.length >= MAX_ITENS) break;
+      if (itens.length >= maxItens) truncado = true;
     }
 
-    return itens;
+    function finalizar() {
+      return {
+        itens,
+        amostra,
+        linhas: totalLinhas,
+        truncado,
+      };
+    }
+
+    return {
+      processarLinha,
+      finalizar,
+      get itens() { return itens; },
+      get truncado() { return truncado; },
+      get linhas() { return totalLinhas; },
+    };
+  }
+
+  function parseComTexto(texto, parser) {
+    const p = parser || criarParser();
+    const linhas = String(texto || "").replace(/^\uFEFF/, "").split(/\r?\n/);
+    for (const linha of linhas) {
+      p.processarLinha(linha);
+      if (p.truncado) break;
+    }
+    return p.finalizar();
+  }
+
+  /**
+   * Lê o texto M3U e devolve os itens crus (sem agrupar séries).
+   * Só aceita URLs http(s): rtmp/udp/rtsp não tocam no navegador.
+   */
+  function parse(texto) {
+    return parseComTexto(texto).itens;
+  }
+
+  /**
+   * Lê uma Response (fetch) em streaming, sem carregar a playlist inteira.
+   * Retorna { itens, amostra, linhas, truncado }.
+   */
+  async function parseResposta(resposta, opcoes = {}) {
+    const parser = criarParser(opcoes);
+    const corpo = resposta && resposta.body;
+    const TextDecoderImpl = window.TextDecoder ||
+      (typeof TextDecoder !== "undefined" ? TextDecoder : null);
+
+    if (!corpo || typeof corpo.getReader !== "function" || !TextDecoderImpl) {
+      const texto = await resposta.text();
+      const resultado = parseComTexto(texto, parser);
+      if (!resultado.itens.length) resultado.diagnostico = diagnosticar(texto);
+      return resultado;
+    }
+
+    const reader = corpo.getReader();
+    const decoder = new TextDecoderImpl("utf-8");
+    let resto = "";
+    let cancelado = false;
+
+    try {
+      while (!parser.truncado) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        resto += decoder.decode(value, { stream: true });
+        let corte;
+        while ((corte = resto.indexOf("\n")) >= 0) {
+          const linha = resto.slice(0, corte).replace(/\r$/, "");
+          resto = resto.slice(corte + 1);
+          parser.processarLinha(linha);
+          if (parser.truncado) break;
+        }
+      }
+      if (!parser.truncado) {
+        resto += decoder.decode();
+        if (resto) parser.processarLinha(resto.replace(/\r$/, ""));
+      }
+    } finally {
+      if (parser.truncado) {
+        cancelado = true;
+        try { await reader.cancel(); } catch (_) {}
+      }
+    }
+
+    const resultado = parser.finalizar();
+    resultado.cancelado = cancelado;
+    if (!resultado.itens.length) resultado.diagnostico = diagnosticar(resultado.amostra);
+    return resultado;
   }
 
   /**
@@ -376,7 +604,7 @@
     });
 
     const categorias = [{ id: "todos", nome: "Todos", icone: "📺" }];
-    const abertos = cards.filter((c) => ehAberto(c.nome)).length;
+    const abertos = cards.filter((c) => c.categoria === "abertos" || ehAberto(c.nome, c.grupo)).length;
     if (abertos > 0) {
       categorias.push({ id: "abertos", nome: "Abertos", icone: "📡", total: abertos });
     }
@@ -411,6 +639,7 @@
         logo: item.logo || null,
         url: item.url,
       };
+      if (item.headers && Object.keys(item.headers).length) base.headers = item.headers;
 
       if (tipo !== "serie") {
         cards.push(base);
@@ -445,7 +674,7 @@
       const rotuloEpisodio = info.episodeTitle
         ? ` · ${info.episodeTitle}`
         : "";
-      serie.episodios.push({
+      const episodio = {
         id: base.id,
         nome: `${serie.nome} — T${info.season} E${info.episode}${rotuloEpisodio}`,
         episodioTitulo: info.episodeTitle,
@@ -459,7 +688,9 @@
         adulto,
         logo: item.logo || serie.logo,
         url: item.url,
-      });
+      };
+      if (item.headers && Object.keys(item.headers).length) episodio.headers = item.headers;
+      serie.episodios.push(episodio);
       if (!serie.logo && item.logo) serie.logo = item.logo;
     }
 
@@ -491,6 +722,8 @@
   window.EFTV_PLAYLIST = {
     MAX_ITENS,
     parse,
+    parseResposta,
+    criarParser,
     diagnosticar,
     montarCatalogo,
     parseSeries,
@@ -501,5 +734,6 @@
     normalizar,
     hash,
     slugify,
+    separarUrlHeaders,
   };
 })();

@@ -197,14 +197,24 @@ function verificar(condicao, mensagem) {
         bannerAtualizacao: !document.querySelector('#update-banner').classList.contains('hidden'),
         versao: document.querySelector('#app-version').textContent,
         alertaCatalogo: document.querySelector('#catalog-alert')?.textContent.trim() || "",
-        alertaCatalogoVisivel: !document.querySelector('#catalog-alert')?.classList.contains('hidden')
+        alertaCatalogoVisivel: !document.querySelector('#catalog-alert')?.classList.contains('hidden'),
+        source: !!window.EFTV_SOURCE,
+        continueSecao: !!document.querySelector('#continue-section'),
+        trialBanner: !!document.querySelector('#trial-banner'),
+        proxyCampo: !!document.querySelector('#set-proxy'),
+        overscanCampo: !!document.querySelector('#set-overscan')
       }))()`
     );
     verificar(inicial.pronto === "complete", "página carregou");
     verificar(inicial.cards > 0, "modo demonstração renderizou cards");
     verificar(inicial.demo === true, "catálogo está em modo demonstração");
     verificar(inicial.bannerAtualizacao === false, "PWA não oferece APK como atualização");
-    verificar(inicial.versao.includes("1.1.4"), "versão web exibida");
+    verificar(inicial.source === true, "módulo de fontes/proxy carregado");
+    verificar(inicial.continueSecao === true, "seção Continuar assistindo existe");
+    verificar(inicial.trialBanner === true, "aviso de fim de teste existe");
+    verificar(inicial.proxyCampo === true, "ajuste de proxy local existe");
+    verificar(inicial.overscanCampo === true, "ajuste de overscan existe");
+    verificar(inicial.versao.includes("1.2.0"), "versão web exibida");
     verificar(
       inicial.alertaCatalogoVisivel && inicial.alertaCatalogo.includes("Modo demonstração"),
       "aviso de modo demonstração visível"
@@ -472,6 +482,58 @@ function verificar(condicao, mensagem) {
       { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 },
       sessionId
     );
+
+    // Modo self-hosted: catálogo magro do server.py + fontes sob demanda.
+    const local = await avaliar(
+      cdp,
+      sessionId,
+      `(async () => {
+        const original = window.fetch;
+        window.fetch = async (url, opcoes) => {
+          const s = String(url);
+          if (s === 'http://127.0.0.1:8124/api/status') {
+            return new Response(JSON.stringify({
+              ok: true, versao: 'teste', canais: 2, playlists: 1
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }
+          if (s === 'http://127.0.0.1:8124/api/catalogo.json') {
+            return new Response(JSON.stringify({
+              categorias: [
+                { id: 'abertos', nome: 'Abertos' },
+                { id: 'filmes', nome: 'Filmes' }
+              ],
+              canais: [
+                { slug: 'ext-1-0', nome: 'Canal Local', grupo: 'Canais | Abertos', categoria: 'abertos', aoVivo: true },
+                { slug: 'ext-1-1', nome: 'Filme Local', grupo: 'Filmes | Ação', categoria: 'filmes', aoVivo: true }
+              ]
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }
+          return original(url, opcoes);
+        };
+        try {
+          const estado = await window.EFTV_SOURCE.definirProxy('http://127.0.0.1:8124');
+          const ok = await window.EFTV_CATALOG.carregarLocal();
+          document.querySelector('.nav-link[data-view="ao-vivo"]').click();
+          await new Promise((r) => setTimeout(r, 300));
+          return {
+            disponivel: estado.disponivel,
+            ok,
+            fonte: window.EFTV_CATALOG.fonte,
+            canais: window.EFTV_CATALOG.canais.length,
+            local: window.EFTV_CATALOG.local,
+            cards: document.querySelectorAll('#grid-ao-vivo .item-card').length
+          };
+        } finally {
+          window.fetch = original;
+          await window.EFTV_SOURCE.definirProxy('');
+        }
+      })()`
+    );
+    verificar(local.disponivel === true, "proxy local foi detectado");
+    verificar(local.ok === true, "catálogo local foi carregado");
+    verificar(local.fonte === "local" && local.local === true, "catálogo marcado como local");
+    verificar(local.canais === 2, "catálogo local trouxe 2 canais");
+    verificar(local.cards === 2, "canais locais apareceram na grade");
 
     verificar(erros.length === 0, "nenhuma exceção JavaScript não tratada");
     if (erros.length) console.error(erros.join("\n"));

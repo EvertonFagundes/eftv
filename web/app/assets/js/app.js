@@ -12,6 +12,7 @@
   const api = window.EFTV_API;
   const catalog = window.EFTV_CATALOG;
   const player = window.EFTV_PLAYER;
+  const source = window.EFTV_SOURCE;
   // Listas reais podem ter dezenas de milhares de canais. A grade mostra um
   // lote por vez (como no app Android) para não travar o navegador.
   const LIMITE_GRADE = 240;
@@ -35,6 +36,7 @@
     ultimoProgressoSalvo: 0,
     buscaTimer: null,
     limiteGrade: LIMITE_GRADE,
+    termoCategoria: "",
   };
 
   /* ------------------------------------------------------------------
@@ -174,6 +176,7 @@
       </div>
       <div class="item-footer">
         <div class="item-info">
+          <span class="item-nome">${escapeHtml(item.nome)}</span>
           <span class="item-grupo">${escapeHtml(item.grupo || "Canal")}</span>
         </div>
         <button class="btn-fav-small ${fav ? "active" : ""}" data-fav="${item.id}" aria-label="Favoritar">${fav ? "★" : "☆"}</button>
@@ -269,10 +272,69 @@
     });
   }
 
+  function podeMostrar(item) {
+    return !!state.settings.adulto || !catalog.ehAdulto(item);
+  }
+
+  // Trilho compacto de "Continuar assistindo" na home, como no Android.
+  function renderContinueRail() {
+    const secao = $("#continue-section");
+    const rail = $("#continue-rail");
+    if (!secao || !rail) return;
+
+    const lista = store.getContinueWatching();
+    const itens = lista
+      .map((p) => {
+        const item = catalog.porId(p.id);
+        if (!item || !podeMostrar(item)) return null;
+        return { ...item, progresso: Number(p.progresso) || 0, posicao: p.atual };
+      })
+      .filter(Boolean)
+      .slice(0, 12);
+
+    rail.innerHTML = "";
+    if (!itens.length) {
+      secao.classList.add("hidden");
+      return;
+    }
+
+    itens.forEach((item) => {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "continue-card";
+      card.title = item.nome;
+      const pct = Math.min(100, Math.max(0, item.progresso));
+      card.innerHTML = `
+        <span class="continue-thumb" style="--hue:${hueDoNome(item.nome)}">
+          <span class="continue-play">▶</span>
+          <span class="continue-progress"><i style="width:${pct}%"></i></span>
+        </span>
+        <span class="continue-info">
+          <span class="continue-nome">${escapeHtml(item.nome)}</span>
+          <span class="continue-meta">${Math.round(pct)}% assistido</span>
+        </span>
+      `;
+      if (item.logo) {
+        const img = document.createElement("img");
+        img.src = item.logo;
+        img.alt = "";
+        img.loading = "lazy";
+        img.referrerPolicy = "no-referrer";
+        img.addEventListener("error", () => img.remove(), { once: true });
+        card.querySelector(".continue-thumb").prepend(img);
+      }
+      card.addEventListener("click", () => abrirPlayer(item));
+      rail.appendChild(card);
+    });
+    secao.classList.remove("hidden");
+  }
+
   function renderAoVivo() {
     const grid = $("#grid-ao-vivo");
     const chips = $("#chips-ao-vivo");
     const vazio = $("#empty-ao-vivo");
+
+    renderContinueRail();
 
     // Chips: usa as categorias que realmente vieram na playlist do provedor,
     // em vez de uma lista fixa que esconderia parte do catálogo real.
@@ -382,9 +444,14 @@
 
   function renderCategorias() {
     const grid = $("#grid-categorias");
+    const busca = $("#busca-categorias");
+    if (busca && busca.value !== state.termoCategoria) busca.value = state.termoCategoria;
+    const termo = normalizar(state.termoCategoria);
     grid.innerHTML = "";
     catalog.categorias.forEach((cat) => {
       if (cat.id === "todos") return;
+      if (cat.id === "adultos" && !state.settings.adulto) return;
+      if (termo && !normalizar(cat.nome).includes(termo)) return;
       const qtd = catalog.contagemCategoria(cat.id);
       if (qtd === 0) return;
       const el = document.createElement("button");
@@ -397,6 +464,18 @@
       el.addEventListener("click", () => abrirCategoria(cat));
       grid.appendChild(el);
     });
+  }
+
+  function configurarCategorias() {
+    const busca = $("#busca-categorias");
+    if (busca) {
+      busca.addEventListener("input", () => {
+        state.termoCategoria = busca.value;
+        renderCategorias();
+      });
+    }
+    const verTodos = $("#btn-continue-ver-todos");
+    if (verTodos) verTodos.addEventListener("click", () => navegar("continuar"));
   }
 
   function abrirCategoria(cat) {
@@ -413,7 +492,9 @@
   function renderFavoritos() {
     const grid = $("#grid-favoritos");
     const vazio = $("#empty-favoritos");
-    const itens = catalog.todos().filter((c) => state.favoritos.has(String(c.id)));
+    const itens = catalog.todos()
+      .filter((c) => state.favoritos.has(String(c.id)))
+      .filter(podeMostrar);
     preencherGrid(grid, itens, { aoMais: renderFavoritos });
     vazio.classList.toggle("hidden", itens.length > 0);
   }
@@ -425,7 +506,8 @@
     const itens = lista
       .map((p) => {
         const item = catalog.porId(p.id);
-        return item ? { ...item, progresso: p.progresso, posicao: p.atual } : null;
+        if (!item || !podeMostrar(item)) return null;
+        return { ...item, progresso: p.progresso, posicao: p.atual };
       })
       .filter(Boolean);
 
@@ -442,7 +524,8 @@
     const lista = store.getRecents();
     const itens = lista
       .map((r) => catalog.porId(r.id))
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter(podeMostrar);
     preencherGrid(grid, itens, { aoMais: renderRecentes });
     vazio.classList.toggle("hidden", itens.length > 0);
   }
@@ -585,12 +668,50 @@
   /* ------------------------------------------------------------------
      Player
   ------------------------------------------------------------------ */
+  function candidatosPlayer(url, tipo, headers) {
+    if (!url) return [];
+    if (!source) return [{ url, tipo, headers: headers || null }];
+    return source.candidatos(url, { headers }).map((c) => ({
+      url: c.url,
+      tipo,
+      headers: c.headers || null,
+    }));
+  }
+
+  /**
+   * Ordem de tentativa parecida com o Android:
+   * HLS derivado de .ts -> URL original (proxy/direto) -> fallback TS/HLS.
+   */
+  function montarFontesPlayer(url, tipo, headers, fallbackUrl, fallbackTipo) {
+    const lista = [];
+    const vistos = new Set();
+    const adicionar = (fonte) => {
+      if (!fonte || !fonte.url) return;
+      const chave = fonte.tipo + "|" + fonte.url;
+      if (vistos.has(chave)) return;
+      vistos.add(chave);
+      lista.push(fonte);
+    };
+
+    if (tipo === "ts" && source) {
+      const variante = source.varianteHls(url);
+      if (variante) candidatosPlayer(variante, "hls", headers).forEach(adicionar);
+    }
+    candidatosPlayer(url, tipo, headers).forEach(adicionar);
+    if (fallbackUrl) {
+      candidatosPlayer(fallbackUrl, fallbackTipo || tipo, headers).forEach(adicionar);
+    }
+    return lista;
+  }
+
   async function abrirPlayer(item) {
     if (item.tipo === "serie" && Array.isArray(item.episodios) && item.episodios.length) {
       abrirSerie(item);
       return;
     }
-    if (!state.usuario && !state.demo) {
+
+    const modoLocal = !!(catalog.local || catalog.fonte === "local" || item.local);
+    if (!state.usuario && !state.demo && !modoLocal) {
       abrirAuth("login");
       mostrarToast("Entre para assistir");
       return;
@@ -615,13 +736,35 @@
 
     player.init($("#video"));
     player.stop();
+    player.setOverscan(state.settings.overscan || 0);
 
-    // Tenta iniciar sessão no backend
-    let streamUrl = item.url;
+    let streamUrl = item.url || "";
+    let tipo = item.streamType || (streamUrl ? tipoStream(item) : "hls");
+    let headers = item.headers || null;
+    let fontes = null;
+    let fallbackUrl = null;
+    let fallbackTipo = null;
     let token = null;
     let sessionId = null;
 
-    if (!state.demo && item.url) {
+    // Catálogo local (server.py): as URLs só são resolvidas agora, sob demanda.
+    if (!streamUrl && (item.local || modoLocal)) {
+      try {
+        const fonte = await catalog.fonteLocal(item.slug);
+        streamUrl = fonte.url;
+        tipo = fonte.tipo || tipo;
+        fallbackUrl = fonte.fallbackUrl || null;
+        fallbackTipo = fonte.fallbackTipo || null;
+      } catch (erro) {
+        $("#player-error").classList.remove("hidden");
+        $("#player-error-text").textContent =
+          erro.message || "Transmissão indisponível no servidor local.";
+        return;
+      }
+    }
+
+    // Sessão no backend apenas para catálogo autenticado (não demo/local).
+    if (!state.demo && !modoLocal && item.url && store.getSession()) {
       try {
         const dados = await api.iniciarPlayer(item.url, item.nome);
         sessionId = dados.session_id || dados.sessionId || null;
@@ -639,25 +782,41 @@
     // Sem URL real (demo): usa o vídeo de demonstração local.
     if (!streamUrl) {
       streamUrl = "assets/media/demo.mp4";
+      tipo = "mp4";
     }
+
+    fontes = montarFontesPlayer(streamUrl, tipo, headers, fallbackUrl, fallbackTipo);
 
     state.playerSessao = sessionId;
     if (sessionId) player.iniciarSessao(sessionId);
 
-    const tipo = item.streamType || (item.url ? tipoStream(item) : "mp4");
-
     try {
-      await player.carregar(item, { url: streamUrl, tipo, token });
+      if (fontes.length) {
+        await player.carregar(item, { fontes, token });
+      } else {
+        await player.carregar(item, {
+          url: streamUrl,
+          tipo,
+          token,
+          headers,
+          fallbackUrl,
+          fallbackTipo,
+        });
+      }
 
       // Retoma progresso salvo (filmes/séries)
       if (item.tipo !== "canal" && !item.aoVivo) {
         const prog = store.getProgress()[String(item.id)];
         if (prog && prog.atual > 5) {
           const tentarRetomar = () => {
-            try { player.seek(prog.atual); } catch (_) {}
-            player.video.removeEventListener("loadedmetadata", tentarRetomar);
+            try {
+              if (player.getDuration() > prog.atual) player.seek(prog.atual);
+            } catch (_) {}
           };
-          player.video.addEventListener("loadedmetadata", tentarRetomar);
+          if (player.video && player.video.readyState >= 1) tentarRetomar();
+          else if (player.video) {
+            player.video.addEventListener("loadedmetadata", tentarRetomar, { once: true });
+          }
         }
       }
 
@@ -724,6 +883,11 @@
           break;
         case "reconectando":
           $("#player-status").textContent = `Reconectando… (${dado?.tentativa || 1})`;
+          break;
+        case "fonte":
+          if (dado && dado.total > 1) {
+            $("#player-status").textContent = `Fonte ${dado.indice + 1}/${dado.total}${dado.proxy ? " (proxy)" : ""}`;
+          }
           break;
         case "progress":
           if (dado && dado.item && dado.item.tipo !== "canal") {
@@ -867,6 +1031,54 @@
   /* ------------------------------------------------------------------
      Conta / Assinatura
   ------------------------------------------------------------------ */
+  function hojeISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  // Aviso de fim de teste: uma vez por dia nos últimos TRIAL_NUDGE_DAYS,
+  // como o TRIAL_NUDGE_DAYS/eftv_nudge do Android.
+  async function verificarAvisoTeste(assinatura) {
+    if (!store.getSession() || state.demo) return;
+    let dados = assinatura;
+    if (!dados) {
+      try {
+        dados = await api.assinatura();
+      } catch (_) {
+        return;
+      }
+    }
+    if (!dados) return;
+    const status = String(dados.status || "").toLowerCase();
+    const dias = Number(
+      dados.days_remaining ?? dados.dias_restantes ?? dados.days_left ?? dados.daysRemaining
+    );
+    if (!["trial", "trialing"].includes(status)) return;
+    if (!Number.isFinite(dias) || dias > cfg.TRIAL_NUDGE_DAYS) return;
+
+    const hoje = hojeISO();
+    if (store.ler("trial_nudge", "") === hoje) return;
+    store.gravar("trial_nudge", hoje);
+
+    const banner = $("#trial-banner");
+    const texto = $("#trial-text");
+    if (!banner || !texto) return;
+    texto.textContent = dias <= 0
+      ? "Seu teste grátis terminou. Assine para continuar assistindo."
+      : `Seu teste grátis termina em ${dias} ${dias === 1 ? "dia" : "dias"}.`;
+    banner.classList.remove("hidden");
+  }
+
+  function configurarTrial() {
+    const banner = $("#trial-banner");
+    if (!banner) return;
+    $("#btn-trial-close").addEventListener("click", () => banner.classList.add("hidden"));
+    $("#btn-trial-assinar").addEventListener("click", () => {
+      banner.classList.add("hidden");
+      if (state.usuario) navegar("conta");
+      else abrirAuth("login");
+    });
+  }
+
   async function carregarConta() {
     const card = $("#account-card");
     const acoes = $("#account-actions");
@@ -906,6 +1118,19 @@
       null;
 
     if (!assinatura) {
+      if (!state.demo) {
+        card.innerHTML = `
+          <div class="account-empty">
+            <div class="empty-icon">⚠️</div>
+            <h3>Não foi possível carregar sua assinatura</h3>
+            <p>Verifique sua conexão e tente novamente. Seus canais continuam disponíveis no catálogo salvo.</p>
+            <button class="btn btn-outline btn-block" id="btn-recarregar-conta">Tentar novamente</button>
+          </div>
+        `;
+        const tentar = $("#btn-recarregar-conta");
+        if (tentar) tentar.addEventListener("click", carregarConta);
+        return;
+      }
       assinatura = {
         status: "trialing",
         plano: state.planoPadrao
@@ -956,6 +1181,7 @@
       } catch (_) {}
     }
     state.assinatura = assinatura;
+    verificarAvisoTeste(assinatura);
 
     const statusLabel = {
       active: "● Ativo",
@@ -1212,13 +1438,13 @@
     await api.logout();
     store.clearSession();
     await store.clearCatalogCacheAsync();
-    catalog.usarDemo();
     state.usuario = null;
     state.assinatura = null;
     state.demo = true;
     state.catalogError = null;
     $("#sidebar-user").textContent = "Convidado";
     mostrarToast("Você saiu da conta");
+    await carregarCatalogo(true);
     navegar("ao-vivo");
   }
 
@@ -1231,10 +1457,26 @@
     $("#set-economia").checked = !!state.settings.economizarDados;
     $("#set-autoplay").checked = !!state.settings.autoplay;
     document.body.classList.toggle("modo-tv", !!state.settings.modoTV);
+
+    const proxyInput = $("#set-proxy");
+    if (proxyInput) proxyInput.value = source ? source.baseConfigurada() : "";
+    const proxyStreams = $("#set-proxy-streams");
+    if (proxyStreams) proxyStreams.checked = state.settings.proxyStreams !== false;
+
+    const overscan = Math.max(0, Math.min(10, Number(state.settings.overscan) || 0));
+    const range = $("#set-overscan");
+    if (range) range.value = String(overscan);
+    const overscanValor = $("#overscan-valor");
+    if (overscanValor) overscanValor.textContent = overscan + "%";
+    if (player.setOverscan) player.setOverscan(overscan);
+
     const fonte = catalog.fonte || (state.demo ? "demo" : "—");
     const erro = state.catalogError ? ` · Erro: ${state.catalogError}` : "";
+    const statusProxy = source ? source.statusTexto() : "Servidor local indisponível.";
+    const proxyStatus = $("#proxy-status");
+    if (proxyStatus) proxyStatus.textContent = statusProxy;
     $("#settings-api").textContent =
-      `API: ${cfg.API_URL} · Versão: ${cfg.APP_VERSION} · Catálogo: ${fonte} (${catalog.canais.length} itens)${erro}`;
+      `API: ${cfg.API_URL} · Versão: ${cfg.APP_VERSION} · Catálogo: ${fonte} (${catalog.canais.length} itens)${erro} · ${statusProxy}`;
   }
 
   function configurarAjustes() {
@@ -1243,6 +1485,9 @@
       store.saveSettings({ adulto: e.target.checked });
       mostrarToast(e.target.checked ? "Conteúdo adulto liberado" : "Conteúdo adulto oculto");
       if (state.view === "ao-vivo") renderAoVivo();
+      if (state.view === "favoritos") renderFavoritos();
+      if (state.view === "continuar") renderContinuar();
+      if (state.view === "recentes") renderRecentes();
     });
     $("#set-tv").addEventListener("change", (e) => {
       state.settings.modoTV = e.target.checked;
@@ -1257,6 +1502,56 @@
       state.settings.autoplay = e.target.checked;
       store.saveSettings({ autoplay: e.target.checked });
     });
+
+    const proxyStreams = $("#set-proxy-streams");
+    if (proxyStreams) {
+      proxyStreams.addEventListener("change", (e) => {
+        state.settings.proxyStreams = e.target.checked;
+        store.saveSettings({ proxyStreams: e.target.checked });
+        mostrarToast(e.target.checked ? "Streams passarão pelo proxy local" : "Streams tentarão a URL direta");
+      });
+    }
+
+    const btnProxy = $("#btn-testar-proxy");
+    if (btnProxy) {
+      btnProxy.addEventListener("click", async () => {
+        if (!source) return;
+        const valor = ($("#set-proxy")?.value || "").trim();
+        const status = $("#proxy-status");
+        if (status) status.textContent = "Testando servidor local…";
+        btnProxy.disabled = true;
+        try {
+          const estado = await source.definirProxy(valor);
+          if (status) status.textContent = source.statusTexto();
+          if (estado.disponivel) {
+            mostrarToast("Servidor local conectado");
+            const local = await catalog.carregarLocal();
+            if (local) {
+              state.demo = false;
+              state.catalogError = null;
+              renderAoVivo();
+              renderAjustes();
+            }
+          } else {
+            mostrarToast("Servidor local não respondeu");
+          }
+        } finally {
+          btnProxy.disabled = false;
+        }
+      });
+    }
+
+    const overscan = $("#set-overscan");
+    if (overscan) {
+      overscan.addEventListener("input", (e) => {
+        const valor = Math.max(0, Math.min(10, Number(e.target.value) || 0));
+        state.settings.overscan = valor;
+        store.saveSettings({ overscan: valor });
+        if (player.setOverscan) player.setOverscan(valor);
+        const label = $("#overscan-valor");
+        if (label) label.textContent = valor + "%";
+      });
+    }
 
     $("#btn-limpar-cache").addEventListener("click", async () => {
       await store.clearCatalogCacheAsync();
@@ -1339,10 +1634,20 @@
     const loading = $("#catalog-loading");
     if (loading) loading.classList.remove("hidden");
 
-    if (!store.getSession() || state.demo || (store.getSession() && store.getSession().access === "demo-access")) {
-      catalog.usarDemo();
-      state.demo = true;
-      state.catalogError = null;
+    const sessao = store.getSession();
+    const semLogin = !sessao || sessao.access === "demo-access";
+
+    if (semLogin) {
+      // Modo self-hosted: o server.py pode ter playlists mesmo sem login.
+      const local = await catalog.carregarLocal();
+      if (local) {
+        state.demo = false;
+        state.catalogError = null;
+      } else {
+        catalog.usarDemo();
+        state.demo = true;
+        state.catalogError = null;
+      }
     } else {
       try {
         await catalog.carregar(forcar);
@@ -1447,6 +1752,7 @@
 
     $("#app-version").textContent = `Web PWA · v${cfg.APP_VERSION}`;
     document.body.classList.toggle("modo-tv", !!state.settings.modoTV);
+    if (player.setOverscan) player.setOverscan(state.settings.overscan || 0);
 
     configurarSidebar();
     configurarBusca();
@@ -1456,6 +1762,8 @@
     configurarAjustes();
     configurarTV();
     configurarSerie();
+    configurarCategorias();
+    configurarTrial();
     configurarErros();
 
     $("#btn-atualizar-catalogo").addEventListener("click", async () => {
@@ -1471,6 +1779,10 @@
 
     await carregarCatalogo(false);
     navegar(rotaDoHash(), { hash: false });
+
+    if (store.getSession() && !state.demo) {
+      verificarAvisoTeste().catch(() => {});
+    }
 
     // Deep link: ?canal=slug ou ?id=123 abre direto o conteúdo.
     const alvo = params.get("canal") || params.get("id");

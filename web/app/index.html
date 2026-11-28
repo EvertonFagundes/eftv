@@ -24,6 +24,13 @@
     <button id="btn-update-close" class="btn-mini ghost">✕</button>
   </div>
 
+  <!-- ===== Aviso de fim de teste ===== -->
+  <div id="trial-banner" class="trial-banner hidden" role="status" aria-live="polite">
+    <span id="trial-text">Seu teste grátis está terminando.</span>
+    <button id="btn-trial-assinar" class="btn-mini">Assinar</button>
+    <button id="btn-trial-close" class="btn-mini ghost" aria-label="Fechar aviso">✕</button>
+  </div>
+
   <!-- ===== Install prompt (PWA) ===== -->
   <dialog id="install-dialog" class="modal" data-install-dialog>
     <div class="modal-card">
@@ -86,7 +93,7 @@
 
     <div class="sidebar-footer">
       <button class="btn-logout" id="btn-logout">Sair</button>
-      <div class="app-version" id="app-version">Web PWA · v1.1.4</div>
+      <div class="app-version" id="app-version">Web PWA · v1.2.0</div>
     </div>
   </nav>
 
@@ -111,6 +118,13 @@
         </div>
       </div>
       <div class="catalog-alert hidden" id="catalog-alert" role="status" aria-live="polite"></div>
+      <section class="continue-section hidden" id="continue-section">
+        <div class="section-head">
+          <h3>Continuar assistindo</h3>
+          <button type="button" class="btn-mini ghost" id="btn-continue-ver-todos">Ver todos</button>
+        </div>
+        <div class="continue-rail" id="continue-rail"></div>
+      </section>
       <div class="chips" id="chips-ao-vivo"></div>
       <div class="content-with-az">
         <div class="grid" id="grid-ao-vivo"></div>
@@ -149,7 +163,10 @@
 
     <!-- Categorias -->
     <section class="view hidden" id="view-categorias" data-view="categorias">
-      <div class="toolbar"><h2>Categorias</h2></div>
+      <div class="toolbar">
+        <h2>Categorias</h2>
+        <input type="search" id="busca-categorias" class="input-busca-categoria" placeholder="Filtrar categorias…" autocomplete="off">
+      </div>
       <div class="grid grid-categorias" id="grid-categorias"></div>
     </section>
 
@@ -245,6 +262,23 @@
           <span><strong>Reproduzir automaticamente</strong><small>Iniciar o vídeo ao abrir um canal</small></span>
           <input type="checkbox" id="set-autoplay" class="switch">
         </label>
+        <div class="settings-field">
+          <label for="set-proxy">Servidor/proxy local</label>
+          <div class="settings-inline">
+            <input type="url" id="set-proxy" placeholder="http://127.0.0.1:8124" autocomplete="off" spellcheck="false">
+            <button type="button" class="btn btn-outline" id="btn-testar-proxy">Testar</button>
+          </div>
+          <small id="proxy-status">Verificando servidor local…</small>
+        </div>
+        <label class="switch-row">
+          <span><strong>Passar streams pelo proxy</strong><small>Usa o server.py para headers, DoH e streams HTTP</small></span>
+          <input type="checkbox" id="set-proxy-streams" class="switch">
+        </label>
+        <div class="settings-field">
+          <label for="set-overscan">Overscan da TV: <span id="overscan-valor">0%</span></label>
+          <input type="range" id="set-overscan" min="0" max="10" step="1" value="0">
+          <small>Margem de segurança para TVs que cortam as bordas. O player continua em tela cheia.</small>
+        </div>
         <div class="settings-actions">
           <button class="btn btn-outline btn-block" id="btn-limpar-cache">Limpar cache do catálogo</button>
           <button class="btn btn-outline btn-block" id="btn-tv-code">Entrar na TV com código</button>
@@ -412,6 +446,7 @@
   <script src="assets/js/config.js"></script>
   <script src="assets/js/store.js"></script>
   <script src="assets/js/api.js"></script>
+  <script src="assets/js/source.js"></script>
   <script src="assets/js/playlist.js"></script>
   <script src="assets/js/catalog.js"></script>
   <script src="assets/js/player.js"></script>

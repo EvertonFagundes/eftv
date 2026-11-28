@@ -11,7 +11,7 @@ const assert = require("assert");
 
 const arquivo = path.join(__dirname, "..", "app", "assets", "js", "playlist.js");
 const codigo = fs.readFileSync(arquivo, "utf8");
-const sandbox = { window: {}, console };
+const sandbox = { window: {}, console, TextDecoder };
 vm.runInNewContext(codigo, sandbox, { filename: arquivo });
 const playlist = sandbox.window.EFTV_PLAYLIST;
 
@@ -149,4 +149,60 @@ teste("tolera playlist vazia ou inválida", () => {
   assert.strictEqual(dados.categorias[0].id, "todos");
 });
 
-console.log(`\n${passou} teste(s) passaram.`);
+const EXEMPLO_HEADERS = `#EXTM3U
+#EXTINF:-1 group-title="Canais | Esportes",Canal Header
+#EXTVLCOPT:http-user-agent=Agente/1.0
+#EXTVLCOPT:http-referrer=https://ref.example/
+https://example.com/live/header.m3u8
+#EXTINF:-1 group-title="Canais | Filmes",Canal URL Header
+https://example.com/live/url.m3u8|User-Agent=Outro/2.0&Referer=https://ref2.example/
+#KODIPROP:inputstream.adaptive.manifest_type=dash
+#EXTINF:-1 group-title="Filmes | Ação",Filme DASH
+https://example.com/vod/filme.mpd
+#EXTINF:-1 group-title="Canais | Filmes",Filme TS
+https://example.com/live/12345.ts
+`;
+
+teste("lê #EXTVLCOPT, #KODIPROP e headers embutidos na URL", () => {
+  const itens = playlist.parse(EXEMPLO_HEADERS);
+  assert.strictEqual(itens.length, 4);
+
+  assert.strictEqual(itens[0].headers["User-Agent"], "Agente/1.0");
+  assert.strictEqual(itens[0].headers.Referer, "https://ref.example/");
+  assert.strictEqual(itens[0].streamType, "hls");
+
+  assert.strictEqual(itens[1].headers["User-Agent"], "Outro/2.0");
+  assert.strictEqual(itens[1].headers.Referer, "https://ref2.example/");
+
+  assert.strictEqual(itens[2].streamType, "dash");
+  assert.strictEqual(itens[3].streamType, "ts");
+  assert.strictEqual(itens[3].tipo, "filme", "Canais | Filmes deve ser filme");
+});
+
+teste("processa playlist linha a linha (streaming)", () => {
+  const parser = playlist.criarParser();
+  EXEMPLO.split(/\r?\n/).forEach((linha) => parser.processarLinha(linha));
+  const resultado = parser.finalizar();
+  assert.strictEqual(resultado.itens.length, 7);
+  assert.ok(resultado.linhas > 10);
+  assert.strictEqual(resultado.truncado, false);
+});
+
+(async () => {
+  try {
+    const resposta = new Response(EXEMPLO, {
+      status: 200,
+      headers: { "Content-Type": "audio/x-mpegurl" },
+    });
+    const resultado = await playlist.parseResposta(resposta);
+    assert.strictEqual(resultado.itens.length, 7);
+    assert.ok(resultado.amostra.includes("#EXTM3U"));
+    console.log("ok - lê Response em streaming");
+    passou += 1;
+  } catch (erro) {
+    console.error("FALHOU - lê Response em streaming");
+    console.error(erro && erro.stack ? erro.stack : erro);
+    process.exitCode = 1;
+  }
+  console.log(`\n${passou} teste(s) passaram.`);
+})();

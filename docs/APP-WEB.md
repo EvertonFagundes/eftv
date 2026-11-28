@@ -128,13 +128,20 @@ independente em [`web/`](../web/), com paridade com o app Android:
 - landing de vendas em `web/landing/`;
 - app instalável em `web/app/` (manifest, service worker, ícones PNG, prints);
 - player HLS/MPEG-TS/DASH/MP4, heartbeat de sessão, limite de 1 tela, 2 dispositivos;
-- login, catálogo paginado, categorias, A-Z, favoritos, continuar assistindo;
+- login, catálogo paginado, categorias (com busca), A-Z, favoritos, continuar assistindo com carrossel na home;
 - **Provisionamento automático da playlist**: o app usa `PLAYLIST_URL` embutida
   (somente build privado) ou `GET /player/playlist` (mesma rota do Android) e
   baixa a URL licenciada direto no navegador; se o CORS bloquear, usa
   `GET /player/playlist-text`. Não há tela de importação para o assinante. O
-  parser limita a 50.000 itens e a grade mostra 240 cards por vez com
+  parser é incremental, aceita até 250.000 itens, lê `#EXTVLCOPT`/`#EXTHTTP`/
+  `#KODIPROP` e headers na URL; a grade mostra 240 cards por vez com
   **Mostrar mais**;
+- **Modo self-hosted**: `source.js` detecta o `server.py` na mesma origem ou em
+  `PROXY_URL`, carrega o catálogo magro (`/api/catalogo.json`), resolve a fonte
+  sob demanda (`/api/canal?slug=`) e usa o proxy com headers/DoH/Range. O player
+  tenta proxy↔direto, HLS derivado de `.ts` e backoff exponencial;
+- aviso de fim do teste grátis (`TRIAL_NUDGE_DAYS`, uma vez por dia) e ajuste de
+  overscan de TV (aplicado à interface, não ao player em tela cheia);
 - checkout Mercado Pago com retorno em `web/app/checkout.html`;
 - modo demonstração (`?demo=1`) e vídeo local `web/app/assets/media/demo.mp4`.
 
@@ -142,11 +149,12 @@ Os canais **não são embutidos** no APK nem no repositório. No Android de
 release, `PlaylistConfig.PLAYLIST_URL` fica vazio e o app busca
 `/player/playlist` depois do login; em debug, a URL pode vir de
 `local.properties`. O PWA segue o mesmo modelo: sem `PLAYLIST_URL` no build
-público, depende do backend ou de um build privado. O catálogo fica no
-IndexedDB local e é apagado no logout. Versão publicada: **1.1.4**, service
-worker **`eftv-web-v7`**. Hoje o Render recebe uma página do nginx do provedor;
-para o live funcionar sem build privado, é preciso popular o cache da playlist
-no backend (`backend/scripts/upload_playlist_cache.py`).
+público, depende do backend, de um build privado ou do modo self-hosted. O
+catálogo fica no IndexedDB local (cache versão 3) e é apagado no logout. Versão
+publicada: **1.2.0**, service worker **`eftv-web-v8`**. Hoje o Render recebe uma
+página do nginx do provedor; para o live funcionar sem build privado, é preciso
+popular o cache da playlist no backend
+(`backend/scripts/upload_playlist_cache.py`).
 
 Documentação completa: [`web/README.md`](../web/README.md) e
 [`web/CONTINUAR.md`](../web/CONTINUAR.md).
