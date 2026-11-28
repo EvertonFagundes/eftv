@@ -217,7 +217,14 @@
     },
 
     // ---------- Player ----------
-    // Texto M3U buscado pelo backend (fallback de DNS/CORS no navegador).
+    // URL licenciada entregue pelo backend (mesma rota do app Android).
+    // A URL contém credenciais do provedor: não logar nem exibir.
+    async playlistAcesso() {
+      return request("/player/playlist", { auth: true, timeout: 30000 });
+    },
+
+    // Texto M3U buscado pelo backend (fallback quando o navegador não
+    // consegue baixar a URL do provedor por CORS/rede).
     // Pode demorar: o backend baixa a playlist do provedor.
     async playlistTexto() {
       return request("/player/playlist-text", { auth: true, timeout: 130000 });

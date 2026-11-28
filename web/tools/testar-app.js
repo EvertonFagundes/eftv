@@ -1,7 +1,8 @@
 /* Teste de fumaça do app web/PWA via Chrome DevTools Protocol.
    Sobe o servidor estático, abre o Chrome headless e valida:
    - modo demonstração
-   - importação de uma playlist M3U
+   - provisionamento automático da playlist (backend/URL embutida)
+   - fallback pelo texto da playlist no backend
    - aba Séries e modal de episódios
    - abertura do player
    - cache do catálogo no IndexedDB
@@ -203,100 +204,89 @@ function verificar(condicao, mensagem) {
     verificar(inicial.cards > 0, "modo demonstração renderizou cards");
     verificar(inicial.demo === true, "catálogo está em modo demonstração");
     verificar(inicial.bannerAtualizacao === false, "PWA não oferece APK como atualização");
-    verificar(inicial.versao.includes("1.1.3"), "versão web exibida");
+    verificar(inicial.versao.includes("1.1.4"), "versão web exibida");
     verificar(
       inicial.alertaCatalogoVisivel && inicial.alertaCatalogo.includes("Modo demonstração"),
       "aviso de modo demonstração visível"
     );
 
-    // Importa a playlist pelo mesmo fluxo da tela "Minha playlist".
-    await avaliar(
-      cdp,
-      sessionId,
-      `(() => {
-        const texto = ${JSON.stringify(PLAYLIST)};
-        const arquivo = new File([texto], 'teste-local.m3u', { type: 'audio/x-mpegurl' });
-        const dt = new DataTransfer();
-        dt.items.add(arquivo);
-        const input = document.querySelector('#playlist-file');
-        input.files = dt.files;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        return true;
-      })()`
-    );
-    await ESPERA(1800);
-    const local = await avaliar(
+    // O catálogo deve ser provisionado automaticamente, como no Android:
+    // o backend entrega a URL licenciada e o navegador baixa a lista.
+    const provisionado = await avaliar(
       cdp,
       sessionId,
       `(async () => {
-        const salvo = await window.EFTV_STORE.getLocalPlaylistAsync();
-        return {
-          fonte: window.EFTV_CATALOG.fonte,
-          canais: window.EFTV_CATALOG.canais.length,
-          demo: window.EFTV_CATALOG.demo,
-          cards: document.querySelectorAll('#grid-ao-vivo .item-card').length,
-          alertaVisivel: !document.querySelector('#catalog-alert').classList.contains('hidden'),
-          chips: [...document.querySelectorAll('#chips-ao-vivo .chip')].map((b) => b.textContent),
-          salvo: !!(salvo && salvo.itens && salvo.itens.length)
+        localStorage.setItem('eftv:session', JSON.stringify({
+          access: 'fake', refresh: 'fake', email: 'teste@eftv.com'
+        }));
+        window.EFTV_API.playlistAcesso = async () => ({
+          playlist_url: 'https://provedor.example/lista.m3u'
+        });
+        window.EFTV_API.playlistTexto = async () => {
+          throw new Error('o fallback do backend nao deveria ser usado');
         };
+        const original = window.fetch;
+        window.fetch = async (url, opcoes) => {
+          if (String(url).includes('provedor.example/lista.m3u')) {
+            return new Response(${JSON.stringify(PLAYLIST)}, {
+              status: 200,
+              headers: { 'Content-Type': 'audio/x-mpegurl' }
+            });
+          }
+          return original(url, opcoes);
+        };
+        try {
+          const c = await window.EFTV_CATALOG.carregar(true);
+          document.querySelector('.nav-link[data-view="ao-vivo"]').click();
+          await new Promise((r) => setTimeout(r, 300));
+          return {
+            fonte: c.fonte,
+            canais: c.canais.length,
+            demo: c.demo,
+            cards: document.querySelectorAll('#grid-ao-vivo .item-card').length,
+            chips: [...document.querySelectorAll('#chips-ao-vivo .chip')].map((b) => b.textContent)
+          };
+        } finally {
+          window.fetch = original;
+        }
       })()`
     );
-    verificar(local.fonte === "local", "playlist local virou o catálogo");
-    verificar(local.canais === 4, "playlist local gerou 4 cards");
-    verificar(local.demo === false, "playlist local desliga o modo demonstração");
-    verificar(local.cards > 0, "canais locais apareceram na grade");
-    verificar(local.alertaVisivel === false, "aviso de demo some após importar");
+    verificar(provisionado.fonte === "playlist", "playlist veio automaticamente do backend");
+    verificar(provisionado.canais === 4, "playlist automatica gerou 4 cards");
+    verificar(provisionado.demo === false, "playlist automatica desliga o modo demonstracao");
+    verificar(provisionado.cards > 0, "canais automaticos apareceram na grade");
     verificar(
-      local.chips.some((c) => c.includes("Séries")) && local.chips.some((c) => c.includes("Filmes")),
+      provisionado.chips.some((c) => c.includes("Séries")) &&
+        provisionado.chips.some((c) => c.includes("Filmes")),
       "chips usam as categorias reais da playlist"
     );
-    verificar(local.salvo === true, "playlist local foi salva no IndexedDB");
 
-    // Recarrega para confirmar que a playlist sobrevive ao fechamento do app.
-    await cdp.enviar("Page.reload", { ignoreCache: false }, sessionId);
-    await ESPERA(2500);
-    const localPersistido = await avaliar(
-      cdp,
-      sessionId,
-      `({
-        fonte: window.EFTV_CATALOG.fonte,
-        canais: window.EFTV_CATALOG.canais.length,
-        demo: window.EFTV_CATALOG.demo
-      })`
-    );
-    verificar(localPersistido.fonte === "local", "playlist local sobreviveu ao reload");
-    verificar(localPersistido.canais === 4, "canais locais voltaram após o reload");
-
-    // A tela "Minha playlist" mostra a lista importada.
-    await avaliar(cdp, sessionId, `location.hash = '#playlist'`);
-    await ESPERA(400);
-    const telaPlaylist = await avaliar(
-      cdp,
-      sessionId,
-      `({
-        atualVisivel: !document.querySelector('#playlist-atual').classList.contains('hidden'),
-        vazioVisivel: !document.querySelector('#playlist-empty').classList.contains('hidden'),
-        nome: document.querySelector('#playlist-nome').textContent,
-        meta: document.querySelector('#playlist-meta').textContent
-      })`
-    );
-    verificar(telaPlaylist.atualVisivel === true, "tela Minha playlist mostra a lista importada");
-    verificar(telaPlaylist.vazioVisivel === false, "estado vazio some após importar");
-    verificar(telaPlaylist.nome.includes("teste local"), "nome da playlist importada aparece");
-    verificar(telaPlaylist.meta.includes("5 itens"), "tela mostra a quantidade de itens");
-
-    // Limpa para os próximos testes (backend/demo).
-    await avaliar(
+    // Se o navegador não puder baixar a URL (CORS), o backend entrega o texto.
+    const fallback = await avaliar(
       cdp,
       sessionId,
       `(async () => {
-        await window.EFTV_STORE.clearLocalPlaylistAsync();
-        window.EFTV_CATALOG.limpar();
-        window.EFTV_CATALOG.usarDemo();
-        return true;
+        window.EFTV_API.playlistAcesso = async () => ({
+          playlist_url: 'https://provedor.example/lista.m3u'
+        });
+        window.EFTV_API.playlistTexto = async () => ${JSON.stringify(PLAYLIST)};
+        const original = window.fetch;
+        window.fetch = async (url, opcoes) => {
+          if (String(url).includes('provedor.example')) {
+            throw new TypeError('Failed to fetch');
+          }
+          return original(url, opcoes);
+        };
+        try {
+          const c = await window.EFTV_CATALOG.carregar(true);
+          return { fonte: c.fonte, canais: c.canais.length };
+        } finally {
+          window.fetch = original;
+        }
       })()`
     );
-    await ESPERA(200);
+    verificar(fallback.fonte === "playlist", "fallback pelo texto do backend funcionou");
+    verificar(fallback.canais === 4, "fallback gerou 4 cards");
 
     // Listas grandes: a grade mostra 240 por vez e o botão carrega o restante.
     const paginacao = await avaliar(
@@ -427,6 +417,7 @@ function verificar(condicao, mensagem) {
       sessionId,
       `(async () => {
         window.EFTV_CATALOG.aplicar([], [], false, null);
+        window.EFTV_API.playlistAcesso = async () => { throw new Error('sem rede'); };
         window.EFTV_API.playlistTexto = async () => { throw new Error('sem rede'); };
         const c = await window.EFTV_CATALOG.carregar(false);
         return { fonte: c.fonte, canais: c.canais.length, demo: c.demo };

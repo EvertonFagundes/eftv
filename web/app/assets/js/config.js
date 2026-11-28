@@ -8,7 +8,14 @@ window.EFTV_CONFIG = {
   API_URL: localStorage.getItem("eftv_api_url") || "https://eftv.onrender.com",
 
   // Versão exibida no app. Atualizações do PWA são tratadas pelo service worker.
-  APP_VERSION: "1.1.3",
+  APP_VERSION: "1.1.4",
+
+  // URL da playlist licenciada embutida no build (opcional).
+  // No app Android de release fica vazia: a URL vem do backend em
+  // /player/playlist depois do login. Em builds privados/self-hosted, pode
+  // ser preenchida aqui para o app baixar a lista automaticamente.
+  // NUNCA comite credenciais do provedor: em repositório público, deixe vazio.
+  PLAYLIST_URL: "",
 
   // Quando true, se a API não responder, o app usa dados de demonstração.
   // Em produção fica false: falha de rede mantém o catálogo salvo e mostra

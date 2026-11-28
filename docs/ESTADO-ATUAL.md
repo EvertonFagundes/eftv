@@ -1,6 +1,6 @@
 # Estado atual do EFTV — handoff
 
-Última atualização: 27/11/2026, ~22:10 (America/Sao_Paulo).
+Última atualização: 27/11/2026 (America/Sao_Paulo).
 
 Este arquivo existe para continuar o trabalho em outra máquina sem perder
 contexto. Leia junto com `TODO.md`.
@@ -15,19 +15,17 @@ contexto. Leia junto com `TODO.md`.
 | Última tag/release | `v1.5.24` |
 | APK de release | https://github.com/EvertonFagundes/eftv/releases/download/v1.5.24/eftv-v1.5.24.apk |
 | Backend | Render, `https://eftv.onrender.com` |
-| PWA web | **1.1.3** — SW `eftv-web-v6` (<https://evertonfagundes.github.io/eftv/web/app/>) |
+| PWA web | **1.1.4** — SW `eftv-web-v7` (<https://evertonfagundes.github.io/eftv/web/app/>) |
 | Dispositivo ADB usado | `mfuwk78xwcjf7h9t` |
 
 Commits recentes:
 
 ```
+0873209 Documenta importacao de playlist no PWA
 6048d1b Permite importar a playlist do provedor no PWA
+b74d0e6 docs: atualiza handoff para a release 1.5.24
 bfd4d85 docs: registra release Android 1.5.24 e validacao pendente
 c768dc6 chore: aponta Render para o APK 1.5.24
-00c27c9 fix(android): MIME explicito no proxy, fallback de fonte e player externo (1.5.24)
-385022c docs: atualiza versao instalada para 1.5.23
-a5dfc2d chore(android): 1.5.23 (versionCode 48) sem log de conteudo da playlist
-6dcfef1 docs: registra validacao em 4G e URL da playlist no Render
 ```
 
 ---
@@ -72,16 +70,22 @@ O endpoint do backend está implementado e deployado:
 - Execuções em cadeia confirmadas no GitHub Actions.
 - `backend/app/main.py` também tem `self_ping` a cada 5 min.
 
-### Web/PWA (versão 1.1.3)
+### Web/PWA (versão 1.1.4)
 
 - Publicado em <https://evertonfagundes.github.io/eftv/web/app/> (GitHub Pages).
-- **Minha playlist** importa `.m3u`/`.m3u8` por arquivo ou link, salva no
-  IndexedDB `eftv-web`/`local-playlist` e tem prioridade sobre backend/demo.
+- **Provisionamento automático**: `PLAYLIST_URL` embutida (só build privado) →
+  `GET /player/playlist` + download direto no navegador → `GET
+  /player/playlist-text` (fallback quando o CORS bloqueia) → `/channels`.
+- Não há tela de importação para o assinante; o fluxo é o mesmo do Android de
+  release, em que `PlaylistConfig.PLAYLIST_URL` fica vazio e a URL licenciada
+  vem do backend depois do login.
 - Limite de 50.000 itens; a grade mostra 240 cards por vez com **Mostrar mais**.
-- A lista não é apagada no logout; use **Minha playlist → Remover** para excluir.
-- Os canais reais **não são embutidos** no APK/repositório; vêm da M3U do
-  provedor. O backend continua sem catálogo real até o cache ser populado.
-- Validado em 27/11/2026: importação, reload e offline com SW `eftv-web-v6`.
+- O catálogo fica no IndexedDB local e é apagado no logout.
+- Os canais reais **não são embutidos** no APK/repositório. O backend continua
+  sem catálogo real até o cache ser populado; o Render recebe uma página do
+  nginx do provedor.
+- Validado em 27/11/2026 no Chrome headless: URL do backend, fallback de texto,
+  cache e offline com SW `eftv-web-v7`.
 - Testes: `node web/tools/testar-app.js` e `node web/tools/testar-playlist.js`.
 - Documentação: `web/CONTINUAR.md`, `web/README.md` e `docs/APP-WEB.md`.
 

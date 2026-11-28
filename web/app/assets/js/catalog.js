@@ -83,18 +83,9 @@
     erro: null,
     erroPlaylist: null,
     fonte: null,
-    local: null,
     _mapa: new Map(),
 
     async carregar(forcar = false) {
-      // Playlist importada pelo usuário tem prioridade: é a forma de assistir
-      // aos canais reais mesmo quando o backend/provedor está bloqueado.
-      const local = await store.getLocalPlaylistAsync();
-      if (local && Array.isArray(local.itens) && local.itens.length) {
-        this.usarLocal(local);
-        return this;
-      }
-
       // Usa cache local por 6h (igual ao app Android). O catálogo real fica
       // no IndexedDB porque pode ter dezenas de milhares de itens.
       const cache = await store.getCatalogCacheAsync();
@@ -159,13 +150,43 @@
     },
 
     /**
-     * Busca o catálogo real. Primeiro tenta a playlist licenciada pelo
-     * backend (mesma fonte do Android); se ela falhar, tenta o catálogo
-     * centralizado de /channels.
+     * Busca o catálogo real como o app Android:
+     * 1. URL embutida no build (opcional, builds privados);
+     * 2. URL licenciada entregue pelo backend em /player/playlist, baixada
+     *    direto pelo navegador (o IP do cliente pode alcançar o provedor
+     *    mesmo quando o Render não alcança);
+     * 3. texto da playlist entregue pelo backend em /player/playlist-text;
+     * 4. catálogo centralizado de /channels.
+     * A URL e o texto nunca são logados.
      */
     async _buscar() {
       const temSessao = !!store.getSession();
+      const embutida = String(window.EFTV_CONFIG.PLAYLIST_URL || "").trim();
+
+      if (embutida && playlist) {
+        try {
+          return await this._carregarPlaylistUrl(embutida, "playlist-embutida");
+        } catch (e) {
+          this.erroPlaylist = e;
+        }
+      }
+
       if (temSessao && playlist) {
+        try {
+          const acesso = await window.EFTV_API.playlistAcesso();
+          const url = acesso && (acesso.playlist_url || acesso.playlistUrl);
+          if (url) {
+            try {
+              return await this._carregarPlaylistUrl(url, "playlist");
+            } catch (e) {
+              // CORS/hotlink: o backend ainda pode entregar o texto.
+              this.erroPlaylist = e;
+            }
+          }
+        } catch (e) {
+          this.erroPlaylist = e;
+        }
+
         try {
           const texto = await window.EFTV_API.playlistTexto();
           if (typeof texto === "string" && texto.trim()) {
@@ -199,23 +220,48 @@
       };
     },
 
+    async _carregarPlaylistUrl(url, fonte) {
+      let destino = String(url || "").trim();
+      if (!/^https?:\/\//i.test(destino)) {
+        throw new Error("O servidor entregou uma URL de playlist inválida.");
+      }
+      // Página HTTPS não baixa http:// (conteúdo misto). Tenta HTTPS.
+      if (location.protocol === "https:" && /^http:\/\//i.test(destino)) {
+        destino = destino.replace(/^http:/i, "https:");
+      }
+
+      let resposta;
+      try {
+        resposta = await fetch(destino, {
+          cache: "no-store",
+          mode: "cors",
+          redirect: "follow",
+        });
+      } catch (_) {
+        throw new Error(
+          "O navegador não conseguiu baixar a playlist do provedor (CORS ou rede)."
+        );
+      }
+      if (!resposta.ok) {
+        throw new Error(`O provedor respondeu HTTP ${resposta.status} ao entregar a playlist.`);
+      }
+      const texto = await resposta.text();
+      const itens = playlist.parse(texto);
+      if (!itens.length) throw new Error(playlist.diagnosticar(texto));
+      const dados = playlist.montarCatalogo(itens);
+      if (!dados.canais.length) {
+        throw new Error("A playlist não gerou canais reproduzíveis.");
+      }
+      return { ...dados, fonte };
+    },
+
     aplicar(canais, categorias, demo, fonte) {
       this.canais = Array.isArray(canais) ? canais : [];
       this.categorias = Array.isArray(categorias) ? categorias : [];
       this.demo = !!demo;
       this.fonte = fonte || null;
-      if (fonte !== "local") this.local = null;
       this.carregado = true;
       this._indexar();
-    },
-
-    // Monta o catálogo a partir da playlist que a pessoa importou no navegador.
-    usarLocal(registro) {
-      const dados = playlist.montarCatalogo((registro && registro.itens) || []);
-      this.aplicar(dados.canais, dados.categorias, false, "local");
-      this.local = registro || null;
-      this.erro = null;
-      return this;
     },
 
     _indexar() {

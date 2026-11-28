@@ -129,19 +129,24 @@ independente em [`web/`](../web/), com paridade com o app Android:
 - app instalável em `web/app/` (manifest, service worker, ícones PNG, prints);
 - player HLS/MPEG-TS/DASH/MP4, heartbeat de sessão, limite de 1 tela, 2 dispositivos;
 - login, catálogo paginado, categorias, A-Z, favoritos, continuar assistindo;
-- **Minha playlist**: importa `.m3u`/`.m3u8` por arquivo (sempre) ou link (se o
-  CORS permitir), salva no IndexedDB `eftv-web`/`local-playlist`, tem prioridade
-  sobre backend/demo, limita a 50.000 itens e mostra 240 cards por vez com
+- **Provisionamento automático da playlist**: o app usa `PLAYLIST_URL` embutida
+  (somente build privado) ou `GET /player/playlist` (mesma rota do Android) e
+  baixa a URL licenciada direto no navegador; se o CORS bloquear, usa
+  `GET /player/playlist-text`. Não há tela de importação para o assinante. O
+  parser limita a 50.000 itens e a grade mostra 240 cards por vez com
   **Mostrar mais**;
 - checkout Mercado Pago com retorno em `web/app/checkout.html`;
 - modo demonstração (`?demo=1`) e vídeo local `web/app/assets/media/demo.mp4`.
 
-Os canais **não são embutidos** no APK nem no repositório: o Android é um WebView
-e o backend está sem catálogo real (o Render recebe uma página do nginx). A forma
-garantida de ver os canais reais hoje é importar a M3U do provedor em
-**Minha playlist**. A lista fica só no aparelho e não é apagada no logout; use
-**Minha playlist → Remover** para excluir. Versão publicada: **1.1.3**, service
-worker **`eftv-web-v6`**.
+Os canais **não são embutidos** no APK nem no repositório. No Android de
+release, `PlaylistConfig.PLAYLIST_URL` fica vazio e o app busca
+`/player/playlist` depois do login; em debug, a URL pode vir de
+`local.properties`. O PWA segue o mesmo modelo: sem `PLAYLIST_URL` no build
+público, depende do backend ou de um build privado. O catálogo fica no
+IndexedDB local e é apagado no logout. Versão publicada: **1.1.4**, service
+worker **`eftv-web-v7`**. Hoje o Render recebe uma página do nginx do provedor;
+para o live funcionar sem build privado, é preciso popular o cache da playlist
+no backend (`backend/scripts/upload_playlist_cache.py`).
 
 Documentação completa: [`web/README.md`](../web/README.md) e
 [`web/CONTINUAR.md`](../web/CONTINUAR.md).

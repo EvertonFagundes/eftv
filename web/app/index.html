@@ -78,7 +78,6 @@
       <li><a href="#favoritos" class="nav-link" data-view="favoritos">⭐ Favoritos</a></li>
       <li><a href="#continuar" class="nav-link" data-view="continuar">⏯ Continuar assistindo</a></li>
       <li><a href="#recentes" class="nav-link" data-view="recentes">🕘 Recentes</a></li>
-      <li><a href="#playlist" class="nav-link" data-view="playlist">📥 Minha playlist</a></li>
       <li class="sidebar-divider">Conta</li>
       <li><a href="#conta" class="nav-link" data-view="conta">💳 Minha assinatura</a></li>
       <li><a href="#ajustes" class="nav-link" data-view="ajustes">⚙️ Ajustes</a></li>
@@ -87,7 +86,7 @@
 
     <div class="sidebar-footer">
       <button class="btn-logout" id="btn-logout">Sair</button>
-      <div class="app-version" id="app-version">Web PWA · v1.1.3</div>
+      <div class="app-version" id="app-version">Web PWA · v1.1.4</div>
     </div>
   </nav>
 
@@ -196,68 +195,6 @@
       </div>
     </section>
 
-    <!-- Minha playlist (importação local) -->
-    <section class="view hidden" id="view-playlist" data-view="playlist">
-      <div class="toolbar"><h2>Minha playlist</h2></div>
-
-      <div class="playlist-card">
-        <h3>Assista aos seus canais sem depender do backend</h3>
-        <p class="playlist-intro">
-          Importe o arquivo <code>.m3u</code>/<code>.m3u8</code> do seu provedor. A lista fica salva
-          <strong>somente neste aparelho</strong> e não é enviada para nenhum servidor.
-        </p>
-
-        <input
-          type="file"
-          id="playlist-file"
-          accept=".m3u,.m3u8,text/plain,audio/x-mpegurl,application/vnd.apple.mpegurl"
-          hidden
-        >
-        <button class="btn btn-primary btn-block" id="btn-playlist-arquivo" type="button">
-          Escolher arquivo .m3u/.m3u8
-        </button>
-
-        <div class="playlist-or"><span>ou cole o link da playlist</span></div>
-
-        <form id="playlist-form-url" class="playlist-url-row">
-          <input
-            type="url"
-            id="playlist-url"
-            placeholder="https://provedor.com/get.php?..."
-            autocomplete="off"
-            spellcheck="false"
-            aria-label="Link da playlist M3U"
-          >
-          <button class="btn btn-outline" type="submit">Importar link</button>
-        </form>
-
-        <p class="playlist-hint">
-          O navegador pode bloquear o link por CORS. Se isso acontecer, baixe o arquivo
-          <code>.m3u</code> no site do provedor e use o botão de arquivo acima.
-        </p>
-
-        <p class="playlist-status hidden" id="playlist-status" role="status" aria-live="polite"></p>
-      </div>
-
-      <div class="playlist-atual hidden" id="playlist-atual">
-        <div class="playlist-atual-info">
-          <strong id="playlist-nome"></strong>
-          <small id="playlist-meta"></small>
-          <small id="playlist-fonte"></small>
-        </div>
-        <div class="playlist-atual-actions">
-          <button class="btn btn-primary" id="btn-playlist-ver" type="button">Ver canais</button>
-          <button class="btn btn-outline" id="btn-playlist-remover" type="button">Remover</button>
-        </div>
-      </div>
-
-      <div class="playlist-empty" id="playlist-empty">
-        <span class="empty-icon">📥</span>
-        <h3>Nenhuma playlist importada</h3>
-        <p>Importe sua lista para assistir aos canais reais mesmo sem o backend.</p>
-      </div>
-    </section>
-
     <!-- Busca -->
     <section class="view hidden" id="view-busca" data-view="busca">
       <div class="toolbar"><h2 id="titulo-busca">Resultados</h2></div>
@@ -309,7 +246,6 @@
           <input type="checkbox" id="set-autoplay" class="switch">
         </label>
         <div class="settings-actions">
-          <button class="btn btn-outline btn-block" id="btn-importar-playlist-ajustes">Importar playlist M3U</button>
           <button class="btn btn-outline btn-block" id="btn-limpar-cache">Limpar cache do catálogo</button>
           <button class="btn btn-outline btn-block" id="btn-tv-code">Entrar na TV com código</button>
           <button class="btn btn-outline btn-block" id="btn-instalar-ajustes">Instalar app (PWA)</button>
@@ -327,14 +263,14 @@
           <li>Abra <code>eftv.com.br/app</code> no navegador do celular.</li>
           <li>Toque em <strong>“Instalar app”</strong> para criar um atalho na tela inicial.</li>
           <li>Não é preciso baixar APK de fontes desconhecidas.</li>
-          <li>Sem catálogo? Abra <strong>Minha playlist</strong> e importe o arquivo <code>.m3u</code>/<code>.m3u8</code> do provedor.</li>
+          <li>Os canais são carregados automaticamente depois do login, como no app Android.</li>
           <li>O plano permite 2 aparelhos e 1 tela simultânea.</li>
           <li>Use a busca (sem acento) ou a barra A-Z para achar canais rapidamente.</li>
         </ul>
         <h3>Problemas comuns</h3>
         <ul>
           <li><strong>“Limite de tela”</strong>: feche o player em outro aparelho ou aguarde 2 minutos.</li>
-          <li><strong>Vídeo não abre</strong>: o provedor pode bloquear CORS no navegador. Importe a playlist em <strong>Minha playlist</strong>; se o stream continuar bloqueado, use o app Android ou o servidor local.</li>
+          <li><strong>Vídeo não abre</strong>: o provedor pode bloquear CORS no navegador. Nesse caso, use o app Android ou o servidor local.</li>
           <li><strong>Sem som</strong>: toque no ícone de volume no player.</li>
         </ul>
         <h3>Suporte</h3>
