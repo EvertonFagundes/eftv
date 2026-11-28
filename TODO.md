@@ -28,8 +28,8 @@
   for fechado no meio de uma importação, `recoverInterruptedImport()` valida os
   lotes já commitados como cache, em vez de apagar tudo e recomeçar.
 
-Estado: 1.5.23 (`versionCode 48`), 230 testes do backend e 6 do servidor local
-passando, compilação Android OK.
+Estado: 1.5.24 (`versionCode 49`), 251 testes do backend, 62 testes JVM do
+Android e APK de release assinado OK.
 
 ### Validação em 4G (aparelho conectado)
 
@@ -88,6 +88,25 @@ passando, compilação Android OK.
   `#EXTM3U`/`#EXTINF`; a mensagem de erro não expõe URL nem credenciais.
   Assim, uma linha própria quebrada não bloqueia mais o 4G quando a playlist
   compartilhada está correta.
+
+## Correção de 27/11/2026 — reprodução em aparelho secundário (1.5.24)
+
+- [x] **Tela preta em séries/filmes e canal travado.** O proxy local entrega
+  uma URL sem extensão; sem MIME explícito o ExoPlayer tratava HLS como vídeo
+  progressivo. Agora o `MediaItem` leva o MIME da extensão original, o decoder
+  de hardware tem fallback para software e, ao falhar, o app alterna entre
+  proxy e acesso direto e tenta forçar HLS antes de reconectar.
+- [x] **AVI/WMV/RMVB e protocolos sem suporte.** O app avisa o formato e oferece
+  "Abrir com outro player" (com `<queries>` para achar VLC/mpv no Android 11+).
+- [x] **Diagnóstico.** O relato de falha inclui rede, proxy, MIME, código do
+  erro e codec/resolução selecionados, sem expor a URL completa.
+- [x] **Release 1.5.24 (49)** assinada e publicada:
+  https://github.com/EvertonFagundes/eftv/releases/tag/v1.5.24
+- [ ] **Validar no aparelho que falhava:** série, filme e canal ao vivo em
+  Wi-Fi e 4G; anotar modelo/Android e o texto de erro/diagnóstico se persistir.
+- [ ] **Refletir a versão no Render:** `APP_LATEST_VERSION_CODE=49`,
+  `APP_LATEST_VERSION_NAME=1.5.24` e `APP_APK_URL` da release `v1.5.24`
+  (`render.yaml` já atualizado; falta o sync das env vars).
 
 ## Correção de 27/11/2026 — capas de série pela API
 
@@ -178,8 +197,9 @@ série (temporadas, episódios e botões de reprodução).
 
 ## Operação
 
-- [x] **Render / versão do APK:** `/app/version` já responde
-  `1.5.23` (`versionCode 48`) com a URL do APK correto.
+- [ ] **Render / versão do APK:** env vars ainda respondem `1.5.23`
+  (`versionCode 48`); atualizar para `1.5.24`/`49` e a URL da release
+  `v1.5.24`.
 - [x] **Backend 1.2.2 no ar:** `/health` responde `version=1.2.2`, e o
   `/player/playlist-text` sem token continua retornando 401.
 
